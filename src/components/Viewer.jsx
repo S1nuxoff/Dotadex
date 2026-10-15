@@ -176,8 +176,9 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
     } catch {}
   }, [shading]);
   useEffect(() => stageRef.current.setPaused(paused), [paused]);
-  // A scene shown on its own has no pedestal
-  useEffect(() => stageRef.current.setShowcase(!scene), [scene]);
+  // A scene shown on its own has no pedestal, except treasure scenes: their backgrounds
+  // are particles only, so the chest stands on the pedestal instead
+  useEffect(() => stageRef.current.setShowcase(!scene || scene.id.startsWith("scenes/treasure/")), [scene]);
   useEffect(() => {
     stageRef.current.setBackdrop(backdrop && !scene ? `${catalog.scenesBase}scenes/${backdrop}.glb` : null);
   }, [backdrop, scene, catalog.scenesBase]);

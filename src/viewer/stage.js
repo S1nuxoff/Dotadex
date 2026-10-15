@@ -83,7 +83,7 @@ async function loadSkin(modelUrl, skin) {
       const textures = {};
       await Promise.all(
         Object.entries(vmat.TextureParams).map(async ([param, path]) => {
-          textures[param] = await loadVariantTexture(base + path, param === "g_tColor" || param === "g_tCubeMap").catch(() => null);
+          textures[param] = await loadVariantTexture(base + path, param === "g_tColor" || param === "g_tCubeMap" || param === "g_tDetail").catch(() => null);
         })
       );
       result[name] = { vmat, textures };
@@ -101,7 +101,7 @@ function dotaMaterialFor(material, textures) {
   for (const [param, name] of Object.entries(vmat.TextureParams ?? {})) {
     const texture = textures[name];
     if (texture) {
-      texture.colorSpace = param === "g_tColor" || param === "g_tCubeMap" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      texture.colorSpace = param === "g_tColor" || param === "g_tCubeMap" || param === "g_tDetail" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
       texture.needsUpdate = true;
       byParam[param] = texture;
     }

@@ -40,6 +40,7 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D tDiffuseWarp;
   uniform sampler2D tFresnelWarp;
   uniform sampler2D tCubeMap;
+  uniform sampler2D tDetail;
 
   uniform float uHasNormal;
   uniform float uHasMasks1;
@@ -47,6 +48,9 @@ const fragmentShader = /* glsl */ `
   uniform float uHasDiffuseWarp;
   uniform float uHasFresnelWarp;
   uniform float uHasCubeMap;
+  uniform float uDetailMode;
+  uniform float uDetailFactor;
+  uniform vec2 uDetailScale;
   uniform float uAlphaTest;
   uniform float uSelfIllum;
 
@@ -107,6 +111,19 @@ const fragmentShader = /* glsl */ `
     vec3 v = normalize(vViewPosition);
     vec3 albedo = color.rgb;
 
+    // Detail texture, masked by Masks1 R: mode 1 multiplies it in (dirt, patterns),
+    // modes 2 and 3 add it on top and it glows (Terrorblade's weapons, Abaddon's mist)
+    vec3 glow = vec3(0.0);
+    if (uDetailMode > 0.5) {
+      vec3 detail = texture2D(tDetail, vUv * uDetailScale).rgb;
+      float amount = (uHasMasks1 > 0.5 ? masks1.r : 1.0) * uDetailFactor;
+      if (uDetailMode < 1.5) {
+        albedo *= mix(vec3(1.0), detail * 2.0, amount);
+      } else {
+        glow = detail * amount;
+      }
+    }
+
     // Diffuse with Dota's warp ramp
     float nl = dot(n, uKeyDir);
     float halfLambert = nl * 0.5 + 0.5;
@@ -117,7 +134,7 @@ const fragmentShader = /* glsl */ `
     vec3 ambient = mix(uGroundColor, uSkyColor, n.y * 0.5 + 0.5) * uAmbientScale;
     float metal = masks1.b;
     // Metal gets its color from reflections, not from diffuse light
-    vec3 diffuse = albedo * (keyDiffuse * uKeyColor + fill * uFillColor + ambient) * (1.0 - metal * 0.65);
+    vec3 diffuse = albedo * (keyDiffuse * uKeyColor + fill * uFillColor + ambient) * (1.0 - metal * 0.4);
 
     // Fresnel ramp drives rim and specular falloff
     float facing = clamp(1.0 - dot(n, v), 0.0, 1.0);
@@ -156,7 +173,7 @@ const fragmentShader = /* glsl */ `
     vec3 env = studio * tint * metal * uCubeMapScale * mix(0.6, 1.2, fresnel.b);
 
     vec3 selfIllum = albedo * masks1.a * uSelfIllum;
-    vec3 outColor = diffuse + specular + rim + env + selfIllum;
+    vec3 outColor = diffuse + specular + rim + env + selfIllum + glow;
     gl_FragColor = vec4(outColor, color.a);
     #include <colorspace_fragment>
   }
@@ -205,6 +222,15 @@ export function createDotaMaterial(original, vmat, textures) {
       uHasDiffuseWarp: { value: int.F_DIFFUSE_WARP && pick("g_tDiffuseWarp") ? 1 : 0 },
       uHasFresnelWarp: { value: pick("g_tFresnelWarp") ? 1 : 0 },
       uHasCubeMap: { value: pick("g_tCubeMap") ? 1 : 0 },
+      tDetail: { value: pick("g_tDetail") },
+      uDetailMode: { value: pick("g_tDetail") ? (int.F_DETAIL ?? 0) : 0 },
+      uDetailFactor: { value: float.g_flDetailBlendFactor ?? 1 },
+      uDetailScale: {
+        value: new THREE.Vector2(
+          vec.g_vDetailTexCoordScale?.[0] ?? float.g_flDetailTexCoordScale ?? 1,
+          vec.g_vDetailTexCoordScale?.[1] ?? float.g_flDetailTexCoordScale ?? 1
+        ),
+      },
       uAlphaTest: { value: int.F_ALPHA_TEST ? 0.5 : 0 },
       uSelfIllum: { value: int.F_SELF_ILLUM ? 1 : 0 },
       uSpecularExponent: { value: float.g_flSpecularExponent ?? 20 },

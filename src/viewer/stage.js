@@ -110,6 +110,12 @@ function dotaMaterialFor(material, textures) {
   return createDotaMaterial(material, vmat, byParam);
 }
 
+// Helpers only the map editor shows: camera markers and the like, in red dev materials
+function editorOnly(node) {
+  const name = node.material?.userData?.vmat?.Name ?? "";
+  return /^materials\/(dev|tools)\//.test(name) || /camera/i.test(node.name) || /camera/i.test(node.parent?.name ?? "");
+}
+
 // Environment materials of the game's scenes, from the flags in their vmat: unlit parts,
 // glowing parts, cut-outs, see-through and additive ones, two-sided leaves and cloth
 function environmentMaterial(material) {
@@ -332,6 +338,7 @@ export class Stage {
         return;
       }
       node.frustumCulled = false;
+      node.visible = !editorOnly(node);
       const original = node.material;
       const variant = skin?.[original.name];
       if (variant) {
@@ -494,6 +501,7 @@ export class Stage {
         return;
       }
       node.frustumCulled = false;
+      node.visible = !editorOnly(node);
       const pbr = environmentMaterial(node.material.clone());
       node.userData.pbr = pbr;
       node.userData.dota = dotaMaterialFor(node.material, gltf.userData.textures) ?? pbr;

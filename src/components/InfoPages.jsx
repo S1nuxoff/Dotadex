@@ -3,6 +3,8 @@ import { Coins } from "lucide-react";
 import { abilityStats, abilityValue, fillText, imageUrl, useGameData } from "../gamedata.js";
 import { RARITIES, itemIcon } from "../catalog.js";
 import { ItemCard } from "./ui.jsx";
+import { SoundList, soundsBase } from "./Voice.jsx";
+import { useEffect, useState } from "react";
 
 function Page({ children }) {
   return (
@@ -191,6 +193,36 @@ export function TreasurePage({ catalog, id, onOpen }) {
           </section>
         );
       })}
+    </Page>
+  );
+}
+
+export function AudioPage({ catalog, id }) {
+  const pack = catalog.audioById[id];
+  const [files, setFiles] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    setFiles(null);
+    fetch(`${catalog.modelsBase}data/audio-library.json`)
+      .then((res) => res.json())
+      .then((library) => {
+        const [kind, folder] = id.split("/");
+        if (!cancelled) {
+          setFiles(library[kind]?.[folder] ?? []);
+        }
+      })
+      .catch(() => !cancelled && setFiles([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [catalog, id]);
+
+  return (
+    <Page>
+      <p className="text-sm text-ash">{pack.kind === "announcers" ? "Announcer pack" : "Music pack"}</p>
+      <h2 className="mt-1 font-display text-4xl leading-tight text-bone sm:text-5xl">{pack.name}</h2>
+      <p className="mt-2 text-sm text-ash">{pack.count} sounds. Ones still being uploaded do not play yet.</p>
+      <div className="mt-8">{files ? <SoundList base={soundsBase(catalog.modelsBase)} files={files} /> : <p className="text-sm text-ash">Loading the list</p>}</div>
     </Page>
   );
 }

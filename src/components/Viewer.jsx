@@ -13,10 +13,35 @@ import {
   Search,
   Shirt,
   Sparkles,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { Stage } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName } from "../catalog.js";
 import { IconButton, Popover, Toggle, useDismiss } from "./ui.jsx";
+import { soundsBase } from "./Voice.jsx";
+
+// What the stage needs to play animation sounds, loaded once when sound is turned on
+let soundData = null;
+function loadSoundData(modelsBase) {
+  soundData ??= Promise.all(
+    ["animsounds.json", "animsound-events.json", "heroes.json"].map((file) =>
+      fetch(`${modelsBase}data/${file}`).then((res) => (res.ok ? res.json() : {}))
+    )
+  ).then(([byModel, events, heroes]) => {
+    const attack = {};
+    for (const hero of Object.values(heroes)) {
+      if (hero.Model && hero.SoundSet) {
+        attack[hero.Model.toLowerCase().replace(/\.vmdl$/, ".glb")] = {
+          event: `${hero.SoundSet}.Attack`,
+          point: Number(hero.AttackAnimationPoint) || 0.4,
+        };
+      }
+    }
+    return { base: soundsBase(modelsBase), byModel, events, attack };
+  });
+  return soundData;
+}
 
 const SPEEDS = [0.5, 1, 1.5];
 
@@ -97,6 +122,7 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
   const [shading, setShading] = useState(initialShading);
   const [copied, setCopied] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [sound, setSound] = useState(false);
 
   const item = outfit.focus ? catalog.itemsById[outfit.focus] : null;
   const hero = outfit.hero ? catalog.heroesById[outfit.hero] : null;
@@ -147,6 +173,17 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
     } catch {}
   }, [shading]);
   useEffect(() => stageRef.current.setPaused(paused), [paused]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!sound) {
+      stageRef.current.setSound(null);
+      return;
+    }
+    loadSoundData(catalog.modelsBase).then((data) => !cancelled && stageRef.current.setSound(data));
+    return () => {
+      cancelled = true;
+    };
+  }, [sound, catalog.modelsBase]);
   useEffect(() => stageRef.current.setSpeed(speed), [speed]);
 
   const pick = (name) => {
@@ -189,6 +226,9 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
             { value: "plain", label: "Plain", icon: <Box className="size-3.5" /> },
           ]}
         />
+        <IconButton label={sound ? "Mute animation sounds" : "Play animation sounds"} onClick={() => setSound(!sound)} active={sound}>
+          {sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+        </IconButton>
         <IconButton label="Fit to view" onClick={() => stageRef.current.frameModel()}>
           <Focus className="size-4" />
         </IconButton>

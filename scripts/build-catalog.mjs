@@ -163,11 +163,23 @@ for (const item of items) {
 
 // Shop items and treasure chests from the dataset's game data, when it is there
 const gameData = async (file) => getJson(`${MODELS_BASE}data/${file}`, null);
-const [shopData, treasureData, englishTexts] = await Promise.all([
+const [shopData, treasureData, englishTexts, library] = await Promise.all([
   gameData("items.json"),
   gameData("treasures.json"),
   gameData("i18n/english.json"),
+  gameData("audio-library.json"),
 ]);
+
+// Announcer and music packs: "announcer_dlc_bastion" -> "Bastion"
+const packName = (folder) =>
+  folder
+    .replace(/^announcer(_dlc)?_?/, "")
+    .replace(/_/g, " ")
+    .replace(/\w/g, (letter) => letter.toUpperCase()) || "Default";
+const audio = Object.entries(library ?? {}).flatMap(([kind, packs]) =>
+  Object.entries(packs).map(([folder, files]) => ({ id: `${kind}/${folder}`, kind, name: packName(folder), count: files.length }))
+);
+audio.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
 // The game spells some keys DOTA_Tooltip_Ability_ and others DOTA_Tooltip_ability_
 const texts = Object.fromEntries(Object.entries(englishTexts ?? {}).map(([key, value]) => [key.toLowerCase(), value]));
 
@@ -206,6 +218,7 @@ const catalog = {
   heroNames,
   shop,
   treasures,
+  audio,
   heroes: Object.values(heroes).sort((a, b) => a.name.localeCompare(b.name)),
   items,
   sets,

@@ -44,6 +44,17 @@ function rowsFor(catalog, tab, filters) {
     }));
   }
 
+  if (tab === "audio") {
+    return catalog.audio.map((pack) => ({
+      key: `audio/${pack.id}`,
+      route: { type: "audio", id: pack.id },
+      name: pack.name,
+      detail: pack.kind === "announcers" ? `Announcer, ${pack.count} lines` : `Music, ${pack.count} tracks`,
+      color: pack.kind === "announcers" ? "#c58bf0" : "#c9a45c",
+      image: null,
+    }));
+  }
+
   if (tab === "treasures") {
     return catalog.treasures.map((treasure) => ({
       key: `treasure/${treasure.id}`,
@@ -118,7 +129,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
   const setFilter = (key) => (value) => setFilters((current) => ({ ...current, [key]: value }));
 
   const counts = useMemo(() => {
-    const result = { heroes: catalog.heroes.length, sets: catalog.sets.length, shop: catalog.shop.length, treasures: catalog.treasures.length };
+    const result = { heroes: catalog.heroes.length, sets: catalog.sets.length, shop: catalog.shop.length, treasures: catalog.treasures.length, audio: catalog.audio.length };
     for (const item of catalog.items) {
       if (!item.default) {
         result[item.kind] = (result[item.kind] ?? 0) + 1;
@@ -179,7 +190,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
   });
 
   const ready = catalog.heroes.length + catalog.items.length;
-  const filterable = !["heroes", "shop", "treasures"].includes(tab);
+  const filterable = !["heroes", "shop", "treasures", "audio"].includes(tab);
   const activeFilters = [filters.hero, tab === "wearable" && filters.slot, tab !== "sets" && filters.rarity].filter(Boolean).length;
 
   return (

@@ -278,6 +278,7 @@ export class Stage {
       attach(root, part);
     });
 
+    this.rootModel = entries[rootIndex].url.slice(entries[rootIndex].url.indexOf("models/"));
     this.replace(group, gltfs[rootIndex].animations);
     return Object.keys(this.actions);
   }
@@ -347,6 +348,7 @@ export class Stage {
       this.current.crossFadeTo(next, fade, false);
     }
     this.current = next;
+    this.lastCycle = 0;
     this.currentName = name;
   }
 
@@ -445,6 +447,7 @@ export class Stage {
     const delta = Math.min(this.clock.getDelta(), 0.1);
     if (this.mixer && !this.paused) {
       this.mixer.update(delta * this.speed);
+      this.playAnimationSounds();
     }
 
     this.effects.update(delta);
@@ -466,6 +469,55 @@ export class Stage {
 
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  // sound: { base, events, byModel, attack: { [model]: { event, point } } } or null to mute
+  setSound(sound) {
+    this.sound = sound;
+    this.lastCycle = this.current ? this.cycle() : 0;
+  }
+
+  cycle() {
+    const duration = this.current.getClip().duration || 1;
+    return (this.current.time % duration) / duration;
+  }
+
+  // The sounds of the current animation between the last frame's point and this one's
+  playAnimationSounds() {
+    if (!this.sound || !this.current) {
+      return;
+    }
+    const clip = this.current.getClip();
+    const list = [...(this.sound.byModel[this.rootModel]?.[clip.name] ?? [])];
+    const attack = this.sound.attack[this.rootModel];
+    // The game plays a hero's attack sound on the hit, not from the animation
+    if (attack && /attack/i.test(clip.name) && clip.duration > 0) {
+      list.push([Math.min(attack.point / clip.duration, 0.95), attack.event]);
+    }
+    const now = this.cycle();
+    const last = this.lastCycle ?? now;
+    this.lastCycle = now;
+    for (const [at, name] of list) {
+      const crossed = now >= last ? at > last && at <= now : at > last || at <= now;
+      if (crossed) {
+        this.playEvent(name, 0);
+      }
+    }
+  }
+
+  playEvent(name, depth) {
+    const event = this.sound?.events[name];
+    if (!event || depth > 3) {
+      return;
+    }
+    if (event.files.length) {
+      const audio = new Audio(this.sound.base + event.files[Math.floor(Math.random() * event.files.length)]);
+      audio.volume = Math.min(Math.max((event.volume ?? 1) * 0.7, 0), 1);
+      audio.preservesPitch = false;
+      audio.playbackRate = Math.min(Math.max((event.pitch ?? 1) * this.speed, 0.5), 2);
+      audio.play().catch(() => {});
+    }
+    event.layers?.forEach((layer) => this.playEvent(layer, depth + 1));
   }
 
   dispose() {

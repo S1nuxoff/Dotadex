@@ -5,7 +5,8 @@ import Sidebar from "./components/Sidebar.jsx";
 import Viewer from "./components/Viewer.jsx";
 import Wardrobe from "./components/Wardrobe.jsx";
 import HeroInfo from "./components/HeroInfo.jsx";
-import { ShopPage, TreasurePage } from "./components/InfoPages.jsx";
+import Voice from "./components/Voice.jsx";
+import { AudioPage, ShopPage, TreasurePage } from "./components/InfoPages.jsx";
 import {
   isKnown,
   loadCatalog,
@@ -29,6 +30,9 @@ function tabFor(catalog, route) {
   }
   if (route.type === "treasure") {
     return "treasures";
+  }
+  if (route.type === "audio") {
+    return "audio";
   }
   return catalog.itemsById[route.id]?.kind ?? "wearable";
 }
@@ -55,6 +59,7 @@ function HeroPanel({ catalog, outfit, language, wardrobe }) {
       <div className="flex gap-1 border-b border-line px-4 pt-4 pb-3" role="tablist">
         {[
           ["hero", hero.name],
+          ["voice", "Voice"],
           ["wardrobe", "Wardrobe"],
         ].map(([id, label]) => (
           <button
@@ -69,7 +74,9 @@ function HeroPanel({ catalog, outfit, language, wardrobe }) {
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        {view === "hero" ? <HeroInfo base={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} language={language} /> : wardrobe}
+        {view === "hero" && <HeroInfo base={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} language={language} />}
+        {view === "voice" && <Voice modelsBase={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} />}
+        {view === "wardrobe" && wardrobe}
       </div>
     </div>
   );
@@ -198,7 +205,7 @@ export default function App() {
     }
   }, [catalog, route]);
 
-  const page = route?.type === "shop" || route?.type === "treasure";
+  const page = ["shop", "treasure", "audio"].includes(route?.type);
   const outfit = useMemo(() => catalog && route && !page && outfitFor(catalog, route), [catalog, route, page]);
   const urls = useMemo(() => catalog && outfit && outfitUrls(catalog, outfit), [catalog, outfit]);
 
@@ -280,6 +287,7 @@ export default function App() {
       <div className="relative min-w-0 flex-1">
         {route.type === "shop" && <ShopPage catalog={catalog} id={route.id} language={language} onOpen={open} />}
         {route.type === "treasure" && <TreasurePage catalog={catalog} id={route.id} onOpen={open} />}
+        {route.type === "audio" && <AudioPage catalog={catalog} id={route.id} />}
         {!page && <Viewer
           catalog={catalog}
           outfit={outfit}

@@ -1,6 +1,6 @@
 # Dotadex
 
-Every Dota 2 hero, cosmetic, courier and ward in 3D, from the game files: https://s1nuxoff.github.io/dotadex/
+Every Dota 2 hero, cosmetic, courier and ward in 3D, from the game files: https://s1nuxoff.github.io/Dotadex/
 
 - Heroes are shown with their default items, and a cosmetic is shown worn by its hero in place of the default item of the same slot.
 - Models are drawn with a take on Dota's hero shader (diffuse warp, rim light, specular and metalness masks from the game's materials). Switch to plain shading to compare.

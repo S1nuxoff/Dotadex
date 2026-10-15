@@ -34,6 +34,9 @@ function tabFor(catalog, route) {
   if (route.type === "audio") {
     return "audio";
   }
+  if (route.type === "scene") {
+    return "scenes";
+  }
   return catalog.itemsById[route.id]?.kind ?? "wearable";
 }
 

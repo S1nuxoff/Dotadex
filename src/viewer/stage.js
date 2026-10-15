@@ -362,6 +362,42 @@ export class Stage {
     this.paused = paused;
   }
 
+  // A scene of the game behind the model instead of the pedestal; null takes it away
+  async setBackdrop(url) {
+    const request = (this.backdropRequest = (this.backdropRequest ?? 0) + 1);
+    if (this.backdrop) {
+      this.scene.remove(this.backdrop);
+      this.backdrop = null;
+    }
+    this.updateShowcase();
+    if (!url) {
+      return;
+    }
+    const gltf = await loadModel(url);
+    if (request !== this.backdropRequest) {
+      return;
+    }
+    const backdrop = gltf.scene.clone();
+    backdrop.traverse((node) => node.isMesh && (node.frustumCulled = false));
+    this.backdrop = backdrop;
+    this.scene.add(backdrop);
+    this.updateShowcase();
+  }
+
+  // The pedestal and its particles, unless a scene of the game is shown
+  setShowcase(on) {
+    this.showcase = on;
+    this.updateShowcase();
+  }
+
+  updateShowcase() {
+    const on = this.showcase !== false && !this.backdrop;
+    this.effects.group.visible = on;
+    if (!on) {
+      this.floor.visible = false;
+    }
+  }
+
   setShading(mode) {
     this.shading = mode;
     this.group?.traverse((node) => {
@@ -417,6 +453,7 @@ export class Stage {
     this.floor.position.set(center.x, box.min.y + pedestal * 0.002, center.z);
     this.floor.scale.setScalar(size.x * 0.55 + size.y * 0.1);
     this.effects.place(new THREE.Vector3(center.x, box.min.y, center.z), pedestal, size.y, standing);
+    this.updateShowcase();
 
     this.camera.near = distance / 100;
     this.camera.far = distance * 20;

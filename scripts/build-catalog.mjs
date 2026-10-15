@@ -176,6 +176,13 @@ const packName = (folder) =>
     .replace(/^announcer(_dlc)?_?/, "")
     .replace(/_/g, " ")
     .replace(/\w/g, (letter) => letter.toUpperCase()) || "Default";
+// Scenes and maps, from the scenes dataset
+const scenes = (await getJson(MODELS_BASE.replace("dota2-models", "dota2-scenes") + "scenes.json", [])).map((scene) => ({
+  id: scene.id,
+  name: scene.name,
+  size: scene.size,
+}));
+
 const audio = Object.entries(library ?? {}).flatMap(([kind, packs]) =>
   Object.entries(packs).map(([folder, files]) => ({ id: `${kind}/${folder}`, kind, name: packName(folder), count: files.length }))
 );
@@ -219,6 +226,7 @@ const catalog = {
   shop,
   treasures,
   audio,
+  scenes,
   heroes: Object.values(heroes).sort((a, b) => a.name.localeCompare(b.name)),
   items,
   sets,

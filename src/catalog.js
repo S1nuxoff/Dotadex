@@ -21,6 +21,7 @@ export const TABS = [
   { id: "treasures", name: "Treasures" },
   { id: "shop", name: "Items" },
   { id: "audio", name: "Audio" },
+  { id: "scenes", name: "Scenes" },
   { id: "courier", name: "Couriers" },
   { id: "ward", name: "Wards" },
   { id: "other", name: "Other" },
@@ -160,6 +161,9 @@ export function itemsForSlot(catalog, heroId, slot) {
 // What is on screen, worked out from the route:
 // { hero, slots: { slot: { id, style } }, focus, style, variant }
 export function outfitFor(catalog, route) {
+  if (route.type === "scene") {
+    return { scene: route.id, hero: null, slots: {}, focus: null };
+  }
   if (route.type === "hero") {
     return { hero: route.id, slots: route.slots ?? {}, focus: null, bare: Boolean(route.bare) };
   }
@@ -173,6 +177,9 @@ export function outfitFor(catalog, route) {
 
 // The models to load: the hero's body, then in each slot the chosen item or the default
 export function outfitUrls(catalog, outfit) {
+  if (outfit.scene) {
+    return [`${catalog.scenesBase}scenes/${outfit.scene}.glb`];
+  }
   if (!outfit.hero) {
     const item = catalog.itemsById[outfit.focus];
     const urls = itemUrls(catalog, item, outfit.style);
@@ -269,6 +276,9 @@ export function withExported(catalog, exported) {
     treasuresById: Object.fromEntries((catalog.treasures ?? []).map((treasure) => [treasure.id, treasure])),
     audio: catalog.audio ?? [],
     audioById: Object.fromEntries((catalog.audio ?? []).map((pack) => [pack.id, pack])),
+    scenes: catalog.scenes ?? [],
+    scenesById: Object.fromEntries((catalog.scenes ?? []).map((scene) => [scene.id, scene])),
+    scenesBase: catalog.modelsBase.replace("dota2-models", "dota2-scenes"),
     total: catalog.heroes.length + catalog.items.length,
   };
 }
@@ -276,12 +286,12 @@ export function withExported(catalog, exported) {
 // #/hero/pudge?head=4007.1&weapon=7247  (slot=item.style)
 // #/item/4517?style=2&alone=1&variant=1
 export function parseRoute(hash) {
-  const [, type, id, query] = hash.match(/^#\/(hero|item|shop|treasure|audio)\/([^?]+)(?:\?(.*))?$/) ?? [];
+  const [, type, id, query] = hash.match(/^#\/(hero|item|shop|treasure|audio|scene)\/([^?]+)(?:\?(.*))?$/) ?? [];
   if (!type) {
     return null;
   }
   const params = new URLSearchParams(query ?? "");
-  if (type === "shop" || type === "treasure" || type === "audio") {
+  if (["shop", "treasure", "audio", "scene"].includes(type)) {
     return { type, id: decodeURIComponent(id) };
   }
   if (type === "hero") {
@@ -326,6 +336,7 @@ export function isKnown(catalog, route) {
     shop: catalog.shopById,
     treasure: catalog.treasuresById,
     audio: catalog.audioById,
+    scene: catalog.scenesById,
   };
   return Boolean(route && lists[route.type]?.[route.id]);
 }

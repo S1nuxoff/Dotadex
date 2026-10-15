@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Stage } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName } from "../catalog.js";
-import { IconButton, Popover, Toggle, useDismiss } from "./ui.jsx";
+import { IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
 import { soundsBase } from "./Voice.jsx";
 import { unlockSound } from "../viewer/soundPlayer.js";
 
@@ -124,8 +124,10 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
   const [copied, setCopied] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [sound, setSound] = useState(false);
+  const [backdrop, setBackdrop] = useState("");
 
   const item = outfit.focus ? catalog.itemsById[outfit.focus] : null;
+  const scene = outfit.scene ? catalog.scenesById[outfit.scene] : null;
   const hero = outfit.hero ? catalog.heroesById[outfit.hero] : null;
   const color = item ? rarity(item).color : HERO_COLOR;
   const urlsKey = urls.join("|");
@@ -174,6 +176,11 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
     } catch {}
   }, [shading]);
   useEffect(() => stageRef.current.setPaused(paused), [paused]);
+  // A scene shown on its own has no pedestal
+  useEffect(() => stageRef.current.setShowcase(!scene), [scene]);
+  useEffect(() => {
+    stageRef.current.setBackdrop(backdrop && !scene ? `${catalog.scenesBase}scenes/${backdrop}.glb` : null);
+  }, [backdrop, scene, catalog.scenesBase]);
   useEffect(() => {
     let cancelled = false;
     if (!sound) {
@@ -199,12 +206,21 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
     setTimeout(() => setCopied(false), 1600);
   };
 
-  const title = item ? item.name : hero?.name;
+  const title = scene ? scene.name : item ? item.name : hero?.name;
+  // Showcase scenes for a hero: its own (arcanas, personas) first, then the shared ones
+  const backdrops = hero
+    ? [
+        ...catalog.scenes.filter((entry) => entry.id.includes(`mvp_${hero.id}`)),
+        ...catalog.scenes.filter((entry) => entry.id === "scenes/mvp/mvp_default"),
+      ]
+    : [];
   const changed = hero && !item ? Object.keys(outfit.slots).length : 0;
-  const subtitle = item
+  const subtitle = scene
+    ? ["Scene", `${(scene.size / 1e6).toFixed(0)} MB`]
+    : item
     ? [rarity(item).name, item.slot && slotName(item.slot), item.hero && catalog.heroNames[item.hero], formatPrice(item.price)]
     : ["Hero", changed > 0 && `${changed} ${changed === 1 ? "item" : "items"} changed`];
-  const downloads = item ? itemModels(item, outfit.style) : hero ? [hero.model] : [];
+  const downloads = scene ? [] : item ? itemModels(item, outfit.style) : hero ? [hero.model] : [];
   const styles = item?.styles;
 
   return (
@@ -291,6 +307,17 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
               <AnimationPicker names={animations} current={current} onPick={pick} />
               <Toggle label="Animation speed" value={speed} onChange={setSpeed} options={SPEEDS.map((value) => ({ value, label: `${value}×` }))} />
             </>
+          )}
+
+          {backdrops.length > 0 && (
+            <Select
+              label="Scene"
+              value={backdrop}
+              onChange={setBackdrop}
+              up
+              className="w-44"
+              options={[{ value: "", label: "Pedestal" }, ...backdrops.map((entry) => ({ value: entry.id, label: entry.name, hint: `${(entry.size / 1e6).toFixed(0)} MB` }))]}
+            />
           )}
 
           {hero && !item && (

@@ -360,6 +360,11 @@ export class Stage {
     }
 
     this.group = group;
+    group.traverse((node) => {
+      if (node.isBone) {
+        node.userData.rest = { position: node.position.clone(), quaternion: node.quaternion.clone(), scale: node.scale.clone() };
+      }
+    });
     this.animated = animations.length > 0;
     this.scene.add(group);
     this.mixer = new THREE.AnimationMixer(group);
@@ -384,7 +389,16 @@ export class Stage {
     if (name === T_POSE) {
       // The pose the model was made in, with no animation on it
       this.mixer?.stopAllAction();
-      this.group?.traverse((node) => node.isSkinnedMesh && node.skeleton.pose());
+      // Every bone back where the files put it: posing each skeleton instead would let a
+      // weapon's own skeleton move the hand bones it shares with the body
+      this.group?.traverse((node) => {
+        const rest = node.isBone && node.userData.rest;
+        if (rest) {
+          node.position.copy(rest.position);
+          node.quaternion.copy(rest.quaternion);
+          node.scale.copy(rest.scale);
+        }
+      });
       this.current = null;
       this.currentName = name;
       return;

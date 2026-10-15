@@ -1,63 +1,167 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { List, X } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
 import Viewer from "./components/Viewer.jsx";
-import { loadCatalog, parseHash } from "./catalog.js";
+import Wardrobe from "./components/Wardrobe.jsx";
+import {
+  isKnown,
+  loadCatalog,
+  loadExported,
+  outfitFor,
+  outfitUrls,
+  parseRoute,
+  routeHash,
+  withExported,
+} from "./catalog.js";
 
-function tabFor(catalog, selection) {
-  if (!selection || selection.type === "hero") {
+// How often to look for models exported since the page opened
+const REFRESH_MS = 3 * 60 * 1000;
+
+function tabFor(catalog, route) {
+  if (!route || route.type === "hero") {
     return "heroes";
   }
-  return catalog.itemsById[selection.id]?.kind ?? "wearable";
+  return catalog.itemsById[route.id]?.kind ?? "wearable";
 }
 
-function isKnown(catalog, selection) {
-  return Boolean(selection && (selection.type === "hero" ? catalog.heroesById : catalog.itemsById)[selection.id]);
+function firstRoute(catalog) {
+  if (catalog.heroes[0]) {
+    return { type: "hero", id: catalog.heroes[0].id, slots: {} };
+  }
+  return catalog.items[0] ? { type: "item", id: catalog.items[0].id } : null;
+}
+
+function useWide() {
+  const query = "(min-width: 1280px)";
+  const [wide, setWide] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setWide(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return wide;
+}
+
+function Sheet({ open, onClose, label, side, children }) {
+  const reduce = useReducedMotion();
+  const from = side === "right" ? { x: "100%" } : { y: "100%" };
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div className="fixed inset-0 z-40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <button className="absolute inset-0 bg-black/50" onClick={onClose} aria-label={`Close ${label}`} />
+          <motion.div
+            initial={reduce ? false : from}
+            animate={{ x: 0, y: 0 }}
+            exit={reduce ? { opacity: 0 } : from}
+            transition={{ type: "spring", damping: 32, stiffness: 320 }}
+            className={
+              side === "right"
+                ? "absolute inset-y-0 right-0 w-[min(22rem,100%)] border-l border-line"
+                : "absolute inset-x-0 bottom-0 h-[85%] overflow-hidden rounded-t-2xl border-t border-line"
+            }
+            role="dialog"
+            aria-label={label}
+          >
+            {children}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 }
 
 export default function App() {
-  const [catalog, setCatalog] = useState(null);
+  const [base, setBase] = useState(null);
+  const [exported, setExported] = useState(null);
   const [error, setError] = useState(null);
-  const [selection, setSelection] = useState(null);
+  const [route, setRoute] = useState(null);
   const [tab, setTab] = useState("heroes");
-  const [drawer, setDrawer] = useState(false);
-  const reduce = useReducedMotion();
+  const [browse, setBrowse] = useState(false);
+  const [wardrobe, setWardrobe] = useState(false);
+  const wide = useWide();
+
+  const catalog = useMemo(() => base && exported && withExported(base, exported), [base, exported]);
 
   useEffect(() => {
     loadCatalog()
-      .then((loaded) => {
-        const fromLink = parseHash(window.location.hash);
-        const first = isKnown(loaded, fromLink)
-          ? fromLink
-          : loaded.heroes[0]
-            ? { type: "hero", id: loaded.heroes[0].id }
-            : { type: "item", id: loaded.items[0].id };
-        setCatalog(loaded);
-        setSelection(first);
-        setTab(tabFor(loaded, first));
+      .then(async (loaded) => {
+        const done = await loadExported(loaded.modelsBase);
+        const ready = withExported(loaded, done);
+        const fromLink = parseRoute(window.location.hash);
+        const first = isKnown(ready, fromLink) ? fromLink : firstRoute(ready);
+        setBase(loaded);
+        setExported(done);
+        setRoute(first);
+        setTab(tabFor(ready, first));
       })
       .catch((reason) => setError(reason.message));
   }, []);
+
+  useEffect(() => {
+    if (!base) {
+      return;
+    }
+    const timer = setInterval(() => {
+      loadExported(base.modelsBase)
+        .then((next) => setExported((current) => (current && next.size === current.size ? current : next)))
+        .catch(() => {});
+    }, REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [base]);
 
   useEffect(() => {
     if (!catalog) {
       return;
     }
     const onHash = () => {
-      const next = parseHash(window.location.hash);
+      const next = parseRoute(window.location.hash);
       if (isKnown(catalog, next)) {
-        setSelection(next);
+        setRoute(next);
       }
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, [catalog]);
 
-  const select = (next) => {
-    window.history.replaceState(null, "", `#/${next.type}/${encodeURIComponent(next.id)}`);
-    setSelection(next);
-    setDrawer(false);
+  // The first model to arrive is shown when the page opened before any was exported
+  useEffect(() => {
+    if (catalog && !route) {
+      const first = firstRoute(catalog);
+      if (first) {
+        setRoute(first);
+        setTab(tabFor(catalog, first));
+      }
+    }
+  }, [catalog, route]);
+
+  const outfit = useMemo(() => catalog && route && outfitFor(catalog, route), [catalog, route]);
+  const urls = useMemo(() => catalog && outfit && outfitUrls(catalog, outfit), [catalog, outfit]);
+
+  const open = (next) => {
+    window.history.replaceState(null, "", routeHash(next));
+    setRoute(next);
+    setBrowse(false);
+  };
+
+  // Dressing up always ends on the hero's route, with what is worn in the link
+  const equip = (slot, id) => {
+    const slots = { ...outfit.slots };
+    if (id) {
+      slots[slot] = { id, style: 0 };
+    } else {
+      delete slots[slot];
+    }
+    open({ type: "hero", id: outfit.hero, slots });
+  };
+  const equipSet = (set) => {
+    const slots = { ...outfit.slots };
+    for (const id of set.items) {
+      slots[catalog.itemsById[id].slot] = { id, style: 0 };
+    }
+    open({ type: "hero", id: outfit.hero, slots });
   };
 
   if (error) {
@@ -71,7 +175,7 @@ export default function App() {
     );
   }
 
-  if (!catalog || !selection) {
+  if (!catalog) {
     return (
       <main className="grid h-full place-items-center">
         <p className="font-display text-xl text-ash">Loading the model list</p>
@@ -79,47 +183,62 @@ export default function App() {
     );
   }
 
-  const sidebar = <Sidebar catalog={catalog} tab={tab} onTab={setTab} selected={selection} onSelect={select} />;
+  if (!route) {
+    return (
+      <main className="grid h-full place-items-center p-6">
+        <div className="max-w-sm">
+          <p className="font-display text-2xl text-bone">No models are exported yet</p>
+          <p className="mt-2 text-sm text-ash">They show up here as the export runs. This page checks for new ones every few minutes.</p>
+        </div>
+      </main>
+    );
+  }
+
+  const sidebar = <Sidebar catalog={catalog} tab={tab} onTab={setTab} route={route} onOpen={open} />;
+  const wardrobePanel = outfit.hero && (
+    <Wardrobe
+      catalog={catalog}
+      outfit={outfit}
+      onEquip={equip}
+      onEquipSet={equipSet}
+      onReset={() => open({ type: "hero", id: outfit.hero, slots: {} })}
+      onClose={wide ? null : () => setWardrobe(false)}
+    />
+  );
 
   return (
     <main className="flex h-full">
       <div className="hidden w-80 shrink-0 border-r border-line lg:block">{sidebar}</div>
 
       <div className="relative min-w-0 flex-1">
-        <Viewer catalog={catalog} selection={selection} />
+        <Viewer
+          catalog={catalog}
+          outfit={outfit}
+          urls={urls}
+          onStyle={(style) => open({ ...route, style })}
+          onAlone={(alone) => open({ ...route, alone })}
+          onVariant={(variant) => open({ ...route, variant })}
+          onWardrobe={wide ? null : () => setWardrobe(true)}
+        />
         <button
-          onClick={() => setDrawer(true)}
+          onClick={() => setBrowse(true)}
           className="absolute top-4 left-4 inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-panel/80 px-3 text-sm text-bone lg:hidden"
         >
-          <List className="size-4" /> Browse models
+          <List className="size-4" /> Browse
         </button>
       </div>
 
-      <AnimatePresence>
-        {drawer && (
-          <motion.div className="fixed inset-0 z-30 lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <button className="absolute inset-0 bg-black/50" onClick={() => setDrawer(false)} aria-label="Close the model list" />
-            <motion.div
-              initial={reduce ? false : { y: "100%" }}
-              animate={{ y: 0 }}
-              exit={reduce ? { opacity: 0 } : { y: "100%" }}
-              transition={{ type: "spring", damping: 32, stiffness: 320 }}
-              className="absolute inset-x-0 bottom-0 h-[85%] overflow-hidden rounded-t-2xl border-t border-line"
-              role="dialog"
-              aria-label="Models"
-            >
-              {sidebar}
-              <button
-                onClick={() => setDrawer(false)}
-                className="absolute top-5 right-4 grid size-8 place-items-center rounded-md text-ash hover:text-bone"
-                aria-label="Close"
-              >
-                <X className="size-5" />
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {wide && wardrobePanel && <div className="w-[22rem] shrink-0 border-l border-line">{wardrobePanel}</div>}
+
+      <Sheet open={browse} onClose={() => setBrowse(false)} label="the model list" side="bottom">
+        {sidebar}
+        <button onClick={() => setBrowse(false)} className="absolute top-5 right-4 grid size-8 place-items-center rounded-md text-ash hover:text-bone" aria-label="Close">
+          <X className="size-5" />
+        </button>
+      </Sheet>
+      <Sheet open={!wide && wardrobe && Boolean(wardrobePanel)} onClose={() => setWardrobe(false)} label="the wardrobe" side="right">
+        {wardrobePanel}
+      </Sheet>
     </main>
   );
 }

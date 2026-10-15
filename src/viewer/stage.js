@@ -2,7 +2,9 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { createDotaMaterial, stageRim } from "./dotaMaterial.js";
+import { StageEffects } from "./effects.js";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -21,18 +23,73 @@ function loadModel(url, onProgress) {
   return cache.get(url);
 }
 
-// Textures by their vmat names, which is how the Dota materials refer to them
+// Textures by their vmat names, which is how the Dota materials refer to them.
+// Only the textures in glTF material slots have texture entries, the masks and
+// warp ramps are kept as bare images, so every image is loaded as a texture.
 async function prepareTextures(gltf) {
-  const definitions = gltf.parser.json.textures ?? [];
+  const { parser } = gltf;
+  const images = parser.json.images ?? [];
   const textures = {};
   await Promise.all(
-    definitions.map(async (definition, index) => {
-      const texture = await gltf.parser.getDependency("texture", index);
-      textures[definition.name] = texture;
+    images.map(async (image, index) => {
+      const texture = await parser.loadImageSource(index, parser.textureLoader);
+      texture.flipY = false;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.name = image.name;
+      textures[image.name] = texture;
     })
   );
   gltf.userData.textures = textures;
   return gltf;
+}
+
+// Material variants: <model>.skins.json next to the model, with the textures in the
+// dataset's textures/ folder. A model without variants answers 404 and keeps its own.
+const skinFiles = new Map();
+const variantTextures = new Map();
+const textureLoader = new THREE.TextureLoader();
+
+function loadVariantTexture(url, color) {
+  if (!variantTextures.has(url)) {
+    variantTextures.set(
+      url,
+      textureLoader.loadAsync(url).then((texture) => {
+        texture.flipY = false;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+        return texture;
+      })
+    );
+  }
+  return variantTextures.get(url);
+}
+
+// { "<material name>": { vmat, textures: { g_tColor: Texture, ... } } } for skin N of a model
+async function loadSkin(modelUrl, skin) {
+  const url = modelUrl.replace(/\.glb$/, ".skins.json");
+  if (!skinFiles.has(url)) {
+    skinFiles.set(url, fetch(url).then((res) => (res.ok ? res.json() : null)).catch(() => null));
+  }
+  const materials = (await skinFiles.get(url))?.[skin];
+  if (!materials) {
+    return null;
+  }
+  const base = modelUrl.slice(0, modelUrl.indexOf("models/"));
+  const result = {};
+  await Promise.all(
+    Object.entries(materials).map(async ([name, vmat]) => {
+      const textures = {};
+      await Promise.all(
+        Object.entries(vmat.TextureParams).map(async ([param, path]) => {
+          textures[param] = await loadVariantTexture(base + path, param === "g_tColor" || param === "g_tCubeMap").catch(() => null);
+        })
+      );
+      result[name] = { vmat, textures };
+    })
+  );
+  return result;
 }
 
 function dotaMaterialFor(material, textures) {
@@ -44,7 +101,7 @@ function dotaMaterialFor(material, textures) {
   for (const [param, name] of Object.entries(vmat.TextureParams ?? {})) {
     const texture = textures[name];
     if (texture) {
-      texture.colorSpace = param === "g_tColor" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      texture.colorSpace = param === "g_tColor" || param === "g_tCubeMap" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
       texture.needsUpdate = true;
       byParam[param] = texture;
     }
@@ -99,6 +156,19 @@ export class Stage {
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(28, 1, 1, 10000);
+
+    // Lights for plain shading only; the Dota material lights itself.
+    // The key light rides with the camera, like the Dota shader's rig.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.6;
+    pmrem.dispose();
+    this.scene.add(new THREE.HemisphereLight(0xb8c4d6, 0x1a1714, 1.2));
+    const key = new THREE.DirectionalLight(0xfff6ea, 2.2);
+    key.position.set(-0.45, 0.75, 0.5);
+    key.target.position.set(0, 0, -1);
+    this.camera.add(key, key.target);
+    this.scene.add(this.camera);
     this.camera.position.set(0, 120, 420);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -111,17 +181,16 @@ export class Stage {
       new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
-        uniforms: { uColor: stageRim },
         vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-        fragmentShader: `uniform vec3 uColor; varying vec2 vUv;
+        fragmentShader: `varying vec2 vUv;
           void main(){ float d = distance(vUv, vec2(0.5)) * 2.0;
-            float shadow = smoothstep(1.0, 0.0, d) * 0.55;
-            float ring = smoothstep(0.06, 0.0, abs(d - 0.92)) * 0.35;
-            gl_FragColor = vec4(mix(vec3(0.0), uColor, ring / max(shadow + ring, 0.001)), shadow + ring); }`,
+            gl_FragColor = vec4(vec3(0.0), smoothstep(1.0, 0.0, d) * 0.6); }`,
       })
     );
     this.floor.rotation.x = -Math.PI / 2;
+    this.floor.renderOrder = 1;
     this.scene.add(this.floor);
+    this.effects = new StageEffects(this.scene, reducedMotion);
 
     this.clock = new THREE.Clock();
     this.group = null;
@@ -154,6 +223,7 @@ export class Stage {
   // urls[0] is the base (a hero), the rest are worn on it. The model with the most
   // animations becomes the skeleton everything follows, so a body-replacing arcana
   // takes the place of the hero base.
+  // An url may end with #skin=N for a material variant of the model.
   async show(urls, onProgress) {
     const request = ++this.request;
     const loaded = new Map();
@@ -167,14 +237,21 @@ export class Stage {
       onProgress?.(total ? done / total : 0);
     };
 
-    const gltfs = await Promise.all(
-      urls.map((url) =>
-        loadModel(url, (event) => {
-          loaded.set(url, { loaded: event.loaded, total: event.total });
-          report();
-        })
-      )
-    );
+    const entries = urls.map((entry) => {
+      const [url, skin] = entry.split("#skin=");
+      return { url, skin: Number(skin) || 0 };
+    });
+    const [gltfs, skins] = await Promise.all([
+      Promise.all(
+        entries.map(({ url }) =>
+          loadModel(url, (event) => {
+            loaded.set(url, { loaded: event.loaded, total: event.total });
+            report();
+          })
+        )
+      ),
+      Promise.all(entries.map(({ url, skin }) => (skin ? loadSkin(url, skin) : null))),
+    ]);
     if (request !== this.request) {
       return null;
     }
@@ -188,7 +265,7 @@ export class Stage {
 
     const group = new THREE.Group();
     const root = cloneSkinned(gltfs[rootIndex].scene);
-    this.applyMaterials(root, gltfs[rootIndex].userData.textures);
+    this.applyMaterials(root, gltfs[rootIndex].userData.textures, skins[rootIndex]);
     group.add(root);
 
     gltfs.forEach((gltf, index) => {
@@ -197,7 +274,7 @@ export class Stage {
         return;
       }
       const part = cloneSkinned(gltf.scene);
-      this.applyMaterials(part, gltf.userData.textures);
+      this.applyMaterials(part, gltf.userData.textures, skins[index]);
       attach(root, part);
     });
 
@@ -205,16 +282,26 @@ export class Stage {
     return Object.keys(this.actions);
   }
 
-  applyMaterials(object, textures) {
+  // skin: { "<material name>": { vmat, textures } } of a material variant, swapped in
+  applyMaterials(object, textures, skin) {
     object.traverse((node) => {
       if (!node.isMesh) {
         return;
       }
       node.frustumCulled = false;
       const original = node.material;
-      node.userData.pbr = original;
-      node.userData.dota = dotaMaterialFor(original, textures) ?? original;
-      node.material = this.shading === "dota" ? node.userData.dota : original;
+      const variant = skin?.[original.name];
+      if (variant) {
+        const plain = original.clone();
+        plain.map = variant.textures.g_tColor ?? plain.map;
+        plain.normalMap = variant.textures.g_tNormal ?? plain.normalMap;
+        node.userData.pbr = plain;
+        node.userData.dota = createDotaMaterial(original, variant.vmat, variant.textures);
+      } else {
+        node.userData.pbr = original;
+        node.userData.dota = dotaMaterialFor(original, textures) ?? original;
+      }
+      node.material = this.shading === "dota" ? node.userData.dota : node.userData.pbr;
     });
   }
 
@@ -230,6 +317,7 @@ export class Stage {
     }
 
     this.group = group;
+    this.animated = animations.length > 0;
     this.scene.add(group);
     this.mixer = new THREE.AnimationMixer(group);
     this.actions = {};
@@ -246,6 +334,7 @@ export class Stage {
     }
     this.mixer.update(0);
     this.frameModel();
+    this.effects.burst();
   }
 
   play(name, fade = 0.25) {
@@ -298,10 +387,32 @@ export class Stage {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z) * 0.5;
-    const distance = radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.75;
 
-    this.floor.position.set(center.x, box.min.y, center.z);
-    this.floor.scale.setScalar(Math.max(size.x, size.z) * 0.75 + radius * 0.2);
+    // Animated models (heroes, couriers) stand and are seen from the front. A weapon or another part
+    // shown alone lies the way it sits on the hero, so look at its broadest side instead.
+    const standing = this.animated || size.y >= 0.6 * Math.max(size.x, size.z);
+    let direction = new THREE.Vector3(0.35, 0.18, 1);
+    if (!standing) {
+      const axes = [
+        { size: size.x, axis: new THREE.Vector3(1, 0, 0) },
+        { size: size.y, axis: new THREE.Vector3(0, 1, 0) },
+        { size: size.z, axis: new THREE.Vector3(0, 0, 1) },
+      ].sort((a, b) => a.size - b.size);
+      direction = axes[0].axis.clone().add(axes[1].axis.clone().multiplyScalar(0.45)).add(new THREE.Vector3(0, 0.25, 0));
+    }
+    // A standing model is fitted by its height and width as seen from the front,
+    // so a long tail behind it does not shrink it; anything else by its bounding sphere
+    const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const distance = standing
+      ? Math.max(size.y / 2 / tan, size.x / 2 / (tan * this.camera.aspect)) * 1.9 + size.z * 0.25
+      : (radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2))) * 1.3;
+
+    // Seen from above, the floor ring would frame the whole view
+    const pedestal = size.x * 0.52 + size.y * 0.1;
+    this.floor.visible = standing;
+    this.floor.position.set(center.x, box.min.y + pedestal * 0.002, center.z);
+    this.floor.scale.setScalar(size.x * 0.55 + size.y * 0.1);
+    this.effects.place(new THREE.Vector3(center.x, box.min.y, center.z), pedestal, size.y, standing);
 
     this.camera.near = distance / 100;
     this.camera.far = distance * 20;
@@ -310,8 +421,8 @@ export class Stage {
     this.controls.maxDistance = distance * 4;
 
     // Aim a little below the middle so the model sits above the title
-    const target = center.clone().add(new THREE.Vector3(0, -size.y * 0.12, 0));
-    const position = center.clone().add(new THREE.Vector3(0.35, 0.18, 1).normalize().multiplyScalar(distance));
+    const target = center.clone().add(new THREE.Vector3(0, standing ? -size.y * 0.16 : -radius * 0.15, 0));
+    const position = target.clone().add(direction.normalize().multiplyScalar(distance));
 
     if (immediate || reducedMotion.matches) {
       this.controls.target.copy(target);
@@ -336,6 +447,7 @@ export class Stage {
       this.mixer.update(delta * this.speed);
     }
 
+    this.effects.update(delta);
     stageRim.value.lerp(this.rimTarget, reducedMotion.matches ? 1 : Math.min(delta * 3, 1));
 
     if (this.tween) {

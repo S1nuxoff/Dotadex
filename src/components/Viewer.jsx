@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
+  Box,
   Check,
   ChevronUp,
   Download,
@@ -10,67 +11,29 @@ import {
   Play,
   RotateCw,
   Search,
+  Shirt,
   Sparkles,
-  Box,
 } from "lucide-react";
 import { Stage } from "../viewer/stage.js";
-import { HERO_COLOR, composition, heroPortrait, rarity, slotName } from "../catalog.js";
+import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName } from "../catalog.js";
+import { IconButton, Popover, Toggle, useDismiss } from "./ui.jsx";
 
 const SPEEDS = [0.5, 1, 1.5];
 
-function IconButton({ label, onClick, children, active }) {
-  return (
-    <button
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className={`grid size-9 place-items-center rounded-lg border transition-colors ${
-        active ? "border-aegis/60 bg-raised text-bone" : "border-line bg-panel/80 text-ash hover:text-bone"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Popover({ open, children, className = "" }) {
-  const reduce = useReducedMotion();
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={reduce ? false : { opacity: 0, y: 6, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={reduce ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98 }}
-          transition={{ duration: 0.16, ease: "easeOut" }}
-          className={`absolute z-20 rounded-xl border border-line bg-panel shadow-2xl shadow-black/40 ${className}`}
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+// ?shading=plain in the link, or the last choice on this device
+function initialShading() {
+  const fromLink = new URLSearchParams(window.location.search).get("shading");
+  let saved = null;
+  try {
+    saved = localStorage.getItem("shading");
+  } catch {}
+  return [fromLink, saved].find((value) => value === "dota" || value === "plain") ?? "dota";
 }
 
 function AnimationPicker({ names, current, onPick }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const close = (event) => !ref.current?.contains(event.target) && setOpen(false);
-    const escape = (event) => event.key === "Escape" && setOpen(false);
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [open]);
-
+  const ref = useDismiss(open, setOpen);
   const shown = names.filter((name) => name.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
@@ -119,27 +82,8 @@ function AnimationPicker({ names, current, onPick }) {
   );
 }
 
-function Toggle({ options, value, onChange, label }) {
-  return (
-    <div role="group" aria-label={label} className="flex rounded-lg border border-line bg-panel/80 p-0.5">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          onClick={() => onChange(option.value)}
-          aria-pressed={value === option.value}
-          className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors ${
-            value === option.value ? "bg-raised text-bone" : "text-ash hover:text-bone"
-          }`}
-        >
-          {option.icon}
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export default function Viewer({ catalog, selection }) {
+// outfit: what is on screen (see outfitFor), urls: the models to load
+export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVariant, onWardrobe }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -150,29 +94,20 @@ export default function Viewer({ catalog, selection }) {
   const [current, setCurrent] = useState(null);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [shading, setShading] = useState("dota");
-  const [onHero, setOnHero] = useState(true);
-  const [variant, setVariant] = useState(0);
+  const [shading, setShading] = useState(initialShading);
   const [copied, setCopied] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
-  const item = selection.type === "item" ? catalog.itemsById[selection.id] : null;
-  const hero = selection.type === "hero" ? catalog.heroesById[selection.id] : item?.hero && catalog.heroesById[item.hero];
+  const item = outfit.focus ? catalog.itemsById[outfit.focus] : null;
+  const hero = outfit.hero ? catalog.heroesById[outfit.hero] : null;
   const color = item ? rarity(item).color : HERO_COLOR;
-  const urls = useMemo(
-    () => composition(catalog, selection, { onHero, variant }),
-    [catalog, selection, onHero, variant]
-  );
+  const urlsKey = urls.join("|");
 
   useEffect(() => {
     const stage = new Stage(canvasRef.current);
     stageRef.current = stage;
     return () => stage.dispose();
   }, []);
-
-  useEffect(() => {
-    setVariant(0);
-  }, [selection]);
 
   useEffect(() => {
     stageRef.current.setRim(color);
@@ -201,9 +136,16 @@ export default function Viewer({ catalog, selection }) {
     return () => {
       cancelled = true;
     };
-  }, [urls, attempt]);
+    // urls change identity on every render, the key does not
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlsKey, attempt]);
 
-  useEffect(() => stageRef.current.setShading(shading), [shading]);
+  useEffect(() => {
+    stageRef.current.setShading(shading);
+    try {
+      localStorage.setItem("shading", shading);
+    } catch {}
+  }, [shading]);
   useEffect(() => stageRef.current.setPaused(paused), [paused]);
   useEffect(() => stageRef.current.setSpeed(speed), [speed]);
 
@@ -220,10 +162,12 @@ export default function Viewer({ catalog, selection }) {
   };
 
   const title = item ? item.name : hero?.name;
-  const ownModels = item ? [...new Set(item.models)] : [hero.model];
+  const changed = hero && !item ? Object.keys(outfit.slots).length : 0;
   const subtitle = item
-    ? [rarity(item).name, slotName(item.slot ?? (item.kind === "wearable" ? "weapon" : null))].filter(Boolean)
-    : ["Hero"];
+    ? [rarity(item).name, item.slot && slotName(item.slot), item.hero && catalog.heroNames[item.hero], formatPrice(item.price)]
+    : ["Hero", changed > 0 && `${changed} ${changed === 1 ? "item" : "items"} changed`];
+  const downloads = item ? itemModels(item, outfit.style) : hero ? [hero.model] : [];
+  const styles = item?.styles;
 
   return (
     <section className="stage-backdrop relative h-full overflow-hidden" style={{ "--rim": color }}>
@@ -242,7 +186,7 @@ export default function Viewer({ catalog, selection }) {
           onChange={setShading}
           options={[
             { value: "dota", label: "Dota", icon: <Sparkles className="size-3.5" /> },
-            { value: "pbr", label: "Plain", icon: <Box className="size-3.5" /> },
+            { value: "plain", label: "Plain", icon: <Box className="size-3.5" /> },
           ]}
         />
         <IconButton label="Fit to view" onClick={() => stageRef.current.frameModel()}>
@@ -251,6 +195,11 @@ export default function Viewer({ catalog, selection }) {
         <IconButton label={copied ? "Link copied" : "Copy link"} onClick={copyLink} active={copied}>
           {copied ? <Check className="size-4" /> : <Link2 className="size-4" />}
         </IconButton>
+        {hero && onWardrobe && (
+          <IconButton label="Wardrobe" onClick={onWardrobe}>
+            <Shirt className="size-4" />
+          </IconButton>
+        )}
       </div>
 
       {error && (
@@ -271,7 +220,7 @@ export default function Viewer({ catalog, selection }) {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-stage via-stage/70 to-transparent px-5 pt-24 pb-5 sm:px-8 sm:pb-7">
         <AnimatePresence mode="wait">
           <motion.div
-            key={`${selection.type}/${selection.id}`}
+            key={item ? `item/${item.id}` : `hero/${hero?.id}`}
             initial={reduce ? false : { opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
@@ -279,13 +228,13 @@ export default function Viewer({ catalog, selection }) {
             className="max-w-3xl"
           >
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              {subtitle.map((part, index) => (
+              {subtitle.filter(Boolean).map((part, index) => (
                 <span key={part} style={index === 0 ? { color } : undefined} className={index === 0 ? "" : "text-ash"}>
                   {part}
                 </span>
               ))}
             </p>
-            <h2 className="mt-1 font-display text-4xl leading-[1.05] text-bone text-balance sm:text-5xl lg:text-6xl">{title}</h2>
+            <h2 className="mt-1 font-display text-4xl leading-[1.05] text-balance text-bone sm:text-5xl lg:text-6xl">{title}</h2>
           </motion.div>
         </AnimatePresence>
 
@@ -296,45 +245,51 @@ export default function Viewer({ catalog, selection }) {
                 {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
               </IconButton>
               <AnimationPicker names={animations} current={current} onPick={pick} />
-              <Toggle
-                label="Animation speed"
-                value={speed}
-                onChange={setSpeed}
-                options={SPEEDS.map((value) => ({ value, label: `${value}×` }))}
-              />
+              <Toggle label="Animation speed" value={speed} onChange={setSpeed} options={SPEEDS.map((value) => ({ value, label: `${value}×` }))} />
             </>
           )}
 
-          {item?.hero && hero && item.kind === "wearable" && (
+          {styles && (
             <Toggle
-              label="Show the item"
-              value={onHero}
-              onChange={setOnHero}
-              options={[
-                {
-                  value: true,
-                  label: `On ${hero.name}`,
-                  icon: <img src={heroPortrait(hero)} alt="" className="h-4 w-7 rounded-sm object-cover" />,
-                },
-                { value: false, label: "Alone" },
-              ]}
-            />
-          )}
-
-          {item?.kind === "courier" && ownModels.length > 1 && (
-            <Toggle
-              label="Courier form"
-              value={variant}
-              onChange={setVariant}
-              options={ownModels.map((model, index) => ({
+              label="Style"
+              value={outfit.style ?? 0}
+              onChange={onStyle}
+              options={styles.map((style, index) => ({
                 value: index,
-                label: /flying/.test(model) ? "Flying" : "Ground",
+                label: `Style ${index + 1}`,
+                disabled: style.missing,
+                title: style.missing ? "This style's model is not exported yet" : undefined,
               }))}
             />
           )}
 
+          {item?.hero && catalog.heroesById[item.hero] && (
+            <Toggle
+              label="Show the item"
+              value={!outfit.hero ? "alone" : "hero"}
+              onChange={(value) => onAlone(value === "alone")}
+              options={[
+                {
+                  value: "hero",
+                  label: `On ${catalog.heroNames[item.hero]}`,
+                  icon: <img src={heroPortrait(catalog.heroesById[item.hero])} alt="" className="h-4 w-7 rounded-sm object-cover" />,
+                },
+                { value: "alone", label: "Alone" },
+              ]}
+            />
+          )}
+
+          {item?.kind === "courier" && !outfit.hero && item.models.length > 1 && (
+            <Toggle
+              label="Courier form"
+              value={(outfit.variant ?? 0) % item.models.length}
+              onChange={onVariant}
+              options={item.models.map((model, index) => ({ value: index, label: /flying/.test(model) ? "Flying" : "Ground" }))}
+            />
+          )}
+
           <div className="ml-auto flex items-center gap-2">
-            {ownModels.map((model) => (
+            {downloads.map((model) => (
               <a
                 key={model}
                 href={catalog.modelsBase + model}
@@ -343,7 +298,7 @@ export default function Viewer({ catalog, selection }) {
                 title={model}
               >
                 <Download className="size-4" />
-                {ownModels.length > 1 ? model.split("/").pop() : "Download GLB"}
+                {downloads.length > 1 ? model.split("/").pop() : "Download GLB"}
               </a>
             ))}
           </div>

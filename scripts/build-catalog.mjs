@@ -1,11 +1,12 @@
-// Builds public/catalog.json: the heroes and items whose models are on Hugging Face,
-// with what the viewer needs to list and show them.
+// Builds public/catalog.json: every hero and item that has a model, with what the
+// viewer needs to list, filter and show them. Which models are exported so far is read
+// from the dataset's index.json in the browser, so new ones show up without a rebuild.
 import fs from "node:fs";
 
 const DATASET = process.env.HF_DATASET || "Sqls1/dota2-models";
 const MODELS_BASE = `https://huggingface.co/datasets/${DATASET}/resolve/main/`;
-const ITEMS_URL =
-  "https://raw.githubusercontent.com/S1nuxoff/dota2-file-tracker/main/static/items_game.json";
+const FILES = "https://raw.githubusercontent.com/S1nuxoff/dota2-file-tracker/main/static";
+const PRICES_URL = "https://raw.githubusercontent.com/S1nuxoff/dota2-price-tacker/main/static/prices/latest.json";
 const OUT = "public/catalog.json";
 
 // Internal hero names that differ from the ones players know
@@ -31,9 +32,13 @@ const HERO_NAMES = {
   zuus: "Zeus",
 };
 
-async function getJson(url) {
+async function getJson(url, fallback) {
   const res = await fetch(url);
   if (!res.ok) {
+    if (fallback !== undefined) {
+      console.warn(`${url}: HTTP ${res.status}, going on without it`);
+      return fallback;
+    }
     throw new Error(`${url}: HTTP ${res.status}`);
   }
   return res.json();
@@ -43,53 +48,112 @@ function heroName(id) {
   return HERO_NAMES[id] ?? id.split("_").map((word) => word[0].toUpperCase() + word.slice(1)).join(" ");
 }
 
-const index = await getJson(`${MODELS_BASE}index.json`);
-const itemsGame = (await getJson(ITEMS_URL)).items_game.items;
+const heroIdOf = (key) => key.replace("npc_dota_hero_", "");
+
+// INDEX_FILE: a local index.json, to try the site with a full catalog before an export
+const [index, itemsGame, english, prices] = await Promise.all([
+  process.env.INDEX_FILE ? JSON.parse(fs.readFileSync(process.env.INDEX_FILE, "utf8")) : getJson(`${MODELS_BASE}index.json`),
+  getJson(`${FILES}/items_game.json`).then((data) => data.items_game),
+  getJson(`${FILES}/items_english.json`, { lang: { Tokens: {} } }).then((data) => data.lang.Tokens),
+  getJson(PRICES_URL, {}),
+]);
+const gameItems = itemsGame.items;
+const localize = (token) => (token?.startsWith("#") ? english[token.slice(1)] : null);
+
+// A market price: the average of the last month, or the last sale for items rarely sold
+function priceOf(name) {
+  const steam = prices[name]?.steam;
+  const value = steam && (steam.last_30d ?? steam.last_7d ?? steam.last_90d ?? steam.last_ever);
+  return value ? Math.round(value * 100) / 100 : undefined;
+}
 
 const heroes = {};
 for (const [key, model] of Object.entries(index.heroes)) {
-  const id = key.replace("npc_dota_hero_", "");
+  const id = heroIdOf(key);
   heroes[id] = { id, name: heroName(id), model, defaults: [] };
 }
 
-const exported = new Set(Object.values(index.items).flatMap((item) => item.models));
 const items = [];
+const idByName = new Map();
 
 for (const [id, entry] of Object.entries(index.items)) {
-  const item = itemsGame[id];
+  const item = gameItems[id];
   const heroKeys = Object.keys(item.used_by_heroes ?? {});
-  const hero = heroKeys.length === 1 ? heroKeys[0].replace("npc_dota_hero_", "") : null;
-  const kind =
-    item.prefab === "courier" ? "courier" : item.prefab === "ward" ? "ward" : hero ? "wearable" : "other";
+  const hero = heroKeys.length === 1 ? heroIdOf(heroKeys[0]) : null;
+  const kind = item.prefab === "courier" ? "courier" : item.prefab === "ward" ? "ward" : hero ? "wearable" : "other";
 
-  items.push({
+  const record = {
     id,
     name: entry.name,
     kind,
-    hero,
-    slot: item.item_slot ?? null,
     rarity: item.item_rarity ?? (item.prefab === "default_item" ? "default" : "common"),
-    icon: item.image_inventory ?? null,
     models: entry.models,
-  });
+  };
+  if (hero) {
+    record.hero = hero;
+    // Wearables without a slot are weapons, as in the game
+    record.slot = item.item_slot ?? "weapon";
+  }
+  if (item.prefab === "default_item") {
+    record.default = 1;
+  }
+  if (item.image_inventory) {
+    record.icon = item.image_inventory;
+  }
+  if (item.creation_date) {
+    record.date = item.creation_date;
+  }
+  if (entry.styles) {
+    record.styles = entry.styles;
+  }
+  if (entry.skin) {
+    record.skin = entry.skin;
+  }
+  const price = priceOf(entry.name);
+  if (price) {
+    record.price = price;
+  }
+
+  items.push(record);
+  idByName.set(entry.name, id);
 }
 
 // What a hero wears by default, skipping personas, so a hero shows up complete
-for (const [id, item] of Object.entries(itemsGame)) {
-  if (item.prefab !== "default_item" || /persona/.test(item.item_slot ?? "")) {
+for (const [id, item] of Object.entries(gameItems)) {
+  if (item.prefab !== "default_item" || /persona/.test(item.item_slot ?? "") || !index.items[id]) {
     continue;
   }
-  const models = index.items[id]?.models.filter((model) => exported.has(model)) ?? [];
   for (const key of Object.keys(item.used_by_heroes ?? {})) {
-    const hero = heroes[key.replace("npc_dota_hero_", "")];
-    if (hero && models.length > 0) {
-      hero.defaults.push({ slot: item.item_slot ?? "weapon", models });
-    }
+    heroes[heroIdOf(key)]?.defaults.push({ id, slot: item.item_slot ?? "weapon", models: index.items[id].models });
+  }
+}
+
+const itemById = new Map(items.map((item) => [item.id, item]));
+
+// Sets of a hero's items, worn together
+const sets = [];
+for (const [key, set] of Object.entries(itemsGame.item_sets ?? {})) {
+  const ids = Object.keys(set.items ?? {})
+    .map((name) => idByName.get(name))
+    .filter(Boolean);
+  const heroesOfSet = new Set(ids.map((id) => itemById.get(id).hero).filter(Boolean));
+  if (ids.length < 2 || heroesOfSet.size !== 1) {
+    continue;
+  }
+  const record = { id: key, name: localize(set.name) ?? set.store_bundle ?? key, hero: [...heroesOfSet][0], items: ids };
+  if (set.portrait_image) {
+    record.icon = set.portrait_image;
+  }
+  sets.push(record);
+  for (const id of ids) {
+    itemById.get(id).set ??= key;
   }
 }
 
 items.sort((a, b) => a.name.localeCompare(b.name));
-// Names of every hero an item belongs to, also those without an exported model yet
+sets.sort((a, b) => a.name.localeCompare(b.name));
+
+// Names of every hero an item belongs to, also heroes without a model of their own
 const heroNames = {};
 for (const item of items) {
   if (item.hero) {
@@ -103,8 +167,9 @@ const catalog = {
   heroNames,
   heroes: Object.values(heroes).sort((a, b) => a.name.localeCompare(b.name)),
   items,
+  sets,
 };
 
 fs.mkdirSync("public", { recursive: true });
 fs.writeFileSync(OUT, JSON.stringify(catalog));
-console.log(`${catalog.heroes.length} heroes, ${items.length} items -> ${OUT}`);
+console.log(`${catalog.heroes.length} heroes, ${items.length} items, ${sets.length} sets -> ${OUT}`);

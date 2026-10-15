@@ -1,46 +1,142 @@
 import { useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Search, X, ExternalLink } from "lucide-react";
-import { TABS, HERO_COLOR, rarity, itemIcon, heroPortrait } from "../catalog.js";
+import { ExternalLink, Search, SlidersHorizontal, X } from "lucide-react";
+import {
+  HERO_COLOR,
+  RARITIES,
+  SORTS,
+  TABS,
+  formatPrice,
+  heroPortrait,
+  itemIcon,
+  rarity,
+  slotName,
+  sortItems,
+} from "../catalog.js";
+import { Select } from "./ui.jsx";
 
-function rowsFor(catalog, tab) {
+const ANY = "";
+
+// Rows of the list for the current tab and filters
+function rowsFor(catalog, tab, filters) {
   if (tab === "heroes") {
     return catalog.heroes.map((hero) => ({
       key: `hero/${hero.id}`,
-      selection: { type: "hero", id: hero.id },
+      route: { type: "hero", id: hero.id },
       name: hero.name,
-      detail: hero.defaults.length ? `${hero.defaults.length} default items` : "Base model",
+      detail: `${(catalog.itemsByHero[hero.id] ?? []).filter((item) => !item.default).length} cosmetics`,
       color: HERO_COLOR,
       image: heroPortrait(hero),
       wide: true,
     }));
   }
-  return catalog.items
-    .filter((item) => item.kind === tab)
-    .map((item) => ({
-      key: `item/${item.id}`,
-      selection: { type: "item", id: item.id },
-      name: item.name,
-      detail: item.hero ? catalog.heroNames[item.hero] : rarity(item).name,
-      color: rarity(item).color,
-      image: itemIcon(item),
-    }));
+
+  if (tab === "sets") {
+    return catalog.sets
+      .filter((set) => !filters.hero || set.hero === filters.hero)
+      .map((set) => {
+        const items = set.items.map((id) => catalog.itemsById[id]);
+        return {
+          key: `set/${set.id}`,
+          route: {
+            type: "hero",
+            id: set.hero,
+            slots: Object.fromEntries(items.map((item) => [item.slot, { id: item.id, style: 0 }])),
+          },
+          name: set.name,
+          detail: `${catalog.heroNames[set.hero]}, ${items.length} items`,
+          color: rarity(items[0]).color,
+          image: itemIcon(set),
+          wide: true,
+          disabled: !catalog.heroesById[set.hero],
+        };
+      });
+  }
+
+  const items = catalog.items.filter(
+    (item) =>
+      item.kind === tab &&
+      !item.default &&
+      (!filters.hero || item.hero === filters.hero) &&
+      (!filters.slot || item.slot === filters.slot) &&
+      (!filters.rarity || item.rarity === filters.rarity)
+  );
+  return sortItems(items, filters.sort).map((item) => ({
+    key: `item/${item.id}`,
+    route: { type: "item", id: item.id },
+    name: item.name,
+    detail: item.hero ? `${catalog.heroNames[item.hero]}, ${slotName(item.slot).toLowerCase()}` : rarity(item).name,
+    price: formatPrice(item.price),
+    color: rarity(item).color,
+    image: itemIcon(item),
+  }));
 }
 
-export default function Sidebar({ catalog, tab, onTab, selected, onSelect }) {
+function isActive(row, route) {
+  if (!route) {
+    return false;
+  }
+  if (row.key.startsWith("set/")) {
+    return (
+      route.type === "hero" &&
+      route.id === row.route.id &&
+      Object.keys(row.route.slots).every((slot) => route.slots?.[slot]?.id === row.route.slots[slot].id)
+    );
+  }
+  return `${route.type}/${route.id}` === row.key;
+}
+
+export default function Sidebar({ catalog, tab, onTab, route, onOpen }) {
   const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState({ hero: ANY, slot: ANY, rarity: ANY, sort: "newest" });
+  const [showFilters, setShowFilters] = useState(false);
   const scrollRef = useRef(null);
+  const setFilter = (key) => (value) => setFilters((current) => ({ ...current, [key]: value }));
 
   const counts = useMemo(() => {
-    const result = { heroes: catalog.heroes.length };
+    const result = { heroes: catalog.heroes.length, sets: catalog.sets.length };
     for (const item of catalog.items) {
-      result[item.kind] = (result[item.kind] ?? 0) + 1;
+      if (!item.default) {
+        result[item.kind] = (result[item.kind] ?? 0) + 1;
+      }
     }
     return result;
   }, [catalog]);
 
+  const heroOptions = useMemo(() => {
+    const heroes = [...new Set(catalog.items.filter((item) => item.hero).map((item) => item.hero))];
+    return [
+      { value: ANY, label: "Any hero" },
+      ...heroes.map((id) => ({ value: id, label: catalog.heroNames[id] })).sort((a, b) => a.label.localeCompare(b.label)),
+    ];
+  }, [catalog]);
+
+  const slotOptions = useMemo(() => {
+    const slots = new Map();
+    for (const item of catalog.items) {
+      if (item.slot && !item.default && (!filters.hero || item.hero === filters.hero)) {
+        slots.set(item.slot, (slots.get(item.slot) ?? 0) + 1);
+      }
+    }
+    return [
+      { value: ANY, label: "Any slot" },
+      ...[...slots].sort((a, b) => b[1] - a[1]).map(([slot, count]) => ({ value: slot, label: slotName(slot), hint: count })),
+    ];
+  }, [catalog, filters.hero]);
+
+  const rarityOptions = [
+    { value: ANY, label: "Any rarity" },
+    ...Object.entries(RARITIES)
+      .filter(([id]) => id !== "default")
+      .map(([id, entry]) => ({
+        value: id,
+        label: entry.name,
+        icon: <span className="size-2 shrink-0 rounded-full" style={{ background: entry.color }} />,
+      })),
+  ];
+
   const rows = useMemo(() => {
-    const all = rowsFor(catalog, tab);
+    const all = rowsFor(catalog, tab, filters);
     const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (words.length === 0) {
       return all;
@@ -49,7 +145,7 @@ export default function Sidebar({ catalog, tab, onTab, selected, onSelect }) {
       const text = `${row.name} ${row.detail}`.toLowerCase();
       return words.every((word) => text.includes(word));
     });
-  }, [catalog, tab, query]);
+  }, [catalog, tab, filters, query]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -58,19 +154,29 @@ export default function Sidebar({ catalog, tab, onTab, selected, onSelect }) {
     overscan: 12,
   });
 
+  const ready = catalog.heroes.length + catalog.items.length;
+  const filterable = tab !== "heroes";
+  const activeFilters = [filters.hero, tab === "wearable" && filters.slot, tab !== "sets" && filters.rarity].filter(Boolean).length;
 
   return (
     <aside className="flex h-full flex-col bg-panel">
       <div className="px-5 pt-6 pb-4">
         <h1 className="font-display text-[1.65rem] leading-none text-bone">Dota 2 Model Viewer</h1>
-        <p className="mt-2 text-sm text-ash">
-          {catalog.heroes.length.toLocaleString("en")} heroes and {catalog.items.length.toLocaleString("en")} items
-          from the game files, shown with Dota's hero shading.
-        </p>
+        <p className="mt-2 text-sm text-ash">Heroes, cosmetics, couriers and wards from the game files, shown with Dota's hero shading.</p>
+        {ready < catalog.total && (
+          <div className="mt-3">
+            <div className="h-1 overflow-hidden rounded-full bg-line" aria-hidden>
+              <div className="h-full rounded-full bg-aegis transition-[width] duration-700" style={{ width: `${(ready / catalog.total) * 100}%` }} />
+            </div>
+            <p className="mt-1.5 text-xs text-ash">
+              {ready.toLocaleString("en")} of {catalog.total.toLocaleString("en")} ready. New ones appear as they are exported.
+            </p>
+          </div>
+        )}
       </div>
 
-      <div className="px-5">
-        <label className="group flex items-center gap-2.5 rounded-lg border border-line bg-stage/60 px-3 py-2 transition-colors focus-within:border-aegis/70">
+      <div className="flex gap-2 px-5">
+        <label className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-line bg-stage/60 px-3 py-2 transition-colors focus-within:border-aegis/70">
           <Search className="size-4 shrink-0 text-ash" aria-hidden />
           <input
             value={query}
@@ -85,9 +191,56 @@ export default function Sidebar({ catalog, tab, onTab, selected, onSelect }) {
             </button>
           )}
         </label>
+        {filterable && (
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            aria-expanded={showFilters}
+            aria-label="Filters and sorting"
+            title="Filters and sorting"
+            className={`relative grid w-10 shrink-0 place-items-center rounded-lg border transition-colors ${
+              showFilters || activeFilters ? "border-aegis/60 text-bone" : "border-line text-ash hover:text-bone"
+            }`}
+          >
+            <SlidersHorizontal className="size-4" />
+            {activeFilters > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full bg-aegis text-[10px] font-semibold text-stage">
+                {activeFilters}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
-      <nav className="mt-4 flex gap-1 overflow-x-auto px-5 pb-3 scrollbar-thin" aria-label="Model types">
+      {filterable && showFilters && (
+        <div className="grid grid-cols-2 gap-2 px-5 pt-3">
+          <Select label="Hero" value={filters.hero} onChange={setFilter("hero")} options={heroOptions} placeholder="Any hero" />
+          {tab === "wearable" && (
+            <Select label="Slot" value={filters.slot} onChange={setFilter("slot")} options={slotOptions} placeholder="Any slot" align="right" />
+          )}
+          {tab !== "sets" && (
+            <Select label="Rarity" value={filters.rarity} onChange={setFilter("rarity")} options={rarityOptions} placeholder="Any rarity" />
+          )}
+          {tab !== "sets" && (
+            <Select
+              label="Sort"
+              value={filters.sort}
+              onChange={setFilter("sort")}
+              align="right"
+              options={SORTS.map((entry) => ({ value: entry.id, label: `Sort: ${entry.name}` }))}
+            />
+          )}
+          {activeFilters > 0 && (
+            <button
+              onClick={() => setFilters((current) => ({ ...current, hero: ANY, slot: ANY, rarity: ANY }))}
+              className="col-span-2 h-8 rounded-lg text-left text-xs text-ash hover:text-bone"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+
+      <nav className="mt-4 flex flex-wrap gap-1 px-5 pb-3" aria-label="Model types">
         {TABS.filter((entry) => counts[entry.id]).map((entry) => (
           <button
             key={entry.id}
@@ -99,7 +252,7 @@ export default function Sidebar({ catalog, tab, onTab, selected, onSelect }) {
           >
             {entry.name}
             <span className={`ml-1.5 tabular-nums ${tab === entry.id ? "text-aegis" : "text-ash/60"}`}>
-              {counts[entry.id]}
+              {counts[entry.id].toLocaleString("en")}
             </span>
           </button>
         ))}
@@ -108,31 +261,25 @@ export default function Sidebar({ catalog, tab, onTab, selected, onSelect }) {
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto border-t border-line scrollbar-thin">
         {rows.length === 0 ? (
           <div className="px-5 py-10 text-sm text-ash">
-            Nothing matches “{query}”. Try a hero name or part of the item name.
+            {query ? `Nothing matches “${query}”. Try a hero name or part of the item name.` : "Nothing matches these filters."}
           </div>
         ) : (
           <ul className="relative" style={{ height: virtualizer.getTotalSize() }}>
             {virtualizer.getVirtualItems().map((virtual) => {
               const row = rows[virtual.index];
-              const active = selected && `${selected.type}/${selected.id}` === row.key;
+              const active = isActive(row, route);
               return (
-                <li
-                  key={row.key}
-                  className="absolute inset-x-0"
-                  style={{ height: virtual.size, transform: `translateY(${virtual.start}px)` }}
-                >
+                <li key={row.key} className="absolute inset-x-0" style={{ height: virtual.size, transform: `translateY(${virtual.start}px)` }}>
                   <button
-                    onClick={() => onSelect(row.selection)}
+                    onClick={() => onOpen(row.route)}
+                    disabled={row.disabled}
+                    title={row.disabled ? "The hero's model is not exported yet" : undefined}
                     aria-current={active ? "true" : undefined}
-                    className={`relative flex h-full w-full items-center gap-3 px-5 text-left transition-colors ${
+                    className={`relative flex h-full w-full items-center gap-3 px-5 text-left transition-colors disabled:opacity-40 ${
                       active ? "bg-raised" : "hover:bg-raised/50"
                     }`}
                   >
-                    <span
-                      className="absolute inset-y-2 left-0 w-[3px] rounded-r"
-                      style={{ background: active ? row.color : "transparent" }}
-                      aria-hidden
-                    />
+                    <span className="absolute inset-y-2 left-0 w-[3px] rounded-r" style={{ background: active ? row.color : "transparent" }} aria-hidden />
                     <span className="relative h-9 w-[54px] shrink-0 overflow-hidden rounded bg-stage">
                       {row.image && (
                         <img
@@ -145,10 +292,11 @@ export default function Sidebar({ catalog, tab, onTab, selected, onSelect }) {
                       )}
                       <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ background: row.color }} />
                     </span>
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1">
                       <span className={`block truncate text-sm ${active ? "text-bone" : "text-bone/90"}`}>{row.name}</span>
                       <span className="block truncate text-xs text-ash">{row.detail}</span>
                     </span>
+                    {row.price && <span className="shrink-0 text-xs text-ash tabular-nums">{row.price}</span>}
                   </button>
                 </li>
               );
@@ -158,7 +306,7 @@ export default function Sidebar({ catalog, tab, onTab, selected, onSelect }) {
       </div>
 
       <footer className="flex items-center justify-between gap-3 border-t border-line px-5 py-3 text-xs text-ash">
-        <span>Updated with each game patch</span>
+        <span>Prices from the Steam Market</span>
         <a
           href={`https://huggingface.co/datasets/${catalog.modelsBase.split("/datasets/")[1]?.split("/resolve")[0]}`}
           target="_blank"

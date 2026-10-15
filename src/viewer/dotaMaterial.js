@@ -39,12 +39,14 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D tMasks2;
   uniform sampler2D tDiffuseWarp;
   uniform sampler2D tFresnelWarp;
+  uniform sampler2D tCubeMap;
 
   uniform float uHasNormal;
   uniform float uHasMasks1;
   uniform float uHasMasks2;
   uniform float uHasDiffuseWarp;
   uniform float uHasFresnelWarp;
+  uniform float uHasCubeMap;
   uniform float uAlphaTest;
   uniform float uSelfIllum;
 
@@ -52,6 +54,8 @@ const fragmentShader = /* glsl */ `
   uniform float uSpecularScale;
   uniform float uRimLightScale;
   uniform float uAmbientScale;
+  uniform float uCubeMapScale;
+  uniform float uReflectionsUntinted;
   uniform vec3 uSpecularColor;
   uniform vec3 uRimLightColor;
 
@@ -82,6 +86,11 @@ const fragmentShader = /* glsl */ `
     return normalize(T * (mapN.x * scale) + B * (mapN.y * scale) + n * mapN.z);
   }
 
+  // A soft round light of the studio: 1 inside an angle of size radians around dir, fading out
+  float softbox(vec3 r, vec3 dir, float size) {
+    return smoothstep(cos(size), cos(size * 0.35), dot(r, normalize(dir)));
+  }
+
   void main() {
     vec4 color = texture2D(tColor, vUv);
     if (uAlphaTest > 0.0 && color.a < uAlphaTest) discard;
@@ -107,7 +116,8 @@ const fragmentShader = /* glsl */ `
     float fill = max(dot(n, uFillDir), 0.0);
     vec3 ambient = mix(uGroundColor, uSkyColor, n.y * 0.5 + 0.5) * uAmbientScale;
     float metal = masks1.b;
-    vec3 diffuse = albedo * (keyDiffuse * uKeyColor + fill * uFillColor + ambient) * (1.0 - metal * 0.6);
+    // Metal gets its color from reflections, not from diffuse light
+    vec3 diffuse = albedo * (keyDiffuse * uKeyColor + fill * uFillColor + ambient) * (1.0 - metal * 0.65);
 
     // Fresnel ramp drives rim and specular falloff
     float facing = clamp(1.0 - dot(n, v), 0.0, 1.0);
@@ -124,11 +134,26 @@ const fragmentShader = /* glsl */ `
     // Rim from above, in the item's rarity tint
     float rimMask = uHasMasks2 > 0.5 ? masks2.g : 0.3;
     float rimUp = clamp(n.y * 0.6 + 0.4, 0.0, 1.0);
-    vec3 rim = fresnel.g * rimMask * uRimLightScale * 0.12 * rimUp * mix(uRimLightColor, uStageRim, 0.65);
+    vec3 rim = min(fresnel.g * rimMask * uRimLightScale * 0.45, 1.2) * rimUp * mix(uRimLightColor, uStageRim, 0.65);
 
-    // Metal reflects a soft studio environment tinted by the base color
+    // Reflections of a studio instead of the material's cube map: a softbox above,
+    // strip lights at the sides, a dark floor and a back light in the rarity color.
+    // Masked by metalness, tinted by the base color as much as Masks2 B says.
     vec3 r = reflect(-v, n);
-    vec3 env = mix(uGroundColor, uSkyColor * 2.0, r.y * 0.5 + 0.5) * albedo * metal;
+    vec3 studio = mix(vec3(0.015, 0.018, 0.025), vec3(0.06, 0.07, 0.09), smoothstep(-0.6, 0.2, r.y));
+    studio += vec3(1.0, 0.97, 0.92) * softbox(r, vec3(-0.5, 0.55, 0.65), 0.55) * 1.8;
+    studio += vec3(0.8, 0.88, 1.0) * softbox(r, vec3(0.95, 0.15, 0.25), 0.3) * 1.1;
+    studio += vec3(0.9, 0.92, 1.0) * smoothstep(0.65, 0.95, r.y) * 0.9;
+    studio += uStageRim * softbox(r, vec3(0.0, 0.25, -1.0), 0.8) * 0.7;
+    // Dota tints reflections by the base color unless the material blends that away
+    vec3 tint = mix(albedo * 2.2, vec3(1.0), uReflectionsUntinted);
+    // The cube map comes as a single face; read it like a matcap, by the view-space
+    // reflection, which gives the uneven streaks Dota's reflections have
+    if (uHasCubeMap > 0.5) {
+      vec2 capUv = r.xy * vec2(0.5, -0.5) + 0.5;
+      studio = studio * 0.35 + texture2D(tCubeMap, capUv).rgb * 1.3;
+    }
+    vec3 env = studio * tint * metal * uCubeMapScale * mix(0.6, 1.2, fresnel.b);
 
     vec3 selfIllum = albedo * masks1.a * uSelfIllum;
     vec3 outColor = diffuse + specular + rim + env + selfIllum;
@@ -142,7 +167,7 @@ const stage = {
   keyColor: new THREE.Color(1.15, 1.1, 1.0),
   fillDir: new THREE.Vector3(0.7, -0.1, 0.4).normalize(),
   fillColor: new THREE.Color(0.18, 0.22, 0.3),
-  skyColor: new THREE.Color(0.32, 0.36, 0.44),
+  skyColor: new THREE.Color(0.22, 0.25, 0.31),
   groundColor: new THREE.Color(0.1, 0.09, 0.1),
 };
 
@@ -173,17 +198,24 @@ export function createDotaMaterial(original, vmat, textures) {
       tMasks2: { value: pick("g_tMasks2") },
       tDiffuseWarp: { value: pick("g_tDiffuseWarp") },
       tFresnelWarp: { value: pick("g_tFresnelWarp") },
+      tCubeMap: { value: pick("g_tCubeMap") },
       uHasNormal: { value: pick("g_tNormal") ? 1 : 0 },
       uHasMasks1: { value: int.F_MASKS_1 && pick("g_tMasks1") ? 1 : 0 },
       uHasMasks2: { value: int.F_MASKS_2 && pick("g_tMasks2") ? 1 : 0 },
       uHasDiffuseWarp: { value: int.F_DIFFUSE_WARP && pick("g_tDiffuseWarp") ? 1 : 0 },
       uHasFresnelWarp: { value: pick("g_tFresnelWarp") ? 1 : 0 },
+      uHasCubeMap: { value: pick("g_tCubeMap") ? 1 : 0 },
       uAlphaTest: { value: int.F_ALPHA_TEST ? 0.5 : 0 },
       uSelfIllum: { value: int.F_SELF_ILLUM ? 1 : 0 },
       uSpecularExponent: { value: float.g_flSpecularExponent ?? 20 },
       uSpecularScale: { value: float.g_flSpecularScale ?? 1 },
       uRimLightScale: { value: float.g_flRimLightScale ?? 1 },
       uAmbientScale: { value: float.g_flAmbientScale ?? 1 },
+      uReflectionsUntinted: { value: float.g_flReflectionsTintByBaseBlendToNone ?? 0 },
+      // Materials with a cube map are the glossy ones, the rest reflect a little
+      uCubeMapScale: {
+        value: int.F_SPECULAR_CUBE_MAP ? THREE.MathUtils.clamp((float.g_flCubeMapScalar ?? 8) / 8, 0.4, 1.6) : 0.35,
+      },
       uSpecularColor: { value: vector(vec.g_vSpecularColor, [1, 1, 1]) },
       uRimLightColor: { value: vector(vec.g_vRimLightColor, [1, 1, 1]) },
       uKeyDir: { value: stage.keyDir },

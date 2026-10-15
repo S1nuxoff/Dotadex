@@ -18,6 +18,8 @@ export const TABS = [
   { id: "heroes", name: "Heroes" },
   { id: "wearable", name: "Cosmetics" },
   { id: "sets", name: "Sets" },
+  { id: "treasures", name: "Treasures" },
+  { id: "shop", name: "Items" },
   { id: "courier", name: "Couriers" },
   { id: "ward", name: "Wards" },
   { id: "other", name: "Other" },
@@ -260,6 +262,10 @@ export function withExported(catalog, exported) {
     itemsById,
     itemsByHero,
     setsById: Object.fromEntries(sets.map((set) => [set.id, set])),
+    shop: catalog.shop ?? [],
+    shopById: Object.fromEntries((catalog.shop ?? []).map((item) => [item.id, item])),
+    treasures: catalog.treasures ?? [],
+    treasuresById: Object.fromEntries((catalog.treasures ?? []).map((treasure) => [treasure.id, treasure])),
     total: catalog.heroes.length + catalog.items.length,
   };
 }
@@ -267,11 +273,14 @@ export function withExported(catalog, exported) {
 // #/hero/pudge?head=4007.1&weapon=7247  (slot=item.style)
 // #/item/4517?style=2&alone=1&variant=1
 export function parseRoute(hash) {
-  const [, type, id, query] = hash.match(/^#\/(hero|item)\/([^?]+)(?:\?(.*))?$/) ?? [];
+  const [, type, id, query] = hash.match(/^#\/(hero|item|shop|treasure)\/([^?]+)(?:\?(.*))?$/) ?? [];
   if (!type) {
     return null;
   }
   const params = new URLSearchParams(query ?? "");
+  if (type === "shop" || type === "treasure") {
+    return { type, id: decodeURIComponent(id) };
+  }
   if (type === "hero") {
     const slots = {};
     const bare = params.get("bare") === "1";
@@ -308,5 +317,6 @@ export function routeHash(route) {
 }
 
 export function isKnown(catalog, route) {
-  return Boolean(route && (route.type === "hero" ? catalog.heroesById : catalog.itemsById)[route.id]);
+  const lists = { hero: catalog.heroesById, item: catalog.itemsById, shop: catalog.shopById, treasure: catalog.treasuresById };
+  return Boolean(route && lists[route.type]?.[route.id]);
 }

@@ -5,6 +5,7 @@ import Sidebar from "./components/Sidebar.jsx";
 import Viewer from "./components/Viewer.jsx";
 import Wardrobe from "./components/Wardrobe.jsx";
 import HeroInfo from "./components/HeroInfo.jsx";
+import { ShopPage, TreasurePage } from "./components/InfoPages.jsx";
 import {
   isKnown,
   loadCatalog,
@@ -22,6 +23,12 @@ const REFRESH_MS = 3 * 60 * 1000;
 function tabFor(catalog, route) {
   if (!route || route.type === "hero") {
     return "heroes";
+  }
+  if (route.type === "shop") {
+    return "shop";
+  }
+  if (route.type === "treasure") {
+    return "treasures";
   }
   return catalog.itemsById[route.id]?.kind ?? "wearable";
 }
@@ -191,7 +198,8 @@ export default function App() {
     }
   }, [catalog, route]);
 
-  const outfit = useMemo(() => catalog && route && outfitFor(catalog, route), [catalog, route]);
+  const page = route?.type === "shop" || route?.type === "treasure";
+  const outfit = useMemo(() => catalog && route && !page && outfitFor(catalog, route), [catalog, route, page]);
   const urls = useMemo(() => catalog && outfit && outfitUrls(catalog, outfit), [catalog, outfit]);
 
   const open = (next) => {
@@ -251,7 +259,7 @@ export default function App() {
   const sidebar = (
     <Sidebar catalog={catalog} tab={tab} onTab={setTab} route={route} onOpen={open} language={language} onLanguage={setLanguage} />
   );
-  const wardrobeView = outfit.hero && (
+  const wardrobeView = outfit?.hero && (
     <Wardrobe
       catalog={catalog}
       outfit={outfit}
@@ -261,7 +269,7 @@ export default function App() {
       onClose={wide ? null : () => setWardrobe(false)}
     />
   );
-  const wardrobePanel = outfit.hero && (
+  const wardrobePanel = outfit?.hero && (
     <HeroPanel key={outfit.hero} catalog={catalog} outfit={outfit} language={language} wardrobe={wardrobeView} />
   );
 
@@ -270,7 +278,9 @@ export default function App() {
       <div className="hidden w-80 shrink-0 border-r border-line lg:block">{sidebar}</div>
 
       <div className="relative min-w-0 flex-1">
-        <Viewer
+        {route.type === "shop" && <ShopPage catalog={catalog} id={route.id} language={language} onOpen={open} />}
+        {route.type === "treasure" && <TreasurePage catalog={catalog} id={route.id} onOpen={open} />}
+        {!page && <Viewer
           catalog={catalog}
           outfit={outfit}
           urls={urls}
@@ -279,7 +289,7 @@ export default function App() {
           onVariant={(variant) => open({ ...route, variant })}
           onBare={(bare) => open({ ...route, bare })}
           onWardrobe={wide ? null : () => setWardrobe(true)}
-        />
+        />}
         <button
           onClick={() => setBrowse(true)}
           className="absolute top-4 left-4 inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-panel/80 px-3 text-sm text-bone lg:hidden"

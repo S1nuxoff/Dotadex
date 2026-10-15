@@ -161,10 +161,51 @@ for (const item of items) {
   }
 }
 
+// Shop items and treasure chests from the dataset's game data, when it is there
+const gameData = async (file) => getJson(`${MODELS_BASE}data/${file}`, null);
+const [shopData, treasureData, englishTexts] = await Promise.all([
+  gameData("items.json"),
+  gameData("treasures.json"),
+  gameData("i18n/english.json"),
+]);
+// The game spells some keys DOTA_Tooltip_Ability_ and others DOTA_Tooltip_ability_
+const texts = Object.fromEntries(Object.entries(englishTexts ?? {}).map(([key, value]) => [key.toLowerCase(), value]));
+
+const shop = [];
+for (const [name, item] of Object.entries(shopData ?? {})) {
+  const title = texts[`dota_tooltip_ability_${name}`.toLowerCase()];
+  // Recipes and hidden or event items have no shop name
+  if (name.startsWith("item_recipe_") || !title || item.IsObsolete === "1") {
+    continue;
+  }
+  shop.push({
+    id: name,
+    name: title,
+    cost: Number(item.ItemCost) || 0,
+    texture: (item.AbilityTextureName ?? name).replace(/^item_/, ""),
+    neutral: item.ItemIsNeutralActiveDrop === "1" || item.ItemIsNeutralPassiveDrop === "1" || undefined,
+  });
+}
+shop.sort((a, b) => a.name.localeCompare(b.name));
+
+const treasures = (treasureData ?? [])
+  .map((treasure) => ({
+    id: treasure.id,
+    name: treasure.name,
+    icon: treasure.icon,
+    rarity: treasure.rarity,
+    date: treasure.date,
+    retired: treasure.retired || undefined,
+    tiers: treasure.tiers.map((tier) => tier.items),
+  }))
+  .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+
 const catalog = {
   manifest: index.manifest,
   modelsBase: MODELS_BASE,
   heroNames,
+  shop,
+  treasures,
   heroes: Object.values(heroes).sort((a, b) => a.name.localeCompare(b.name)),
   items,
   sets,
@@ -172,4 +213,4 @@ const catalog = {
 
 fs.mkdirSync("public", { recursive: true });
 fs.writeFileSync(OUT, JSON.stringify(catalog));
-console.log(`${catalog.heroes.length} heroes, ${items.length} items, ${sets.length} sets -> ${OUT}`);
+console.log(`${catalog.heroes.length} heroes, ${items.length} items, ${sets.length} sets, ${shop.length} shop items, ${treasures.length} treasures -> ${OUT}`);

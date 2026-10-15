@@ -68,7 +68,13 @@ export function useGameData(base, files, language = "english") {
         }
         const english = results[files.length];
         const local = results[files.length + 1] ?? {};
-        const texts = { ...english, ...local };
+        // The game spells some keys DOTA_Tooltip_Ability_ and others DOTA_Tooltip_ability_,
+        // so texts are looked up without regard to case
+        const lower = {};
+        for (const [key, value] of Object.entries({ ...english, ...local })) {
+          lower[key.toLowerCase()] = value;
+        }
+        const texts = new Proxy(lower, { get: (target, key) => (typeof key === "string" ? target[key.toLowerCase()] : undefined) });
         const data = Object.fromEntries(files.map((file, index) => [file.replace(/\.json$/, ""), results[index]]));
         setState({ data: { ...data, texts }, error: null });
       })

@@ -32,6 +32,29 @@ function rowsFor(catalog, tab, filters) {
     }));
   }
 
+  if (tab === "shop") {
+    return catalog.shop.map((item) => ({
+      key: `shop/${item.id}`,
+      route: { type: "shop", id: item.id },
+      name: item.name,
+      detail: item.neutral ? "Neutral item" : item.cost ? `${item.cost} gold` : "Item",
+      color: "#c9a45c",
+      image: `${catalog.modelsBase}images/items/${item.texture}_png.png`,
+      wide: true,
+    }));
+  }
+
+  if (tab === "treasures") {
+    return catalog.treasures.map((treasure) => ({
+      key: `treasure/${treasure.id}`,
+      route: { type: "treasure", id: treasure.id },
+      name: treasure.name,
+      detail: `${treasure.tiers.reduce((sum, tier) => sum + tier.length, 0)} items${treasure.date ? `, ${treasure.date.slice(0, 4)}` : ""}`,
+      color: rarity(treasure).color,
+      image: itemIcon(treasure),
+    }));
+  }
+
   if (tab === "sets") {
     return catalog.sets
       .filter((set) => !filters.hero || set.hero === filters.hero)
@@ -95,7 +118,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
   const setFilter = (key) => (value) => setFilters((current) => ({ ...current, [key]: value }));
 
   const counts = useMemo(() => {
-    const result = { heroes: catalog.heroes.length, sets: catalog.sets.length };
+    const result = { heroes: catalog.heroes.length, sets: catalog.sets.length, shop: catalog.shop.length, treasures: catalog.treasures.length };
     for (const item of catalog.items) {
       if (!item.default) {
         result[item.kind] = (result[item.kind] ?? 0) + 1;
@@ -156,7 +179,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
   });
 
   const ready = catalog.heroes.length + catalog.items.length;
-  const filterable = tab !== "heroes";
+  const filterable = !["heroes", "shop", "treasures"].includes(tab);
   const activeFilters = [filters.hero, tab === "wearable" && filters.slot, tab !== "sets" && filters.rarity].filter(Boolean).length;
 
   return (

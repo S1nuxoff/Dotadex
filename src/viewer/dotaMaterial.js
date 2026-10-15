@@ -111,17 +111,12 @@ const fragmentShader = /* glsl */ `
     vec3 v = normalize(vViewPosition);
     vec3 albedo = color.rgb;
 
-    // Detail texture, masked by Masks1 R: mode 1 multiplies it in (dirt, patterns),
-    // modes 2 and 3 add it on top and it glows (Terrorblade's weapons, Abaddon's mist)
+    // Detail texture, masked by Masks1 R, multiplied in at twice its value
     vec3 glow = vec3(0.0);
     if (uDetailMode > 0.5) {
       vec3 detail = texture2D(tDetail, vUv * uDetailScale).rgb;
       float amount = (uHasMasks1 > 0.5 ? masks1.r : 1.0) * uDetailFactor;
-      if (uDetailMode < 1.5) {
-        albedo *= mix(vec3(1.0), detail * 2.0, amount);
-      } else {
-        glow = detail * amount;
-      }
+      albedo *= mix(vec3(1.0), detail * 2.0, amount);
     }
 
     // Diffuse with Dota's warp ramp
@@ -151,7 +146,8 @@ const fragmentShader = /* glsl */ `
     // Rim from above, in the item's rarity tint
     float rimMask = uHasMasks2 > 0.5 ? masks2.g : 0.3;
     float rimUp = clamp(n.y * 0.6 + 0.4, 0.0, 1.0);
-    vec3 rim = min(fresnel.g * rimMask * uRimLightScale * 0.45, 1.2) * rimUp * mix(uRimLightColor, uStageRim, 0.65);
+    // The material's own rim color (Terrorblade's is cyan), with a touch of the stage's
+    vec3 rim = min(fresnel.g * rimMask * uRimLightScale * 0.45, 1.2) * rimUp * mix(uRimLightColor, uStageRim, 0.2);
 
     // Reflections of a studio instead of the material's cube map: a softbox above,
     // strip lights at the sides, a dark floor and a back light in the rarity color.
@@ -168,7 +164,8 @@ const fragmentShader = /* glsl */ `
     // reflection, which gives the uneven streaks Dota's reflections have
     if (uHasCubeMap > 0.5) {
       vec2 capUv = r.xy * vec2(0.5, -0.5) + 0.5;
-      studio = studio * 0.35 + texture2D(tCubeMap, capUv).rgb * 1.3;
+      // Some cube maps come out black; the studio stays underneath for those
+      studio = studio * 0.6 + texture2D(tCubeMap, capUv).rgb * 1.1;
     }
     vec3 env = studio * tint * metal * uCubeMapScale * mix(0.6, 1.2, fresnel.b);
 

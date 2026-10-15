@@ -110,6 +110,43 @@ function dotaMaterialFor(material, textures) {
   return createDotaMaterial(material, vmat, byParam);
 }
 
+// Environment materials of the game's scenes, from the flags in their vmat: unlit parts,
+// glowing parts, cut-outs, see-through and additive ones, two-sided leaves and cloth
+function environmentMaterial(material) {
+  const vmat = material.userData?.vmat;
+  if (!vmat) {
+    return material;
+  }
+  const flags = vmat.IntParams ?? {};
+  const floats = vmat.FloatParams ?? {};
+  let result = material;
+  if (flags.F_FULLBRIGHT || flags.F_UNLIT || vmat.ShaderName?.includes("unlit")) {
+    result = new THREE.MeshBasicMaterial({ name: material.name, map: material.map, color: material.color, vertexColors: material.vertexColors });
+    result.userData = material.userData;
+    material.dispose();
+  } else if (!flags.F_SELF_ILLUM) {
+    // Only self-illuminated parts glow
+    result.emissiveMap = null;
+    result.emissive?.set(0x000000);
+  }
+  if (flags.F_ALPHA_TEST) {
+    result.alphaTest = floats.g_flAlphaTestReference ?? 0.5;
+  }
+  if (flags.F_TRANSLUCENT || flags.F_ADDITIVE_BLEND || flags.F_BLEND_MODE) {
+    result.transparent = true;
+    result.depthWrite = false;
+    result.alphaTest = 0;
+  }
+  if (flags.F_ADDITIVE_BLEND || flags.F_BLEND_MODE === 2) {
+    result.blending = THREE.AdditiveBlending;
+  }
+  if (flags.F_RENDER_BACKFACES || flags.F_TRANSLUCENT) {
+    result.side = THREE.DoubleSide;
+  }
+  result.needsUpdate = true;
+  return result;
+}
+
 // Makes the skinned meshes of `part` follow the bones of `root` with the same names.
 // Bones only the part has (chains, cloth) are moved under their parent in the root skeleton.
 function attach(root, part) {
@@ -302,7 +339,7 @@ export class Stage {
         node.userData.dota = createDotaMaterial(original, variant.vmat, variant.textures);
       } else {
         node.userData.pbr = original;
-        node.userData.dota = dotaMaterialFor(original, textures) ?? original;
+        node.userData.dota = dotaMaterialFor(original, textures) ?? environmentMaterial(original.clone());
       }
       node.material = this.shading === "dota" ? node.userData.dota : node.userData.pbr;
     });
@@ -367,6 +404,12 @@ export class Stage {
     const request = (this.backdropRequest = (this.backdropRequest ?? 0) + 1);
     if (this.backdrop) {
       this.scene.remove(this.backdrop);
+      this.backdrop.traverse((node) => {
+        if (node.isMesh) {
+          node.userData.pbr.dispose();
+          node.userData.dota.dispose();
+        }
+      });
       this.backdrop = null;
     }
     this.updateShowcase();
@@ -377,8 +420,18 @@ export class Stage {
     if (request !== this.backdropRequest) {
       return;
     }
-    const backdrop = gltf.scene.clone();
-    backdrop.traverse((node) => node.isMesh && (node.frustumCulled = false));
+    const backdrop = cloneSkinned(gltf.scene);
+    // Statues and props of the scenes are drawn like heroes, the rest with their own flags
+    backdrop.traverse((node) => {
+      if (!node.isMesh) {
+        return;
+      }
+      node.frustumCulled = false;
+      const pbr = environmentMaterial(node.material.clone());
+      node.userData.pbr = pbr;
+      node.userData.dota = dotaMaterialFor(node.material, gltf.userData.textures) ?? pbr;
+      node.material = this.shading === "dota" ? node.userData.dota : node.userData.pbr;
+    });
     this.backdrop = backdrop;
     this.scene.add(backdrop);
     this.updateShowcase();
@@ -400,11 +453,11 @@ export class Stage {
 
   setShading(mode) {
     this.shading = mode;
-    this.group?.traverse((node) => {
+    [this.group, this.backdrop].forEach((object) => object?.traverse((node) => {
       if (node.isMesh) {
         node.material = mode === "dota" ? node.userData.dota : node.userData.pbr;
       }
-    });
+    }));
   }
 
   setRim(color) {

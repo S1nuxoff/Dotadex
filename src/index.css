@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --color-stage: #121a24;
+  --color-panel: #1a2330;
+  --color-raised: #212c3b;
+  --color-line: #2c3846;
+  --color-bone: #e8e2d6;
+  --color-ash: #8a94a3;
+  --color-aegis: #c9a45c;
+
+  --font-sans: "Instrument Sans", system-ui, sans-serif;
+  --font-display: "Marcellus", Georgia, serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-stage);
+  color: var(--color-bone);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-aegis);
+  outline-offset: 2px;
+}
+
+/* Registered so the rarity color can transition */
+@property --rim {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #c9a45c;
+}
+
+/* The stage: a lit backdrop that takes the item's rarity color */
+.stage-backdrop {
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 42%, color-mix(in oklab, var(--rim) 16%, transparent), transparent 70%),
+    radial-gradient(ellipse 120% 80% at 50% 110%, #0b1017, transparent 60%),
+    linear-gradient(180deg, #17202c 0%, #121a24 55%, #0e141c 100%);
+  transition: --rim 900ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-backdrop {
+    transition: none;
+  }
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}

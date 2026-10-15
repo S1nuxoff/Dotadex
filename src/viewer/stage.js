@@ -386,8 +386,15 @@ export class Stage {
   }
 
   play(name, fade = 0.25) {
+    this.group?.traverse((node) => {
+      if (node.userData.offInTPose) {
+        node.visible = true;
+        node.userData.offInTPose = false;
+      }
+    });
     if (name === T_POSE) {
       // The pose the model was made in, with no animation on it
+      const before = this.mainBonePositions();
       this.mixer?.stopAllAction();
       // Every bone back where the files put it: posing each skeleton instead would let a
       // weapon's own skeleton move the hand bones it shares with the body
@@ -399,6 +406,18 @@ export class Stage {
           node.scale.copy(rest.scale);
         }
       });
+      // Weapons are put in the hand only by animations and drop to the ground without one:
+      // a part that fell from where it was to near the floor is hidden until the next animation
+      this.group?.updateMatrixWorld(true);
+      const height = new THREE.Box3().setFromObject(this.group).getSize(new THREE.Vector3()).y || 1;
+      const floor = new THREE.Box3().setFromObject(this.group).min.y;
+      for (const [mesh, position] of before) {
+        const now = mesh.userData.mainBone.getWorldPosition(new THREE.Vector3());
+        if (now.y - floor < height * 0.12 && now.distanceTo(position) > height * 0.2) {
+          mesh.visible = false;
+          mesh.userData.offInTPose = true;
+        }
+      }
       this.current = null;
       this.currentName = name;
       return;
@@ -414,6 +433,29 @@ export class Stage {
     this.current = next;
     this.lastCycle = 0;
     this.currentName = name;
+  }
+
+  // Where the bone that moves most of each skinned mesh is now
+  mainBonePositions() {
+    const result = new Map();
+    this.group?.updateMatrixWorld(true);
+    this.group?.traverse((node) => {
+      if (!node.isSkinnedMesh) {
+        return;
+      }
+      if (!node.userData.mainBone) {
+        const { skinIndex, skinWeight } = node.geometry.attributes;
+        const totals = new Float32Array(node.skeleton.bones.length);
+        for (let i = 0; i < skinIndex.count; i++) {
+          for (let k = 0; k < 4; k++) {
+            totals[skinIndex.getComponent(i, k)] += skinWeight.getComponent(i, k);
+          }
+        }
+        node.userData.mainBone = node.skeleton.bones[totals.indexOf(Math.max(...totals))];
+      }
+      result.set(node, node.userData.mainBone.getWorldPosition(new THREE.Vector3()));
+    });
+    return result;
   }
 
   setSpeed(speed) {

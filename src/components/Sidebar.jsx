@@ -161,7 +161,8 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen }) {
   return (
     <aside className="flex h-full flex-col bg-panel">
       <div className="px-5 pt-6 pb-4">
-        <h1 className="font-display text-[1.65rem] leading-none text-bone">Dotadex</h1>
+        <h1 className="font-display text-[1.9rem] leading-none text-bone">Dotadex</h1>
+        <p className="mt-1.5 text-sm text-aegis">The complete Dota 2 encyclopedia, in 3D</p>
         <p className="mt-2 text-sm text-ash">Every Dota 2 hero, cosmetic, courier and ward from the game files, shown with Dota's hero shading.</p>
         {ready < catalog.total && (
           <div className="mt-3">

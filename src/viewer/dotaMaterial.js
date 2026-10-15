@@ -169,7 +169,8 @@ const fragmentShader = /* glsl */ `
     }
     vec3 env = studio * tint * metal * uCubeMapScale * mix(0.6, 1.2, fresnel.b);
 
-    vec3 selfIllum = albedo * masks1.a * uSelfIllum;
+    // Masks1 alpha is the hero shader's self-illumination mask (eyes, glowing parts)
+    vec3 selfIllum = albedo * masks1.a * uSelfIllum * 1.5;
     vec3 outColor = diffuse + specular + rim + env + selfIllum + glow;
     gl_FragColor = vec4(outColor, color.a);
     #include <colorspace_fragment>
@@ -178,10 +179,10 @@ const fragmentShader = /* glsl */ `
 
 const stage = {
   keyDir: new THREE.Vector3(-0.45, 0.75, 0.5).normalize(),
-  keyColor: new THREE.Color(1.15, 1.1, 1.0),
+  keyColor: new THREE.Color(1.4, 1.34, 1.22),
   fillDir: new THREE.Vector3(0.7, -0.1, 0.4).normalize(),
   fillColor: new THREE.Color(0.18, 0.22, 0.3),
-  skyColor: new THREE.Color(0.22, 0.25, 0.31),
+  skyColor: new THREE.Color(0.28, 0.3, 0.37),
   groundColor: new THREE.Color(0.1, 0.09, 0.1),
 };
 
@@ -229,7 +230,8 @@ export function createDotaMaterial(original, vmat, textures) {
         ),
       },
       uAlphaTest: { value: int.F_ALPHA_TEST ? 0.5 : 0 },
-      uSelfIllum: { value: int.F_SELF_ILLUM ? 1 : 0 },
+      // The flag is often not set on materials whose mask still glows in the game
+      uSelfIllum: { value: int.F_MASKS_1 ? 1 : 0 },
       uSpecularExponent: { value: float.g_flSpecularExponent ?? 20 },
       uSpecularScale: { value: float.g_flSpecularScale ?? 1 },
       uRimLightScale: { value: float.g_flRimLightScale ?? 1 },

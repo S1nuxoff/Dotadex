@@ -76,7 +76,7 @@ async function loadSkin(modelUrl, skin) {
   if (!materials) {
     return null;
   }
-  const base = modelUrl.slice(0, modelUrl.indexOf("models/"));
+  const base = modelUrl.slice(0, modelUrl.indexOf("/models/") + 1);
   const result = {};
   await Promise.all(
     Object.entries(materials).map(async ([name, vmat]) => {
@@ -278,7 +278,7 @@ export class Stage {
       attach(root, part);
     });
 
-    this.rootModel = entries[rootIndex].url.slice(entries[rootIndex].url.indexOf("models/"));
+    this.rootModel = entries[rootIndex].url.slice(entries[rootIndex].url.indexOf("/models/") + 1);
     this.replace(group, gltfs[rootIndex].animations);
     return Object.keys(this.actions);
   }

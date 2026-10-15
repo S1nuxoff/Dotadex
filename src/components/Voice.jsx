@@ -6,14 +6,23 @@ export function soundsBase(modelsBase) {
   return modelsBase.replace("dota2-models", "dota2-sounds");
 }
 
+// Some of the game's sounds are WAV rather than MP3: when the .mp3 is missing, try .wav
+export function createAudio(url) {
+  const audio = new Audio(url);
+  if (url.endsWith(".mp3")) {
+    audio.addEventListener("error", () => (audio.src = url.replace(/\.mp3$/, ".wav")), { once: true });
+  }
+  return audio;
+}
+
 // One sound at a time across the page
 let current = null;
 export function playSound(url, onEnd) {
   current?.pause();
-  const audio = new Audio(url);
+  const audio = createAudio(url);
+  audio.addEventListener("canplay", () => audio.play().catch(() => onEnd?.()), { once: true });
   audio.addEventListener("ended", () => onEnd?.());
   audio.addEventListener("pause", () => onEnd?.());
-  audio.play().catch(() => onEnd?.());
   current = audio;
   return audio;
 }

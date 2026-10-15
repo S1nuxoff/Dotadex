@@ -5,6 +5,7 @@ import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { createDotaMaterial, stageRim } from "./dotaMaterial.js";
 import { StageEffects } from "./effects.js";
+import { createAudio } from "../components/Voice.jsx";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -511,11 +512,11 @@ export class Stage {
       return;
     }
     if (event.files.length) {
-      const audio = new Audio(this.sound.base + event.files[Math.floor(Math.random() * event.files.length)]);
+      const audio = createAudio(this.sound.base + event.files[Math.floor(Math.random() * event.files.length)]);
       audio.volume = Math.min(Math.max((event.volume ?? 1) * 0.7, 0), 1);
       audio.preservesPitch = false;
       audio.playbackRate = Math.min(Math.max((event.pitch ?? 1) * this.speed, 0.5), 2);
-      audio.play().catch(() => {});
+      audio.addEventListener("canplay", () => audio.play().catch(() => {}), { once: true });
     }
     event.layers?.forEach((layer) => this.playEvent(layer, depth + 1));
   }

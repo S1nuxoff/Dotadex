@@ -158,7 +158,7 @@ export function itemsForSlot(catalog, heroId, slot) {
 // { hero, slots: { slot: { id, style } }, focus, style, variant }
 export function outfitFor(catalog, route) {
   if (route.type === "hero") {
-    return { hero: route.id, slots: route.slots ?? {}, focus: null };
+    return { hero: route.id, slots: route.slots ?? {}, focus: null, bare: Boolean(route.bare) };
   }
   const item = catalog.itemsById[route.id];
   const style = route.style ?? 0;
@@ -182,6 +182,10 @@ export function outfitUrls(catalog, outfit) {
 
   const hero = catalog.heroesById[outfit.hero];
   const urls = [catalog.modelsBase + hero.model];
+  // The hero's own model alone, without anything worn on it
+  if (outfit.bare) {
+    return urls;
+  }
   const slots = new Set([...hero.defaults.map((entry) => entry.slot), ...Object.keys(outfit.slots)]);
   for (const slot of slots) {
     const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
@@ -265,11 +269,13 @@ export function parseRoute(hash) {
   const params = new URLSearchParams(query ?? "");
   if (type === "hero") {
     const slots = {};
+    const bare = params.get("bare") === "1";
+    params.delete("bare");
     for (const [slot, value] of params) {
       const [itemId, style] = value.split(".");
       slots[slot] = { id: itemId, style: Number(style) || 0 };
     }
-    return { type, id: decodeURIComponent(id), slots };
+    return { type, id: decodeURIComponent(id), slots, bare };
   }
   return {
     type,
@@ -286,6 +292,7 @@ export function routeHash(route) {
     for (const [slot, { id, style }] of Object.entries(route.slots ?? {})) {
       params.set(slot, style ? `${id}.${style}` : id);
     }
+    route.bare && params.set("bare", "1");
   } else {
     route.style && params.set("style", route.style);
     route.alone && params.set("alone", "1");

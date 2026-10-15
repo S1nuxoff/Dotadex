@@ -218,6 +218,7 @@ export default function App() {
           onStyle={(style) => open({ ...route, style })}
           onAlone={(alone) => open({ ...route, alone })}
           onVariant={(variant) => open({ ...route, variant })}
+          onBare={(bare) => open({ ...route, bare })}
           onWardrobe={wide ? null : () => setWardrobe(true)}
         />
         <button

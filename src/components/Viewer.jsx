@@ -83,7 +83,7 @@ function AnimationPicker({ names, current, onPick }) {
 }
 
 // outfit: what is on screen (see outfitFor), urls: the models to load
-export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVariant, onWardrobe }) {
+export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -247,6 +247,18 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
               <AnimationPicker names={animations} current={current} onPick={pick} />
               <Toggle label="Animation speed" value={speed} onChange={setSpeed} options={SPEEDS.map((value) => ({ value, label: `${value}×` }))} />
             </>
+          )}
+
+          {hero && !item && (
+            <Toggle
+              label="Outfit"
+              value={outfit.bare ? "bare" : "dressed"}
+              onChange={(value) => onBare(value === "bare")}
+              options={[
+                { value: "dressed", label: "Dressed" },
+                { value: "bare", label: "Bare model" },
+              ]}
+            />
           )}
 
           {styles && (

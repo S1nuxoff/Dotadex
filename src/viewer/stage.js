@@ -147,6 +147,9 @@ function environmentMaterial(material) {
   return result;
 }
 
+// Not an animation: the model standing in the pose it was made in
+export const T_POSE = "T-pose";
+
 // Makes the skinned meshes of `part` follow the bones of `root` with the same names.
 // Bones only the part has (chains, cloth) are moved under their parent in the root skeleton.
 function attach(root, part) {
@@ -378,6 +381,14 @@ export class Stage {
   }
 
   play(name, fade = 0.25) {
+    if (name === T_POSE) {
+      // The pose the model was made in, with no animation on it
+      this.mixer?.stopAllAction();
+      this.group?.traverse((node) => node.isSkinnedMesh && node.skeleton.pose());
+      this.current = null;
+      this.currentName = name;
+      return;
+    }
     const next = this.actions[name];
     if (!next) {
       return;

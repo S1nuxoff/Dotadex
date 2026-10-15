@@ -16,7 +16,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import { Stage } from "../viewer/stage.js";
+import { Stage, T_POSE } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName } from "../catalog.js";
 import { IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
 import { soundsBase } from "./Voice.jsx";
@@ -304,7 +304,7 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
               <IconButton label={paused ? "Play" : "Pause"} onClick={() => setPaused(!paused)}>
                 {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
               </IconButton>
-              <AnimationPicker names={animations} current={current} onPick={pick} />
+              <AnimationPicker names={[T_POSE, ...animations]} current={current} onPick={pick} />
               <Toggle label="Animation speed" value={speed} onChange={setSpeed} options={SPEEDS.map((value) => ({ value, label: `${value}×` }))} />
             </>
           )}

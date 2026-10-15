@@ -20,6 +20,7 @@ import { Stage } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName } from "../catalog.js";
 import { IconButton, Popover, Toggle, useDismiss } from "./ui.jsx";
 import { soundsBase } from "./Voice.jsx";
+import { unlockSound } from "../viewer/soundPlayer.js";
 
 // What the stage needs to play animation sounds, loaded once when sound is turned on
 let soundData = null;
@@ -226,7 +227,10 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
             { value: "plain", label: "Plain", icon: <Box className="size-3.5" /> },
           ]}
         />
-        <IconButton label={sound ? "Mute animation sounds" : "Play animation sounds"} onClick={() => setSound(!sound)} active={sound}>
+        <IconButton label={sound ? "Mute animation sounds" : "Play animation sounds"} onClick={() => {
+            unlockSound();
+            setSound(!sound);
+          }} active={sound}>
           {sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
         </IconButton>
         <IconButton label="Fit to view" onClick={() => stageRef.current.frameModel()}>

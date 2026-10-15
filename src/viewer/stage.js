@@ -5,7 +5,7 @@ import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { createDotaMaterial, stageRim } from "./dotaMaterial.js";
 import { StageEffects } from "./effects.js";
-import { createAudio } from "../components/Voice.jsx";
+import { playLoaded, preloadSound } from "./soundPlayer.js";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -281,6 +281,7 @@ export class Stage {
 
     this.rootModel = entries[rootIndex].url.slice(entries[rootIndex].url.indexOf("/models/") + 1);
     this.replace(group, gltfs[rootIndex].animations);
+    this.preloadSounds();
     return Object.keys(this.actions);
   }
 
@@ -476,6 +477,28 @@ export class Stage {
   setSound(sound) {
     this.sound = sound;
     this.lastCycle = this.current ? this.cycle() : 0;
+    this.preloadSounds();
+  }
+
+  // Loads every sound the current model's animations can play, so they play on time
+  preloadSounds() {
+    if (!this.sound || !this.rootModel) {
+      return;
+    }
+    const names = new Set(Object.values(this.sound.byModel[this.rootModel] ?? {}).flatMap((list) => list.map(([, name]) => name)));
+    const attack = this.sound.attack[this.rootModel];
+    if (attack) {
+      names.add(attack.event);
+    }
+    const visit = (name, depth) => {
+      const event = this.sound.events[name];
+      if (!event || depth > 3) {
+        return;
+      }
+      event.files.forEach((file) => preloadSound(this.sound.base + file));
+      event.layers?.forEach((layer) => visit(layer, depth + 1));
+    };
+    names.forEach((name) => visit(name, 0));
   }
 
   cycle() {
@@ -512,11 +535,10 @@ export class Stage {
       return;
     }
     if (event.files.length) {
-      const audio = createAudio(this.sound.base + event.files[Math.floor(Math.random() * event.files.length)]);
-      audio.volume = Math.min(Math.max((event.volume ?? 1) * 0.7, 0), 1);
-      audio.preservesPitch = false;
-      audio.playbackRate = Math.min(Math.max((event.pitch ?? 1) * this.speed, 0.5), 2);
-      audio.addEventListener("canplay", () => audio.play().catch(() => {}), { once: true });
+      playLoaded(this.sound.base + event.files[Math.floor(Math.random() * event.files.length)], {
+        volume: Math.min(Math.max((event.volume ?? 1) * 0.7, 0), 1),
+        rate: Math.min(Math.max((event.pitch ?? 1) * this.speed, 0.5), 2),
+      });
     }
     event.layers?.forEach((layer) => this.playEvent(layer, depth + 1));
   }

@@ -4,6 +4,7 @@ import { List, X } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
 import Viewer from "./components/Viewer.jsx";
 import Wardrobe from "./components/Wardrobe.jsx";
+import HeroInfo from "./components/HeroInfo.jsx";
 import {
   isKnown,
   loadCatalog,
@@ -25,11 +26,63 @@ function tabFor(catalog, route) {
   return catalog.itemsById[route.id]?.kind ?? "wearable";
 }
 
+// A light model to open with: heroes carry hundreds of animations and take a while
+const WELCOME_ITEM = "10096";
+
 function firstRoute(catalog) {
+  if (catalog.itemsById[WELCOME_ITEM]) {
+    return { type: "item", id: WELCOME_ITEM };
+  }
   if (catalog.heroes[0]) {
     return { type: "hero", id: catalog.heroes[0].id, slots: {} };
   }
   return catalog.items[0] ? { type: "item", id: catalog.items[0].id } : null;
+}
+
+// The right panel of a hero: its data, or what it wears
+function HeroPanel({ catalog, outfit, language, wardrobe }) {
+  const [view, setView] = useState(outfit.focus ? "wardrobe" : "hero");
+  const hero = catalog.heroesById[outfit.hero];
+  return (
+    <div className="flex h-full flex-col bg-panel">
+      <div className="flex gap-1 border-b border-line px-4 pt-4 pb-3" role="tablist">
+        {[
+          ["hero", hero.name],
+          ["wardrobe", "Wardrobe"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${view === id ? "bg-raised text-bone" : "text-ash hover:text-bone"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        {view === "hero" ? <HeroInfo base={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} language={language} /> : wardrobe}
+      </div>
+    </div>
+  );
+}
+
+function useLanguage() {
+  const [language, setLanguage] = useState(() => {
+    try {
+      return localStorage.getItem("language") ?? "english";
+    } catch {
+      return "english";
+    }
+  });
+  const change = (value) => {
+    setLanguage(value);
+    try {
+      localStorage.setItem("language", value);
+    } catch {}
+  };
+  return [language, change];
 }
 
 function useWide() {
@@ -82,6 +135,7 @@ export default function App() {
   const [browse, setBrowse] = useState(false);
   const [wardrobe, setWardrobe] = useState(false);
   const wide = useWide();
+  const [language, setLanguage] = useLanguage();
 
   const catalog = useMemo(() => base && exported && withExported(base, exported), [base, exported]);
 
@@ -194,8 +248,10 @@ export default function App() {
     );
   }
 
-  const sidebar = <Sidebar catalog={catalog} tab={tab} onTab={setTab} route={route} onOpen={open} />;
-  const wardrobePanel = outfit.hero && (
+  const sidebar = (
+    <Sidebar catalog={catalog} tab={tab} onTab={setTab} route={route} onOpen={open} language={language} onLanguage={setLanguage} />
+  );
+  const wardrobeView = outfit.hero && (
     <Wardrobe
       catalog={catalog}
       outfit={outfit}
@@ -204,6 +260,9 @@ export default function App() {
       onReset={() => open({ type: "hero", id: outfit.hero, slots: {} })}
       onClose={wide ? null : () => setWardrobe(false)}
     />
+  );
+  const wardrobePanel = outfit.hero && (
+    <HeroPanel key={outfit.hero} catalog={catalog} outfit={outfit} language={language} wardrobe={wardrobeView} />
   );
 
   return (

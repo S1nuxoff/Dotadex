@@ -14,6 +14,7 @@ import {
   sortItems,
 } from "../catalog.js";
 import { Select } from "./ui.jsx";
+import { LANGUAGES } from "../gamedata.js";
 
 const ANY = "";
 
@@ -86,7 +87,7 @@ function isActive(row, route) {
   return `${route.type}/${route.id}` === row.key;
 }
 
-export default function Sidebar({ catalog, tab, onTab, route, onOpen }) {
+export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, onLanguage }) {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({ hero: ANY, slot: ANY, rarity: ANY, sort: "newest" });
   const [showFilters, setShowFilters] = useState(false);
@@ -307,7 +308,14 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen }) {
       </div>
 
       <footer className="flex items-center justify-between gap-3 border-t border-line px-5 py-3 text-xs text-ash">
-        <span>Prices from the Steam Market</span>
+        <Select
+          label="Language"
+          value={language}
+          onChange={onLanguage}
+          up
+          className="w-40"
+          options={LANGUAGES.map(([value, label]) => ({ value, label }))}
+        />
         <a
           href={`https://huggingface.co/datasets/${catalog.modelsBase.split("/datasets/")[1]?.split("/resolve")[0]}`}
           target="_blank"

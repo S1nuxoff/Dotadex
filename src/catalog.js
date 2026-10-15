@@ -208,6 +208,11 @@ export async function loadCatalog() {
 
 // Paths of the models exported so far, read live from the dataset
 export async function loadExported(modelsBase) {
+  // exported.json is just the list; older datasets only have the whole index
+  const small = await fetch(`${modelsBase}exported.json?t=${Date.now()}`, { cache: "no-store" }).catch(() => null);
+  if (small?.ok) {
+    return new Set(await small.json());
+  }
   const res = await fetch(`${modelsBase}index.json?t=${Date.now()}`, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`The list of exported models did not load (HTTP ${res.status}).`);

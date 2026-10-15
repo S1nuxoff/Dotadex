@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { Coins } from "lucide-react";
+import { Box, Coins } from "lucide-react";
 import { abilityStats, abilityValue, fillText, imageUrl, useGameData } from "../gamedata.js";
-import { RARITIES, itemIcon } from "../catalog.js";
+import { RARITIES, itemIcon, treasureScene } from "../catalog.js";
 import { ItemCard } from "./ui.jsx";
 import { SoundList, soundsBase } from "./Voice.jsx";
 import { useEffect, useState } from "react";
@@ -154,6 +154,7 @@ export function TreasurePage({ catalog, id, onOpen }) {
   const treasure = catalog.treasuresById[id];
   const rarity = RARITIES[treasure.rarity] ?? RARITIES.common;
   const total = treasure.tiers.reduce((sum, tier) => sum + tier.length, 0);
+  const scene = treasureScene(catalog, treasure);
 
   return (
     <Page>
@@ -167,6 +168,14 @@ export function TreasurePage({ catalog, id, onOpen }) {
           </p>
           <h2 className="mt-1 font-display text-4xl leading-tight text-bone sm:text-5xl">{treasure.name}</h2>
           <p className="mt-2 text-sm text-ash">{total} items can drop from it.</p>
+          {scene && (
+            <button
+              onClick={() => onOpen({ type: "scene", id: scene.id })}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-line px-3 py-1.5 text-sm text-bone transition-colors hover:border-ash/50"
+            >
+              <Box className="size-4 text-ash" aria-hidden /> Open the chest in its scene
+            </button>
+          )}
         </div>
       </div>
 

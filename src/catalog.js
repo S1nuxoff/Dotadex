@@ -340,3 +340,16 @@ export function isKnown(catalog, route) {
   };
   return Boolean(route && lists[route.type]?.[route.id]);
 }
+
+// The scene a treasure opens in. The game picks it in code, not in its data, so it is
+// matched by the treasure's picture and year; the rest open in the common one.
+const TREASURE_SCENES = [
+  [(treasure) => treasure.icon?.includes("new_bloom_2024"), "scenes/treasure/newbloom_2024_chest"],
+  [(treasure) => treasure.icon?.includes("frostivus_chest") && treasure.date?.startsWith("2023"), "scenes/treasure/frostivus2023_chest"],
+  [(treasure) => /calavera/.test(treasure.icon ?? ""), "scenes/treasure/calavera_chest"],
+];
+
+export function treasureScene(catalog, treasure) {
+  const id = TREASURE_SCENES.find(([matches]) => matches(treasure))?.[1] ?? "scenes/treasure/generic_chest";
+  return catalog.scenesById[id] ?? null;
+}

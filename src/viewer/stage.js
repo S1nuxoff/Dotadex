@@ -9,7 +9,8 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
-import { StageEffects } from "./effects.js";
+import { StageEffects, stageTint } from "./effects.js";
+import { RockStage } from "./rocks.js";
 import { playLoaded, preloadSound } from "./soundPlayer.js";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -17,6 +18,14 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 // Loaded models are kept, switching back and forth does not download them again
 const cache = new Map();
 const loader = new GLTFLoader();
+
+// Starts downloading models ahead of time (the pointer resting on a hero in the list), so
+// they are ready, or nearly, when picked
+export function prefetchModels(urls) {
+  for (const url of urls) {
+    loadModel(url.split("#")[0]).catch(() => {});
+  }
+}
 
 function loadModel(url, onProgress) {
   if (!cache.has(url)) {
@@ -199,7 +208,7 @@ function plainMaterial(material, textures) {
       )
       .replace("#include <emissivemap_fragment>", "")
       // Glowing parts a little brighter than the game, so the glow pass catches them
-      .replace("#include <opaque_fragment>", "outgoingLight = mix( outgoingLight, diffuseColor.rgb * 1.35, selfIllum );\n#include <opaque_fragment>");
+      .replace("#include <opaque_fragment>", "outgoingLight = mix( outgoingLight, diffuseColor.rgb * 1.2, selfIllum );\n#include <opaque_fragment>");
   };
   result.customProgramCacheKey = () => `dota-plain-${layers.map((layer) => layer.mode).join("-")}`;
   return result;
@@ -297,6 +306,50 @@ function attach(root, part) {
   root.add(part);
 }
 
+// Fog over the whole view while one model gives way to another: it rolls in in billows,
+// the model changes behind it, and it parts again
+const veilShader = {
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position.xy, 0.0, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform float uCover;
+    uniform float uTime;
+    uniform float uAspect;
+    uniform vec3 uTint;
+    varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p) {
+      vec2 i = floor(p), f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+    }
+    float fbm(vec2 p) {
+      float sum = 0.0, amp = 0.5;
+      for (int i = 0; i < 5; i++) {
+        sum += noise(p) * amp;
+        p = p * 2.03 + vec2(1.7, 9.2);
+        amp *= 0.5;
+      }
+      return sum;
+    }
+    void main() {
+      vec2 p = vec2(vUv.x * uAspect, vUv.y) * 3.0;
+      float fog = fbm(p + vec2(uTime * 0.3, uTime * 0.12) + fbm(p * 1.7 - uTime * 0.2));
+      // The billows close in from the edges first and clear from the middle first
+      float edge = length(vUv - 0.5) * 0.6;
+      float alpha = smoothstep(0.0, 0.25, uCover * 1.5 - (1.0 - fog) + edge * (1.0 - uCover));
+      vec3 color = mix(vec3(0.05, 0.06, 0.08), uTint * 0.35, fog * 0.6);
+      gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0) * min(uCover * 3.0, 1.0));
+      #include <colorspace_fragment>
+    }
+  `,
+};
+
 export class Stage {
   constructor(canvas) {
     this.canvas = canvas;
@@ -349,6 +402,27 @@ export class Stage {
     this.floor.renderOrder = 1;
     this.scene.add(this.floor);
     this.effects = new StageEffects(this.scene, reducedMotion);
+    this.veil = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.ShaderMaterial({
+        ...veilShader,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        uniforms: { uCover: { value: 0 }, uTime: { value: 0 }, uAspect: { value: 1 }, uTint: stageTint },
+      })
+    );
+    this.veil.frustumCulled = false;
+    this.veil.renderOrder = 1000;
+    this.veil.visible = false;
+    this.veil.userData.skipGlow = true;
+    this.scene.add(this.veil);
+    this.veilTarget = 0;
+    // Stony ground instead of the stone pedestal, with real shadows
+    this.rockStage = new RockStage(this.scene);
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.fog = new THREE.FogExp2(0x0b1017, 0.001);
+
 
     this.clock = new THREE.Clock();
     this.group = null;
@@ -366,7 +440,7 @@ export class Stage {
     // The glow is added to the colors only, so the page still shows through around the model.
     this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.35, 1.5);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.35, 1.3);
     Object.assign(this.bloom.blendMaterial, {
       blending: THREE.CustomBlending,
       blendEquation: THREE.AddEquation,
@@ -381,7 +455,7 @@ export class Stage {
     this.glowComposer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
     this.glowComposer.renderToScreen = false;
     this.glowComposer.addPass(new RenderPass(this.scene, this.camera, null, new THREE.Color(0, 0, 0), 0));
-    this.glowComposer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.95, 0.5, 0.12));
+    this.glowComposer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.65, 0.45, 0.15));
     this.glowBlack = new THREE.MeshBasicMaterial({ color: 0x000000 });
     this.glowMix = new ShaderPass({
       uniforms: { tDiffuse: { value: null }, tGlow: { value: this.glowComposer.renderTarget2.texture } },
@@ -412,6 +486,7 @@ export class Stage {
     this.glowComposer.setPixelRatio(this.renderer.getPixelRatio());
     this.glowComposer.setSize(clientWidth, clientHeight);
     this.camera.aspect = clientWidth / clientHeight;
+    this.effects.hazeMaterial.uniforms.uAspect.value = this.camera.aspect;
     this.camera.updateProjectionMatrix();
   }
 
@@ -420,6 +495,11 @@ export class Stage {
   // takes the place of the hero base.
   // An url may end with #skin=N for a material variant of the model.
   async show(urls, onProgress) {
+    // A model on show is veiled in fog while the next one loads
+    if (this.group && !reducedMotion.matches) {
+      this.veilTarget = 1;
+      this.veilSince = performance.now();
+    }
     const request = ++this.request;
     const loaded = new Map();
     const report = () => {
@@ -474,8 +554,27 @@ export class Stage {
     });
 
     this.rootModel = entries[rootIndex].url.slice(entries[rootIndex].url.indexOf("/models/") + 1);
+    // The swap happens behind the fog once it has closed over the view
+    while (this.veilTarget === 1 && this.veil.material.uniforms.uCover.value < 0.95) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (request !== this.request) {
+        return null;
+      }
+    }
     this.replace(group, gltfs[rootIndex].animations);
-    this.preloadSounds();
+    this.veilTarget = 0;
+    this.onShow?.();
+    try {
+      this.measureTint(group);
+    } catch {}
+    // Models whose materials glow with a halo light the rocks around them more
+    let glowing = false;
+    group.traverse((node) => {
+      glowing ||= Boolean(node.isMesh && node.userData.dota?.userData?.glow);
+    });
+    this.rockStage.setGlowStrength(glowing ? 3 : 1);
+    // The animations' sounds once the model is up, not competing with its download
+    setTimeout(() => request === this.request && this.preloadSounds(), 1200);
     return Object.keys(this.actions);
   }
 
@@ -505,17 +604,21 @@ export class Stage {
 
   replace(group, animations) {
     if (this.group) {
-      this.scene.remove(this.group);
-      this.group.traverse((node) => {
-        if (node.isMesh && node.userData.dota !== node.userData.pbr) {
-          node.userData.dota.dispose();
-        }
-      });
       this.mixer?.stopAllAction();
+      this.dropModel(this.group);
+      // The camera swings round onto the new model
+      this.swing = true;
     }
+    // A flash of the new model's light as it comes in
+    this.flash = 1;
 
     this.group = group;
     group.traverse((node) => {
+      // The model's shadow falls on the rocks
+      if (node.isMesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
       if (node.isBone) {
         node.userData.rest = { position: node.position.clone(), quaternion: node.quaternion.clone(), scale: node.scale.clone() };
       }
@@ -532,11 +635,31 @@ export class Stage {
     const idle = Object.keys(this.actions).find((name) => /^idle$|_idle$|^idle_anim$/i.test(name))
       ?? Object.keys(this.actions).find((name) => /idle/i.test(name))
       ?? Object.keys(this.actions)[0];
+    // Heroes come in with their spawn animation, as in the game, then settle into idle
+    const spawn = Object.keys(this.actions).find((name) => /spawn/i.test(name) && !/respawn|loadout/i.test(name));
+    // The frame and the ground are set from the idle pose: a spawn starts mid-leap or crouched
     if (idle) {
       this.play(idle, 0);
+      this.mixer.update(0);
+    }
+    this.frameModel();
+    if (spawn && idle && !reducedMotion.matches) {
+      const action = this.actions[spawn];
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+      this.play(spawn, 0);
+      const settle = (event) => {
+        if (event.action === action) {
+          this.mixer.removeEventListener("finished", settle);
+          if (this.current === action) {
+            this.play(idle, 0.35);
+            this.onAnimation?.(idle);
+          }
+        }
+      };
+      this.mixer.addEventListener("finished", settle);
     }
     this.mixer.update(0);
-    this.frameModel();
     this.effects.burst();
   }
 
@@ -662,7 +785,8 @@ export class Stage {
 
   // The light and camera of a scene of the game: { light, camera, points } from the scene
   // list, or null for the studio. The camera is taken when the scene says where it was.
-  setSceneLook(info) {
+  setSceneLook(info, { camera = true } = {}) {
+    this.useSceneCamera = camera;
     const light = info?.light;
     this.sceneLook = light ? info : null;
     this.sceneLights.clear();
@@ -712,12 +836,43 @@ export class Stage {
     this.updateShowcase();
   }
 
+  // The pedestal and its smoke on their own; behind a model in a scene of the game, only the
+  // embers and the haze, with fog that sinks the scene's distance into the dark
   updateShowcase() {
     const on = this.showcase !== false && !this.backdrop;
-    this.effects.group.visible = on;
-    if (!on) {
+    const scene = this.showcase !== false && Boolean(this.backdrop);
+    this.effects.group.visible = on || scene;
+    this.effects.setPedestal(on);
+    // The rocks stand in for the stone pedestal, and their shadows for the soft disc under the model
+    const rocks = on && this.standing !== false;
+    this.rockStage.group.visible = rocks;
+    this.effects.pedestalMesh.visible = false;
+    // The rocks have the model's own light; the pedestal's pool of light would glow on bare ground
+    this.effects.pool.visible = !rocks;
+    if (this.renderer.shadowMap.enabled !== rocks) {
+      this.renderer.shadowMap.enabled = rocks;
+      // Lit materials compile again with or without shadows
+      this.scene.traverse((node) => node.isMesh && node.material && (node.material.needsUpdate = true));
+    }
+    // On the rocks the light from the camera and the room is turned down, so the stage's sun
+    // gives the stones their shape
+    this.key.intensity = rocks ? 1.1 : 2.2;
+    this.scene.environmentIntensity = rocks ? 0.18 : 0.6;
+    this.hemi.intensity = rocks ? 0.45 : 1.2;
+    if (!on || rocks) {
       this.floor.visible = false;
     }
+    this.scene.fog = scene ? this.fog : null;
+  }
+
+  // Takes a model off the stage for good
+  dropModel(group) {
+    this.scene.remove(group);
+    group.traverse((node) => {
+      if (node.isMesh && node.userData.dota !== node.userData.pbr) {
+        node.userData.dota.dispose();
+      }
+    });
   }
 
   setShading(mode) {
@@ -729,6 +884,45 @@ export class Stage {
     }));
   }
 
+  // The model's main color from its color textures: saturated, lit pixels count most
+  measureTint(group) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 24;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    const sum = new THREE.Color(0, 0, 0);
+    let weight = 0;
+    const seen = new Set();
+    group.traverse((node) => {
+      const image = node.isMesh && node.visible && node.userData.pbr?.map?.image;
+      if (!image?.width || seen.has(image)) {
+        return;
+      }
+      seen.add(image);
+      context.clearRect(0, 0, 24, 24);
+      context.drawImage(image, 0, 0, 24, 24);
+      const pixels = context.getImageData(0, 0, 24, 24).data;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const r = pixels[i] / 255;
+        const g = pixels[i + 1] / 255;
+        const b = pixels[i + 2] / 255;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const w = (max - min) * max * (pixels[i + 3] / 255);
+        sum.r += r * w;
+        sum.g += g * w;
+        sum.b += b * w;
+        weight += w;
+      }
+    });
+    if (weight < 1) {
+      return;
+    }
+    const tint = new THREE.Color(sum.r / weight, sum.g / weight, sum.b / weight);
+    // Bright enough to see on the dark stage, whatever the model's colors
+    const hsl = tint.getHSL({});
+    this.tintTarget = new THREE.Color().setHSL(hsl.h, Math.min(1, hsl.s * 1.2 + 0.1), THREE.MathUtils.clamp(hsl.l, 0.5, 0.65));
+  }
+
   setRim(color) {
     this.rimTarget.set(color);
     if (reducedMotion.matches) {
@@ -738,7 +932,7 @@ export class Stage {
 
   // Fits the camera to the model, gliding there unless reduced motion is on
   frameModel(immediate = false) {
-    const shot = this.sceneLook?.camera;
+    const shot = this.useSceneCamera && this.sceneLook?.camera;
     if (shot) {
       // Source gives the horizontal field of view of a 4:3 screen
       this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(shot.fov / 2)) * 0.75));
@@ -794,10 +988,19 @@ export class Stage {
     this.floor.position.set(center.x, box.min.y + pedestal * 0.002, center.z);
     this.floor.scale.setScalar(size.x * 0.55 + size.y * 0.1);
     this.effects.place(new THREE.Vector3(center.x, box.min.y, center.z), pedestal, size.y, standing);
+    this.standing = standing;
+    this.rockStage.place(new THREE.Vector3(center.x, box.min.y, center.z), pedestal, size.y, distance);
+    // The ground fades out from just past the model to well before its edge
+    this.rockStage.viewFade.near.value = distance * 1.05;
+    this.rockStage.viewFade.far.value = distance * 2.2;
+
     this.updateShowcase();
 
     this.camera.near = distance / 100;
-    this.camera.far = distance * 20;
+    // Fog for scenes behind the model: thick enough to hide their far edges
+    this.fog.density = this.sceneLook?.fog?.density ?? 1 / (pedestal * 14);
+    // Far enough for the scenes behind the model
+    this.camera.far = Math.max(distance * 20, pedestal * 50);
     this.camera.updateProjectionMatrix();
     this.controls.minDistance = radius * 0.4;
     this.controls.maxDistance = distance * 4;
@@ -807,6 +1010,7 @@ export class Stage {
     const position = target.clone().add(direction.normalize().multiplyScalar(distance));
 
     if (immediate || reducedMotion.matches) {
+      this.swing = false;
       this.controls.target.copy(target);
       this.camera.position.copy(position);
       this.tween = null;
@@ -814,13 +1018,16 @@ export class Stage {
     }
     this.tween = {
       start: performance.now(),
-      duration: 900,
+      duration: this.swing ? 1400 : 900,
       fromTarget: this.controls.target.clone(),
       fromPosition: this.camera.position.clone(),
       target,
       position,
       lift: size.y * 0.06,
+      // Swinging in along an arc round the model after a change of model
+      sweep: this.swing ? THREE.MathUtils.degToRad(70) : 0,
     };
+    this.swing = false;
   }
 
   // Draws the halos of the model's glowing materials into the glow composer, when it has any
@@ -839,7 +1046,7 @@ export class Stage {
     const swapped = [];
     const hidden = [];
     this.scene.traverse((node) => {
-      if (node.isPoints || node.isSprite) {
+      if (node.isPoints || node.isSprite || node.userData.skipGlow) {
         if (node.visible) {
           node.visible = false;
           hidden.push(node);
@@ -852,7 +1059,11 @@ export class Stage {
     for (const [node, glow] of glowing) {
       node.material = glow;
     }
+    // The shadows of this frame are drawn with the frame itself
+    const shadows = this.renderer.shadowMap.autoUpdate;
+    this.renderer.shadowMap.autoUpdate = false;
     this.glowComposer.render();
+    this.renderer.shadowMap.autoUpdate = shadows;
     for (const [node, material] of swapped) {
       node.material = material;
     }
@@ -869,16 +1080,59 @@ export class Stage {
     }
 
     this.effects.update(delta);
+    this.flash = Math.max(0, (this.flash ?? 0) - delta * 1.6);
+    // Never left hanging if a load fails
+    if (this.veilTarget === 1 && performance.now() - (this.veilSince ?? 0) > 6000) {
+      this.veilTarget = 0;
+    }
+    const veil = this.veil.material.uniforms;
+    const cover = veil.uCover.value;
+    // Even both ways: about half a second to close, a little longer to part
+    const speed = this.veilTarget > cover ? 1.8 : 1.4;
+    veil.uCover.value = THREE.MathUtils.clamp(cover + Math.sign(this.veilTarget - cover) * delta * speed, 0, 1);
+    veil.uTime.value += delta;
+    veil.uAspect.value = this.camera.aspect;
+    this.veil.visible = veil.uCover.value > 0.01;
+    this.rockStage.flash = this.flash;
+    // How the camera has turned round the model and tilted, for the background haze to follow:
+    // a full turn slides it by about four screen widths
+    const look = this.camera.position.clone().sub(this.controls.target);
+    const angle = Math.atan2(look.x, look.z);
+    // Added up turn by turn, so going all the way round never jumps
+    let step = angle - (this.lastAngle ?? angle);
+    step -= Math.round(step / (Math.PI * 2)) * Math.PI * 2;
+    this.lastAngle = angle;
+    this.turn = (this.turn ?? 0) + step;
+    const tilt = Math.atan2(look.y, Math.hypot(look.x, look.z));
+    this.effects.hazeMaterial.uniforms.uView.value.set((-this.turn / (Math.PI * 2)) * 4 * 2.2 * this.camera.aspect, tilt * 1.5);
+    this.rockStage.update(delta);
+
     if (this.sceneLook) {
       setDotaKeyDir(this.sunDir.clone().transformDirection(this.camera.matrixWorldInverse));
     }
     stageRim.value.lerp(this.rimTarget, reducedMotion.matches ? 1 : Math.min(delta * 3, 1));
+    if (this.tintTarget) {
+      stageTint.value.lerp(this.tintTarget, reducedMotion.matches ? 1 : Math.min(delta * 2, 1));
+    }
+    // A scene's own fog color, or a dark one in the model's tint
+    if (this.sceneLook?.fog) {
+      this.fog.color.setRGB(...this.sceneLook.fog.color);
+    } else {
+      this.fog.color.copy(stageTint.value).multiplyScalar(0.12).add(new THREE.Color(0.03, 0.04, 0.055));
+    }
 
     if (this.tween) {
       const t = Math.min((performance.now() - this.tween.start) / this.tween.duration, 1);
       const ease = 1 - Math.pow(1 - t, 4);
       this.controls.target.lerpVectors(this.tween.fromTarget, this.tween.target, ease);
       this.camera.position.lerpVectors(this.tween.fromPosition, this.tween.position, ease);
+      if (this.tween.sweep) {
+        // Round the target: the end position turned back by what is left of the sweep
+        const offset = this.tween.position.clone().sub(this.tween.target);
+        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.tween.sweep * (1 - ease));
+        const radius = this.tween.fromPosition.distanceTo(this.tween.fromTarget) * (1 - ease) + offset.length() * ease;
+        this.camera.position.copy(this.controls.target).add(offset.setLength(radius));
+      }
       // The model rises onto the stage as the camera settles
       if (this.group) {
         this.group.position.y = -this.tween.lift * (1 - ease);

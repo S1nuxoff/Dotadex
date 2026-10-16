@@ -230,7 +230,7 @@ export function AudioPage({ catalog, id }) {
     <Page>
       <p className="text-sm text-ash">{pack.kind === "announcers" ? "Announcer pack" : "Music pack"}</p>
       <h2 className="mt-1 font-display text-4xl leading-tight text-bone sm:text-5xl">{pack.name}</h2>
-      <p className="mt-2 text-sm text-ash">{pack.count} sounds. Ones still being uploaded do not play yet.</p>
+      <p className="mt-2 text-sm text-ash">{pack.count} sounds.</p>
       <div className="mt-8">{files ? <SoundList base={soundsBase(catalog.modelsBase)} files={files} /> : <p className="text-sm text-ash">Loading the list</p>}</div>
     </Page>
   );

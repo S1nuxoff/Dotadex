@@ -13,6 +13,7 @@ import {
   sortItems,
 } from "../catalog.js";
 import { ItemCard, Select } from "./ui.jsx";
+import { equipSound } from "../uiSounds.js";
 
 function SlotRow({ slot, item, isDefault, onOpen }) {
   const icon = item && itemIcon(item);
@@ -96,9 +97,72 @@ function SlotPicker({ catalog, hero, slot, equipped, onEquip, onBack }) {
   );
 }
 
+// A card of the loadout grid, as the game's: the item standing tall, its name, and what
+// picking it does (DEFAULT, EQUIP) or that it is worn (EQUIPPED, in a gold frame)
+function LoadoutCard({ image, name, color, state, sound, onPick }) {
+  const worn = state === "equipped";
+  return (
+    <button
+      onClick={onPick}
+      data-sound={worn ? undefined : sound}
+      data-hover
+      className={`group relative flex flex-col overflow-hidden border text-left transition-colors ${
+        worn ? "border-aegis shadow-[0_0_0_1px_var(--color-aegis)]" : "border-black/80 hover:border-ash/50"
+      }`}
+      style={{ background: `linear-gradient(180deg, #11141a 0%, #0b0d11 55%, ${color}33 100%)` }}
+    >
+      <span className="relative block aspect-[3/4] w-full">
+        {image && (
+          <img
+            src={image}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 size-full object-contain p-2 transition-transform duration-200 group-hover:scale-[1.04]"
+            onError={(event) => (event.currentTarget.style.visibility = "hidden")}
+          />
+        )}
+        <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ background: color }} />
+      </span>
+      <span className="line-clamp-2 min-h-[2.4em] px-1.5 pt-1.5 text-center text-xs leading-tight text-bone/90">{name}</span>
+      <span
+        className={`m-1.5 mt-1 py-1 text-center font-display text-[11px] tracking-[0.14em] ${
+          worn
+            ? "text-aegis"
+            : state === "default"
+            ? "text-ash"
+            : "bg-gradient-to-b from-[#3a424c] to-[#252b32] text-bone shadow-[inset_0_1px_0_rgb(255_255_255/0.12)] group-hover:from-[#4a535e]"
+        }`}
+      >
+        {worn ? "Equipped" : state === "default" ? "Default" : "Equip"}
+      </span>
+    </button>
+  );
+}
+
+// A row of the slot column: what the slot shows now, its name and how many items it has
+function LoadoutSlot({ image, name, count, active, onSelect }) {
+  return (
+    <button
+      onClick={onSelect}
+      data-sound="click"
+      data-hover
+      className={`relative flex w-full items-center gap-2.5 border-b border-black/60 px-2 py-2 text-left transition-colors ${
+        active ? "bg-gradient-to-r from-[#2a313a] to-[#1d2228]" : "hover:bg-raised/50"
+      }`}
+    >
+      <span className="relative size-12 shrink-0 overflow-hidden border border-black/70 bg-stage">
+        {image && <img src={image} alt="" loading="lazy" className="size-full object-cover" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-[13px] leading-tight ${active ? "text-bone" : "text-bone/80"}`}>{name}</span>
+        <span className="block text-[11px] text-ash tabular-nums">({count})</span>
+      </span>
+      {active && <span className="absolute top-1/2 right-1 size-0 -translate-y-1/2 border-y-[6px] border-l-[7px] border-y-transparent border-l-bone" aria-hidden />}
+    </button>
+  );
+}
+
 export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset, onClose }) {
-  const [openSlot, setOpenSlot] = useState(null);
-  const reduce = useReducedMotion();
   const hero = catalog.heroesById[outfit.hero];
   const slots = useMemo(() => heroSlots(catalog, hero.id, outfit.persona ?? 0), [catalog, hero, outfit.persona]);
   // Sets of the body shown: the hero's own or the persona's
@@ -106,118 +170,130 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
     () => catalog.sets.filter((set) => set.hero === hero.id && personaOf(set.items.map((id) => catalog.itemsById[id]).find(Boolean)?.slot) === (outfit.persona ?? 0)),
     [catalog, hero, outfit.persona]
   );
+  const [selected, setSelected] = useState(() => (sets.length ? "sets" : slots[0]?.slot));
+  const [query, setQuery] = useState("");
   const changed = Object.keys(outfit.slots).length > 0;
-  const picking = slots.find((slot) => slot.slot === openSlot);
+  const words = query.trim().toLowerCase();
 
-  const slide = (direction) =>
-    reduce
-      ? { initial: false, animate: { opacity: 1 }, exit: { opacity: 0 } }
-      : {
-          initial: { opacity: 0, x: 24 * direction },
-          animate: { opacity: 1, x: 0 },
-          exit: { opacity: 0, x: -24 * direction },
-          transition: { duration: 0.2, ease: "easeOut" },
-        };
+  // The cards of what is picked in the column
+  const cards = useMemo(() => {
+    if (selected === "sets") {
+      return sets
+        .filter((set) => !words || set.name.toLowerCase().includes(words))
+        .map((set) => {
+          const worn = set.items.every((id) => outfit.slots[catalog.itemsById[id]?.slot]?.id === id);
+          const first = catalog.itemsById[set.items[0]];
+          return {
+            key: set.id,
+            image: set.icon ? itemIcon(set) : null,
+            name: set.name,
+            color: first ? rarity(first).color : "#8b96a3",
+            state: worn ? "equipped" : "equip",
+            sound: "equip",
+            onPick: () => onEquipSet(set),
+          };
+        });
+    }
+    const slot = slots.find((entry) => entry.slot === selected);
+    if (!slot) {
+      return [];
+    }
+    const chosen = outfit.slots[slot.slot];
+    const list = [];
+    if (slot.defaultItem && (!words || slot.defaultItem.name.toLowerCase().includes(words))) {
+      list.push({
+        key: `default-${slot.slot}`,
+        image: itemIcon(slot.defaultItem),
+        name: slot.defaultItem.name,
+        color: rarity(slot.defaultItem).color,
+        state: chosen ? "default" : "equipped",
+        sound: "unequip",
+        onPick: () => onEquip(slot.slot, null),
+      });
+    }
+    for (const item of sortItems(itemsForSlot(catalog, hero.id, slot.slot), "newest")) {
+      if (words && !item.name.toLowerCase().includes(words)) {
+        continue;
+      }
+      list.push({
+        key: item.id,
+        image: itemIcon(item),
+        name: item.name,
+        color: rarity(item).color,
+        state: chosen?.id === item.id ? "equipped" : "equip",
+        sound: equipSound(slot.slot),
+        onPick: () => onEquip(slot.slot, item.id),
+      });
+    }
+    return list;
+  }, [selected, sets, slots, outfit.slots, words, catalog, hero, onEquip, onEquipSet]);
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-panel">
-      <AnimatePresence mode="wait" initial={false}>
-        {picking ? (
-          <motion.div key={`slot-${picking.slot}`} className="h-full" {...slide(1)}>
-            <SlotPicker
-              catalog={catalog}
-              hero={hero}
-              slot={picking}
-              equipped={outfit.slots[picking.slot]}
-              onEquip={onEquip}
-              onBack={() => setOpenSlot(null)}
-            />
-          </motion.div>
-        ) : (
-          <motion.div key="slots" className="flex h-full flex-col" {...slide(-1)}>
-            <div className="flex items-center gap-3 px-4 pt-5 pb-3">
-              <img src={heroPortrait(hero)} alt="" className="h-9 w-[54px] rounded object-cover" />
-              <div className="min-w-0 flex-1">
-                <p className="font-display text-lg leading-tight text-bone">Wardrobe</p>
-                <p className="truncate text-xs text-ash">What {hero.name} wears</p>
-              </div>
-              {changed && (
-                <button
-                  onClick={onReset}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs text-ash hover:text-bone"
-                >
-                  <RotateCcw className="size-3.5" /> Default
-                </button>
-              )}
-              {onClose && (
-                <button onClick={onClose} className="grid size-8 place-items-center rounded-md text-ash hover:text-bone" aria-label="Close the wardrobe">
-                  <X className="size-5" />
-                </button>
-              )}
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto pb-4 scrollbar-thin">
-              {slots.length === 0 && (
-                <p className="border-t border-line px-4 py-5 text-sm text-ash">
-                  {hero.name}'s items are not exported yet. They appear here as the export runs.
-                </p>
-              )}
-              <ul className={slots.length ? "border-y border-line py-1" : "hidden"}>
-                {slots.map((slot) => {
-                  const chosen = outfit.slots[slot.slot];
-                  const item = chosen ? catalog.itemsById[chosen.id] : slot.defaultItem;
-                  return (
-                    <li key={slot.slot}>
-                      <SlotRow slot={slot} item={item} isDefault={!chosen} onOpen={() => setOpenSlot(slot.slot)} />
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {sets.length > 0 && (
-                <section className="pt-4">
-                  <h3 className="flex items-center gap-2 px-4 pb-2 text-sm text-bone">
-                    <Layers className="size-4 text-ash" /> Sets
-                    <span className="text-xs text-ash tabular-nums">{sets.length}</span>
-                  </h3>
-                  <ul>
-                    {sets.map((set) => {
-                      const worn = set.items.every((id) => {
-                        const item = catalog.itemsById[id];
-                        return outfit.slots[item.slot]?.id === id;
-                      });
-                      return (
-                        <li key={set.id}>
-                          <button
-                            onClick={() => onEquipSet(set)}
-                            className={`flex w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-raised/60 ${worn ? "bg-raised" : ""}`}
-                          >
-                            <span className="h-9 w-[54px] shrink-0 overflow-hidden rounded bg-stage">
-                              {set.icon && (
-                                <img
-                                  src={itemIcon(set)}
-                                  alt=""
-                                  loading="lazy"
-                                  className="size-full object-cover"
-                                  onError={(event) => (event.currentTarget.style.visibility = "hidden")}
-                                />
-                              )}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className={`block truncate text-sm ${worn ? "text-aegis" : "text-bone/90"}`}>{set.name}</span>
-                              <span className="block text-xs text-ash">{set.items.length} items</span>
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              )}
-            </div>
-          </motion.div>
+    <div className="flex h-full flex-col bg-panel">
+      <div className="flex items-center gap-2 border-b border-black/60 px-3 py-2">
+        <label className="flex min-w-0 flex-1 items-center gap-2 border px-2">
+          <Search className="size-3.5 shrink-0 text-ash" aria-hidden />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search"
+            aria-label="Search the loadout"
+            className="h-7 w-full bg-transparent text-sm text-bone placeholder:text-ash/70 focus:outline-none"
+          />
+        </label>
+        {changed && (
+          <button onClick={onReset} className="inline-flex h-7 items-center gap-1.5 px-2 text-xs text-ash hover:text-bone" title="Back to the default look">
+            <RotateCcw className="size-3.5" /> Default
+          </button>
         )}
-      </AnimatePresence>
+        {onClose && (
+          <button onClick={onClose} className="grid size-7 place-items-center text-ash hover:text-bone" aria-label="Close the loadout">
+            <X className="size-5" />
+          </button>
+        )}
+      </div>
+      {slots.length === 0 && sets.length === 0 ? (
+        <p className="px-4 py-5 text-sm text-ash">{hero.name}'s items are not exported yet. They appear here as the export runs.</p>
+      ) : (
+        <div className="flex min-h-0 flex-1">
+          <div className="w-60 shrink-0 overflow-y-auto border-r border-black/60 bg-black/20 scrollbar-thin">
+            {sets.length > 0 && (
+              <LoadoutSlot
+                image={sets[0].icon ? itemIcon(sets[0]) : heroPortrait(hero)}
+                name="Full Sets"
+                count={sets.length}
+                active={selected === "sets"}
+                onSelect={() => setSelected("sets")}
+              />
+            )}
+            {slots.map((slot) => {
+              const chosen = outfit.slots[slot.slot];
+              const item = chosen ? catalog.itemsById[chosen.id] : slot.defaultItem;
+              return (
+                <LoadoutSlot
+                  key={slot.slot}
+                  image={item ? itemIcon(item) : null}
+                  name={slotName(slot.slot)}
+                  count={slot.count}
+                  active={selected === slot.slot}
+                  onSelect={() => setSelected(slot.slot)}
+                />
+              );
+            })}
+          </div>
+          <div className="min-w-0 flex-1 overflow-y-auto p-2 scrollbar-thin">
+            {cards.length > 0 ? (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
+                {cards.map(({ key, ...card }) => (
+                  <LoadoutCard key={key} {...card} />
+                ))}
+              </div>
+            ) : (
+              <p className="p-2 text-sm text-ash">{words ? `Nothing matches “${query}”.` : "No other items for this slot are exported yet."}</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

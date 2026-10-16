@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, Clock, Droplet } from "lucide-react";
-import { ATTRIBUTES, abilityIcon, abilityStats, abilityValue, fillText, useGameData } from "../gamedata.js";
+import { abilityIcon, abilityStats, abilityValue, fillText, useGameData } from "../gamedata.js";
 
 const TALENT_LEVELS = [25, 20, 15, 10];
 
@@ -120,8 +120,6 @@ export default function HeroInfo({ base, heroKey, language }) {
     return <p className="p-4 text-sm text-ash">No data for this hero yet.</p>;
   }
 
-  const attribute = ATTRIBUTES[hero.AttributePrimary] ?? ATTRIBUTES.DOTA_ATTRIBUTE_ALL;
-  const roles = (hero.Role ?? "").split(",").filter(Boolean);
   const abilityNames = Array.from({ length: 9 }, (_, index) => hero[`Ability${index + 1}`]).filter(
     (name) => name && name !== "generic_hidden" && !name.startsWith("special_bonus") && abilities[name]
   );
@@ -130,36 +128,13 @@ export default function HeroInfo({ base, heroKey, language }) {
   const facets = Object.keys(hero.Facets ?? {});
   const bio = texts[`${heroKey}_bio`];
   const hype = texts[`${heroKey}_hype`];
-  const number = (key) => Number(hero[key] ?? 0);
 
   return (
     <div className="space-y-5 px-4 pt-2 pb-6">
       <div>
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          <span style={{ color: attribute.color }}>{attribute.name}</span>
-          {roles.map((role) => (
-            <span key={role} className="text-ash">
-              {role}
-            </span>
-          ))}
-        </p>
-        {hype && <p className="mt-2 text-sm text-bone/80">{fillText(hype)}</p>}
+        {hype && <p className="text-sm text-bone/80">{fillText(hype)}</p>}
       </div>
 
-      <section>
-        <h3 className="mb-2 text-sm text-bone">Attributes</h3>
-        <div className="grid grid-cols-3 gap-1.5">
-          <Stat label="Strength" value={number("AttributeBaseStrength")} hint={`+${number("AttributeStrengthGain")}`} />
-          <Stat label="Agility" value={number("AttributeBaseAgility")} hint={`+${number("AttributeAgilityGain")}`} />
-          <Stat label="Intelligence" value={number("AttributeBaseIntelligence")} hint={`+${number("AttributeIntelligenceGain")}`} />
-          <Stat label="Damage" value={`${number("AttackDamageMin")}–${number("AttackDamageMax")}`} />
-          <Stat label="Attack range" value={number("AttackRange")} />
-          <Stat label="Attack time" value={number("AttackRate")} />
-          <Stat label="Armor" value={number("ArmorPhysical")} />
-          <Stat label="Move speed" value={number("MovementSpeed")} />
-          <Stat label="Vision" value={`${number("VisionDaytimeRange")} / ${number("VisionNighttimeRange")}`} />
-        </div>
-      </section>
 
       {facets.length > 0 && (
         <section>

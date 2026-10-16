@@ -7,6 +7,8 @@ export function IconButton({ label, onClick, children, active, className = "" })
   return (
     <button
       onClick={onClick}
+      data-sound="toggle"
+      data-hover
       title={label}
       aria-label={label}
       className={`grid size-9 shrink-0 place-items-center rounded-lg border transition-colors ${
@@ -25,6 +27,7 @@ export function Toggle({ options, value, onChange, label }) {
         <button
           key={String(option.value)}
           onClick={() => onChange(option.value)}
+          data-sound="toggle"
           aria-pressed={value === option.value}
           disabled={option.disabled}
           title={option.title}
@@ -93,6 +96,8 @@ export function Select({ value, options, onChange, label, placeholder, className
     <div ref={ref} className={`relative ${className}`}>
       <button
         onClick={() => setOpen(!open)}
+        data-sound="click"
+        data-hover
         aria-expanded={open}
         aria-label={label}
         className={`flex h-8 w-full items-center gap-1.5 rounded-lg border px-2.5 text-sm transition-colors ${
@@ -123,6 +128,7 @@ export function Select({ value, options, onChange, label, placeholder, className
           {shown.map((option) => (
             <li key={String(option.value)}>
               <button
+                data-sound="click"
                 onClick={() => {
                   onChange(option.value);
                   setOpen(false);

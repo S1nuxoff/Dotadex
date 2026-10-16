@@ -1,16 +1,23 @@
 @import "tailwindcss";
 
+/* After Dota's own interface: near-black blue panels with fine light edges, cold white and
+   grey text, gold for what matters, square corners, bold capitals with wide spacing for titles */
 @theme {
-  --color-stage: #121a24;
-  --color-panel: #1a2330;
-  --color-raised: #212c3b;
-  --color-line: #2c3846;
-  --color-bone: #e8e2d6;
-  --color-ash: #8a94a3;
-  --color-aegis: #c9a45c;
+  --color-stage: #0d1117;
+  --color-panel: #161b22;
+  --color-raised: #222a33;
+  --color-line: #2f3842;
+  --color-bone: #e4e8ec;
+  --color-ash: #8b96a3;
+  --color-aegis: #d1aa5a;
 
-  --font-sans: "Instrument Sans", system-ui, sans-serif;
-  --font-display: "Marcellus", Georgia, serif;
+  --font-sans: "Barlow", system-ui, sans-serif;
+  --font-display: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
 }
 
 html,
@@ -24,6 +31,46 @@ body {
   color: var(--color-bone);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Dota's own cursor, everywhere, as in the game */
+html,
+body,
+a,
+button,
+summary,
+label,
+select,
+input,
+[role="button"],
+canvas,
+.cursor-grab,
+.cursor-grabbing,
+.cursor-pointer {
+  cursor: url("/Dotadex/ui/cursor_default.png") 2 2, default !important;
+}
+input[type="text"],
+input[type="search"],
+input:not([type]) {
+  cursor: url("/Dotadex/ui/cursor_default.png") 2 2, text;
+}
+
+/* Titles in bold, spaced capitals */
+.font-display {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Panels and raised controls: a dark vertical gradient with a light top edge, as Dota draws them */
+.bg-panel,
+.bg-panel\/80,
+.bg-panel\/90 {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.035), rgb(0 0 0 / 0.18));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+.bg-raised {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(0 0 0 / 0.12));
 }
 
 :focus-visible {
@@ -56,4 +103,61 @@ body {
 .scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--color-line) transparent;
+}
+
+/* Sliders as in Dota's settings: a dark sunken track, the filled part in a cold light gradient,
+   a small bevelled bar for the thumb. --fill is set from the value by the slider itself. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border: 1px solid #000;
+  background: linear-gradient(90deg, #6f8496, #c4d3de) 0 / var(--fill, 50%) 100% no-repeat, #0b0e12;
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.8), 0 1px 0 rgb(255 255 255 / 0.06);
+}
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border: 1px solid #000;
+  background: #0b0e12;
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.8), 0 1px 0 rgb(255 255 255 / 0.06);
+}
+input[type="range"]::-moz-range-progress {
+  height: 6px;
+  background: linear-gradient(90deg, #6f8496, #c4d3de);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 8px;
+  height: 16px;
+  margin-top: -6px;
+  border: 1px solid #000;
+  background: linear-gradient(180deg, #f2f5f7, #9aa7b1);
+  box-shadow: inset 0 1px 0 #fff, 0 1px 3px rgb(0 0 0 / 0.7);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 8px;
+  height: 16px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: linear-gradient(180deg, #f2f5f7, #9aa7b1);
+  box-shadow: inset 0 1px 0 #fff, 0 1px 3px rgb(0 0 0 / 0.7);
+}
+input[type="range"]:hover::-webkit-slider-thumb {
+  background: linear-gradient(180deg, #fff, #b8c4cd);
+}
+
+/* Text fields and the boxes around them: sunken, dark, a fine edge that lights up on focus */
+label:has(> input[type="text"]),
+label:has(> input:not([type])),
+label:has(> input[type="search"]) {
+  background: linear-gradient(180deg, #07090c, #0f1318);
+  border-color: #000 !important;
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.9), 0 1px 0 rgb(255 255 255 / 0.06);
+}
+label:has(> input:focus) {
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.9), 0 0 0 1px #6f8496;
 }

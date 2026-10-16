@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { prefetchModels } from "./viewer/stage.js";
+import { installUiSounds } from "./uiSounds.js";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { List, X } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
@@ -33,7 +35,7 @@ function tabFor(catalog, route) {
     return "treasures";
   }
   if (route.type === "audio") {
-    return "audio";
+    return catalog.audioById[route.id]?.kind ?? "music";
   }
   if (route.type === "scene") {
     return "scenes";
@@ -55,26 +57,38 @@ function firstRoute(catalog) {
 }
 
 // The right panel of a hero: its data, or what it wears
-function HeroPanel({ catalog, outfit, language, wardrobe }) {
+function HeroPanel({ catalog, outfit, language, wardrobe, onView }) {
   const [view, setView] = useState(outfit.focus ? "wardrobe" : "hero");
+  // The loadout needs room: the panel widens while it is open
+  useEffect(() => onView?.(view), [view, onView]);
   const hero = catalog.heroesById[outfit.hero];
   return (
     <div className="flex h-full flex-col bg-panel">
-      <div className="flex gap-1 border-b border-line px-4 pt-4 pb-3" role="tablist">
+      {/* Tabs as the game's hero pick has them: STRATEGY / LOADOUT, spaced capitals parted by slashes */}
+      <div className="flex items-center gap-3 border-b border-line px-5 pt-5 pb-4" role="tablist">
         {[
-          ["hero", hero.name],
+          ["hero", "Hero"],
           ["voice", "Voice"],
-          ["wardrobe", "Wardrobe"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={view === id}
-            onClick={() => setView(id)}
-            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${view === id ? "bg-raised text-bone" : "text-ash hover:text-bone"}`}
-          >
-            {label}
-          </button>
+          ["wardrobe", "Loadout"],
+        ].map(([id, label], index) => (
+          <Fragment key={id}>
+            {index > 0 && (
+              <span className="text-lg text-ash/40" aria-hidden>
+                /
+              </span>
+            )}
+            <button
+              role="tab"
+              data-sound="toptab"
+              aria-selected={view === id}
+              onClick={() => setView(id)}
+              className={`font-display text-[15px] tracking-[0.14em] transition-colors ${
+                view === id ? "text-bone [text-shadow:0_0_12px_rgb(255_255_255/0.25)]" : "text-ash/70 hover:text-bone"
+              }`}
+            >
+              {label}
+            </button>
+          </Fragment>
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
@@ -130,7 +144,7 @@ function Sheet({ open, onClose, label, side, children }) {
             transition={{ type: "spring", damping: 32, stiffness: 320 }}
             className={
               side === "right"
-                ? "absolute inset-y-0 right-0 w-[min(22rem,100%)] border-l border-line"
+                ? "absolute inset-y-0 right-0 w-[min(26rem,100%)] border-l border-line"
                 : "absolute inset-x-0 bottom-0 h-[85%] overflow-hidden rounded-t-2xl border-t border-line"
             }
             role="dialog"
@@ -152,6 +166,7 @@ export default function App() {
   const [tab, setTab] = useState("heroes");
   const [browse, setBrowse] = useState(false);
   const [wardrobe, setWardrobe] = useState(false);
+  const [panelView, setPanelView] = useState("hero");
   const wide = useWide();
   const [language, setLanguage] = useLanguage();
 
@@ -213,6 +228,20 @@ export default function App() {
   const outfit = useMemo(() => catalog && route && !page && outfitFor(catalog, route), [catalog, route, page]);
   const urls = useMemo(() => catalog && outfit && outfitUrls(catalog, outfit), [catalog, outfit]);
 
+  // A hero or item the pointer rests on starts downloading, after a moment so a sweep down
+  // the list does not start them all
+  const prefetchTimer = useRef(null);
+  const prefetch = (next) => {
+    clearTimeout(prefetchTimer.current);
+    if (!next || next.type !== "hero") {
+      return;
+    }
+    prefetchTimer.current = setTimeout(() => {
+      const look = outfitFor(catalog, next);
+      prefetchModels(outfitUrls(catalog, look));
+    }, 450);
+  };
+
   const open = (next) => {
     window.history.replaceState(null, "", routeHash(next));
     setRoute(next);
@@ -243,6 +272,13 @@ export default function App() {
     const slots = Object.fromEntries(Object.entries(outfit.slots).filter(([slot]) => personaOf(slot) === persona));
     open({ type: "hero", id: outfit.hero, slots, persona, bare: outfit.bare });
   };
+
+  // The game's interface sounds for the whole page
+  useEffect(() => {
+    if (catalog) {
+      installUiSounds(catalog.modelsBase.replace("dota2-models", "dota2-sounds"));
+    }
+  }, [catalog]);
 
   if (error) {
     return (
@@ -275,7 +311,7 @@ export default function App() {
   }
 
   const sidebar = (
-    <Sidebar catalog={catalog} tab={tab} onTab={setTab} route={route} onOpen={open} language={language} onLanguage={setLanguage} />
+    <Sidebar catalog={catalog} tab={tab} onTab={setTab} route={route} onOpen={open} onPrefetch={prefetch} language={language} onLanguage={setLanguage} />
   );
   const wardrobeView = outfit?.hero && (
     <Wardrobe
@@ -288,12 +324,12 @@ export default function App() {
     />
   );
   const wardrobePanel = outfit?.hero && (
-    <HeroPanel key={outfit.hero} catalog={catalog} outfit={outfit} language={language} wardrobe={wardrobeView} />
+    <HeroPanel key={outfit.hero} catalog={catalog} outfit={outfit} language={language} wardrobe={wardrobeView} onView={setPanelView} />
   );
 
   return (
     <main className="flex h-full">
-      <div className="hidden w-80 shrink-0 border-r border-line lg:block">{sidebar}</div>
+      <div className="hidden w-[23rem] shrink-0 border-r border-line lg:block xl:w-[26rem]">{sidebar}</div>
 
       <div className="relative min-w-0 flex-1">
         {route.type === "shop" && <ShopPage catalog={catalog} id={route.id} language={language} onOpen={open} />}
@@ -301,6 +337,7 @@ export default function App() {
         {route.type === "audio" && <AudioPage catalog={catalog} id={route.id} />}
         {!page && <Viewer
           catalog={catalog}
+          language={language}
           outfit={outfit}
           urls={urls}
           onStyle={(style) => open({ ...route, style })}
@@ -318,7 +355,15 @@ export default function App() {
         </button>
       </div>
 
-      {wide && wardrobePanel && <div className="w-[22rem] shrink-0 border-l border-line">{wardrobePanel}</div>}
+      {wide && wardrobePanel && (
+        <div
+          className={`shrink-0 border-l border-line transition-[width] duration-300 ${
+            panelView === "wardrobe" ? "w-[44rem] 2xl:w-[54rem]" : "w-[26rem] xl:w-[29rem]"
+          }`}
+        >
+          {wardrobePanel}
+        </div>
+      )}
 
       <Sheet open={browse} onClose={() => setBrowse(false)} label="the model list" side="bottom">
         {sidebar}

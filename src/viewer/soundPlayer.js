@@ -1,3 +1,5 @@
+import { effectsVolume } from "../volume.js";
+
 // Sounds of animations through Web Audio: loaded and decoded ahead of time, so they
 // play on the frame they belong to instead of after a download.
 
@@ -52,7 +54,7 @@ export function playLoaded(url, { volume = 1, rate = 1 } = {}) {
   source.buffer = buffer;
   source.playbackRate.value = rate;
   const gain = ctx.createGain();
-  gain.gain.value = volume;
+  gain.gain.value = volume * effectsVolume();
   source.connect(gain).connect(ctx.destination);
   source.start();
 }

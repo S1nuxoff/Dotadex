@@ -11,6 +11,7 @@ const vertexShader = /* glsl */ `
   #include <common>
   #include <morphtarget_pars_vertex>
   #include <skinning_pars_vertex>
+  #include <shadowmap_pars_vertex>
 
   varying vec2 vUv;
   varying vec3 vViewNormal;
@@ -28,6 +29,8 @@ const vertexShader = /* glsl */ `
     #include <morphtarget_vertex>
     #include <skinning_vertex>
     #include <project_vertex>
+    #include <worldpos_vertex>
+    #include <shadowmap_vertex>
     vViewNormal = normalize(transformedNormal);
     vWorldNormal = normalize(inverseTransformDirection(transformedNormal, viewMatrix));
     vViewPosition = -mvPosition.xyz;
@@ -35,6 +38,10 @@ const vertexShader = /* glsl */ `
 `;
 
 const fragmentShader = /* glsl */ `
+  #include <common>
+  #include <packing>
+  #include <lights_pars_begin>
+  #include <shadowmap_pars_fragment>
   uniform sampler2D tColor;
   uniform sampler2D tNormal;
   uniform sampler2D tMasks1;
@@ -167,17 +174,34 @@ const fragmentShader = /* glsl */ `
 
     // Diffuse: half-Lambert, through the warp ramp whose row Masks1 G picks
     float nl = dot(n, uKeyDir);
-    float halfLambert = nl * 0.5 + 0.5;
+    // The stage's shadows (rocks, the model's own arms and weapons), as the game darkens
+    // its sun with its shadow map before the warp ramp
+    float shadow = 1.0;
+    #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+      DirectionalLightShadow sunShadow = directionalLightShadows[ 0 ];
+      shadow = getShadow( directionalShadowMap[ 0 ], sunShadow.shadowMapSize, sunShadow.shadowIntensity, sunShadow.shadowBias, sunShadow.shadowRadius, vDirectionalShadowCoord[ 0 ] );
+      shadow = mix(1.0, shadow, 0.85);
+    #endif
+    float halfLambert = (nl * 0.5 + 0.5) * shadow;
     vec3 warped = uHasDiffuseWarp > 0.5 ? texture2D(tDiffuseWarp, vec2(halfLambert, warpMask)).rgb : vec3(halfLambert);
     vec3 diffuseLight = mix(vec3(halfLambert), warped, uWarpSelectsRow > 0.5 ? 1.0 : warpMask) * uKeyColor;
     // A second light that fills from another side, then the sky and the ground
     diffuseLight += clamp(dot(n, uFillDir), 0.0, 1.0) * uFillColor * uAmbientScale;
     diffuseLight += mix(uGroundColor, uSkyColor, worldN.y * 0.5 + 0.5) * uAmbientScale;
+    // Lamps on the stage: fires and the like light the side of the model turned to them
+    #if NUM_POINT_LIGHTS > 0
+      for (int i = 0; i < NUM_POINT_LIGHTS; i++) {
+        vec3 toLamp = pointLights[ i ].position + vViewPosition;
+        float lampDistance = length(toLamp);
+        float lampFalloff = getDistanceAttenuation(lampDistance, pointLights[ i ].distance, pointLights[ i ].decay);
+        diffuseLight += pointLights[ i ].color * lampFalloff * clamp(dot(n, toLamp / lampDistance), 0.0, 1.0);
+      }
+    #endif
 
     // Specular: Phong, sharpness from Masks2 A, plus the cube map unless metal masks it
     vec3 r = reflect(-v, n);
     float exponent = exponentMask * uSpecularExponent;
-    float phong = pow(max(clamp(dot(r, uKeyDir), 0.0, 1.0), 0.001), max(exponent, 1.0)) * clamp(nl, 0.0, 1.0);
+    float phong = pow(max(clamp(dot(r, uKeyDir), 0.0, 1.0), 0.001), max(exponent, 1.0)) * clamp(nl, 0.0, 1.0) * shadow;
     vec3 env = vec3(0.0);
     if (uHasCubeMap > 0.5) {
       // The cube map comes as a single face; read it like a matcap by the reflection
@@ -203,7 +227,7 @@ const fragmentShader = /* glsl */ `
     outColor = outColor * uIllumination + rim * mix(vec3(1.0), uStageRim * 2.0, 0.15);
 
     // Self-illuminated parts show their color as it is, a little brighter for the glow pass
-    outColor = mix(outColor, albedo * 1.35, clamp(selfIllum, 0.0, 1.0)) * uOverbright;
+    outColor = mix(outColor, albedo * 1.2, clamp(selfIllum, 0.0, 1.0)) * uOverbright;
     gl_FragColor = vec4(outColor, color.a);
     #include <colorspace_fragment>
   }
@@ -263,9 +287,12 @@ export function createDotaMaterial(original, vmat, textures) {
 
   const translucent = int.F_TRANSLUCENT === 1 || int.F_ADDITIVE_BLEND === 1;
   const material = new THREE.ShaderMaterial({
+    lights: true,
     vertexShader,
     fragmentShader,
     uniforms: {
+      // The scene's lights, for the shadow of the stage's sun
+      ...THREE.UniformsUtils.clone(THREE.UniformsLib.lights),
       tColor: { value: pick("g_tColor") ?? original.map ?? white },
       tNormal: { value: pick("g_tNormal") },
       tMasks1: { value: pick("g_tMasks1") },

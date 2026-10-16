@@ -55,8 +55,8 @@ function rowsFor(catalog, tab, filters) {
     }));
   }
 
-  if (tab === "audio") {
-    return catalog.audio.map((pack) => ({
+  if (tab === "music" || tab === "announcers") {
+    return catalog.audio.filter((pack) => pack.kind === tab).map((pack) => ({
       key: `audio/${pack.id}`,
       route: { type: "audio", id: pack.id },
       name: pack.name,
@@ -132,7 +132,7 @@ function isActive(row, route) {
   return `${route.type}/${route.id}` === row.key;
 }
 
-export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, onLanguage }) {
+export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, onLanguage, onPrefetch }) {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({ hero: ANY, slot: ANY, rarity: ANY, sort: "newest" });
   const [showFilters, setShowFilters] = useState(false);
@@ -140,7 +140,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
   const setFilter = (key) => (value) => setFilters((current) => ({ ...current, [key]: value }));
 
   const counts = useMemo(() => {
-    const result = { heroes: catalog.heroes.length, sets: catalog.sets.length, shop: catalog.shop.length, treasures: catalog.treasures.length, audio: catalog.audio.length, scenes: catalog.scenes.length };
+    const result = { heroes: catalog.heroes.length, sets: catalog.sets.length, shop: catalog.shop.length, treasures: catalog.treasures.length, music: catalog.audio.filter((pack) => pack.kind === "music").length, announcers: catalog.audio.filter((pack) => pack.kind === "announcers").length, scenes: catalog.scenes.length };
     for (const item of catalog.items) {
       if (!item.default) {
         result[item.kind] = (result[item.kind] ?? 0) + 1;
@@ -201,7 +201,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
   });
 
   const ready = catalog.heroes.length + catalog.items.length;
-  const filterable = !["heroes", "shop", "treasures", "audio", "scenes"].includes(tab);
+  const filterable = !["heroes", "shop", "treasures", "music", "announcers", "scenes"].includes(tab);
   const activeFilters = [filters.hero, tab === "wearable" && filters.slot, tab !== "sets" && filters.rarity].filter(Boolean).length;
 
   return (
@@ -292,6 +292,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
           <button
             key={entry.id}
             onClick={() => onTab(entry.id)}
+            data-sound="toptab"
             aria-pressed={tab === entry.id}
             className={`shrink-0 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
               tab === entry.id ? "bg-raised text-bone" : "text-ash hover:text-bone"
@@ -319,6 +320,9 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
                 <li key={row.key} className="absolute inset-x-0" style={{ height: virtual.size, transform: `translateY(${virtual.start}px)` }}>
                   <button
                     onClick={() => onOpen(row.route)}
+                    onPointerEnter={() => onPrefetch?.(row.route)}
+                    data-sound={row.route?.type === "hero" ? "pick" : "click"}
+                    data-hover
                     disabled={row.disabled}
                     title={row.disabled ? "The hero's model is not exported yet" : undefined}
                     aria-current={active ? "true" : undefined}

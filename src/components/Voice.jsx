@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, Search } from "lucide-react";
+import { effectsVolume } from "../volume.js";
 
 // Where the sounds are: the sounds dataset next to the models one
 export function soundsBase(modelsBase) {
@@ -20,6 +21,7 @@ let current = null;
 export function playSound(url, onEnd) {
   current?.pause();
   const audio = createAudio(url);
+  audio.volume = Math.min(effectsVolume(), 1);
   audio.addEventListener("canplay", () => audio.play().catch(() => onEnd?.()), { once: true });
   audio.addEventListener("ended", () => onEnd?.());
   audio.addEventListener("pause", () => onEnd?.());
@@ -150,7 +152,6 @@ export default function Voice({ modelsBase, heroKey }) {
           className="h-8 w-full bg-transparent text-sm text-bone placeholder:text-ash/70 focus:outline-none"
         />
       </label>
-      <p className="mt-2 text-xs text-ash">Lines still being uploaded do not play yet.</p>
       {groups.map(([category, list]) => (
         <details key={category} className="mt-3" open={groups.length <= 3}>
           <summary className="cursor-pointer text-sm text-bone select-none">

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { Code2, Database } from "lucide-react";
 import { LANGUAGES } from "../gamedata.js";
-import { Popover, Select, useDismiss } from "./ui.jsx";
+import { Popover, Select, UI_WIDTH as WIDTH, useDismiss, useUiScale } from "./ui.jsx";
 import { useMenuMusic, VolumeSliders } from "./Music.jsx";
 import { getVolume, onVolume, setVolume } from "../volume.js";
 
@@ -58,24 +58,12 @@ function Slashed({ items, active, onPick, className }) {
 
 // The game's top bar is laid out for a 1920 wide screen and scaled with it; so is this one.
 // Everything below is in the game's own pixels, from its dashboard stylesheet and images.
-const WIDTH = 1920;
 const UI = "/Dotadex/ui/topbar/";
 // Where the separators between the tabs cross the middle of the bar, and the room between them
 const TAB_LEFT = 386.85;
 const TAB_PITCH = 164.65;
 // The bar's own picture has five tabs; the separators of any past those are drawn on
 const BAR_TABS = 5;
-
-function useBarScale() {
-  const scaleFor = () => Math.max(window.innerWidth / WIDTH, 0.5);
-  const [scale, setScale] = useState(scaleFor);
-  useEffect(() => {
-    const resize = () => setScale(scaleFor());
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, []);
-  return scale;
-}
 
 // A flat icon in the bar, tinted as the game washes its icons: dark slate, lighter on hover
 function MaskIcon({ src, size, className = "" }) {
@@ -167,7 +155,7 @@ function useMuted() {
 export default function TopNav({ catalog, tab, onTab, onSection, onHome, onBack, onForward, canBack, canForward, onRandom, language, onLanguage }) {
   useMenuMusic(catalog.modelsBase);
   const [muted, toggleMute] = useMuted();
-  const scale = useBarScale();
+  const scale = useUiScale();
   const width = Math.max(WIDTH, window.innerWidth / scale);
   const section = sectionOf(tab);
   const active = SECTIONS.findIndex((entry) => entry.id === section.id);

@@ -3,6 +3,20 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { formatPrice, itemIcon, rarity } from "../catalog.js";
 
+// The game's interface is laid out for a 1920 wide screen and scaled with it; the pages made
+// after it are too
+export const UI_WIDTH = 1920;
+export function useUiScale() {
+  const scaleFor = () => Math.max(window.innerWidth / UI_WIDTH, 0.5);
+  const [scale, setScale] = useState(scaleFor);
+  useEffect(() => {
+    const resize = () => setScale(scaleFor());
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  return scale;
+}
+
 export function IconButton({ label, onClick, children, active, className = "" }) {
   return (
     <button

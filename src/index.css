@@ -252,3 +252,21 @@ label:has(> input:focus) {
   color: white;
   filter: drop-shadow(0 0 7px #3382ff) drop-shadow(0 0 12px #3382ffaa);
 }
+
+/* The hero grid's footer: a fine light line across the top, fading out at both ends */
+.hero-grid-footer {
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, rgb(198 225 255 / 0.06) 6%, rgb(198 225 255 / 0.14) 50%, rgb(198 225 255 / 0.06) 94%, transparent) 1;
+  background: radial-gradient(ellipse 50% 80% at 50% 0%, rgb(153 219 255 / 0.04), transparent);
+}
+
+/* A hero found by typing pulses, as the game lights the cards it found */
+.hero-card-found {
+  box-shadow: 0 0 8px #00ffff44;
+  animation: hero-card-found 0.8s infinite;
+}
+@keyframes hero-card-found {
+  50% {
+    filter: brightness(2);
+  }
+}

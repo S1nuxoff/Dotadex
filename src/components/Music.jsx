@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SlidersHorizontal } from "lucide-react";
 import { createAudio, soundsBase } from "./Voice.jsx";
-import { IconButton, Popover, useDismiss } from "./ui.jsx";
 import { getVolume, musicVolume, onVolume, setVolume } from "../volume.js";
 
 // The game's own menu music, one track after another, as the main menu plays it
@@ -13,7 +11,7 @@ const TRACKS = [
   "sounds/music/valve_dota_001/diretide/ui_main_03.mp3",
 ];
 
-function useMenuMusic(modelsBase) {
+export function useMenuMusic(modelsBase) {
   const audio = useRef(null);
   const track = useRef(0);
   useEffect(() => {
@@ -80,24 +78,15 @@ function Slider({ label, value, onChange }) {
   );
 }
 
-// Plays the menu music and offers the volume of everything, the music and the other sounds
-export default function SoundSettings({ modelsBase }) {
-  useMenuMusic(modelsBase);
-  const [open, setOpen] = useState(false);
+// The volume of everything, the music and the other sounds
+export function VolumeSliders() {
   const [levels, setLevels] = useState(getVolume);
-  const ref = useDismiss(open, setOpen);
   useEffect(() => onVolume(setLevels), []);
-
   return (
-    <div ref={ref} className="relative">
-      <IconButton label="Volume" onClick={() => setOpen(!open)} active={open}>
-        <SlidersHorizontal className="size-4" />
-      </IconButton>
-      <Popover open={open} className="top-11 right-0 w-60 space-y-3 p-3">
-        <Slider label="Overall" value={levels.master} onChange={(master) => setVolume({ master })} />
-        <Slider label="Music" value={levels.music} onChange={(music) => setVolume({ music })} />
-        <Slider label="Voice and sounds" value={levels.effects} onChange={(effects) => setVolume({ effects })} />
-      </Popover>
+    <div className="space-y-3">
+      <Slider label="Overall" value={levels.master} onChange={(master) => setVolume({ master })} />
+      <Slider label="Music" value={levels.music} onChange={(music) => setVolume({ music })} />
+      <Slider label="Voice and sounds" value={levels.effects} onChange={(effects) => setVolume({ effects })} />
     </div>
   );
 }

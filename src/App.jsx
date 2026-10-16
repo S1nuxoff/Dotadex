@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { prefetchModels } from "./viewer/stage.js";
 import { installUiSounds } from "./uiSounds.js";
-import TopNav, { sectionOf } from "./components/TopNav.jsx";
+import TopNav, { SECTIONS, sectionOf } from "./components/TopNav.jsx";
 import HeroGrid from "./components/HeroGrid.jsx";
 import HeroPage from "./components/HeroPage.jsx";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -231,6 +231,42 @@ export default function App() {
 
   const page = ["shop", "treasure", "audio"].includes(route?.type);
   const outfit = useMemo(() => catalog && route && !page && outfitFor(catalog, route), [catalog, route, page]);
+
+  // The pages visited, for the back and forward arrows of the top bar; a change of look on the
+  // same hero or item is not a new page
+  const [visited, setVisited] = useState({ stack: [], index: -1 });
+  const travelling = useRef(false);
+  const pageKey = route && (heroGrid && sectionOf(tab).id === "heroes" ? "grid" : `${tab}|${route.type}:${route.id}`);
+  useEffect(() => {
+    if (!pageKey) {
+      return;
+    }
+    if (travelling.current) {
+      travelling.current = false;
+      return;
+    }
+    setVisited(({ stack, index }) => {
+      if (stack[index]?.key === pageKey) {
+        return { stack, index };
+      }
+      const next = [...stack.slice(0, index + 1), { key: pageKey, route, tab, heroGrid }].slice(-100);
+      return { stack: next, index: next.length - 1 };
+    });
+    // Only a new page is recorded
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageKey]);
+  const travel = (step) => {
+    const target = visited.stack[visited.index + step];
+    if (!target) {
+      return;
+    }
+    travelling.current = true;
+    setVisited({ ...visited, index: visited.index + step });
+    window.history.replaceState(null, "", target.heroGrid ? window.location.pathname : routeHash(target.route));
+    setRoute(target.route);
+    setTab(target.tab);
+    setHeroGrid(target.heroGrid);
+  };
   const urls = useMemo(() => catalog && outfit && outfitUrls(catalog, outfit), [catalog, outfit]);
 
   // A hero or item the pointer rests on starts downloading, after a moment so a sweep down
@@ -359,7 +395,23 @@ export default function App() {
 
   return (
     <main className="flex h-full flex-col">
-      <TopNav catalog={catalog} tab={tab} onTab={setTab} onSection={pickSection} language={language} onLanguage={setLanguage} />
+      <TopNav
+        catalog={catalog}
+        tab={tab}
+        onTab={setTab}
+        onSection={pickSection}
+        onHome={() => pickSection(SECTIONS[0])}
+        onBack={() => travel(-1)}
+        onForward={() => travel(1)}
+        canBack={visited.index > 0}
+        canForward={visited.index < visited.stack.length - 1}
+        onRandom={() => {
+          setTab("heroes");
+          open({ type: "hero", id: heroOrder[Math.floor(Math.random() * heroOrder.length)].id });
+        }}
+        language={language}
+        onLanguage={setLanguage}
+      />
 
       {section.id === "heroes" && heroGrid ? (
         <HeroGrid catalog={catalog} language={language} onOpen={open} onPrefetch={prefetch} />

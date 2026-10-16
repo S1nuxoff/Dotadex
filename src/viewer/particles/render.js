@@ -19,6 +19,19 @@ function textureOf(def) {
   return layer?.m_hTexture ?? def.m_hTexture ?? null;
 }
 
+// The first texture's final scale and offset, u and v: (scale u, scale v, offset u, offset v)
+function textureTransformOf(def) {
+  const controls = def.m_vecTexturesInput?.[0]?.m_TextureControls ?? {};
+  return new THREE.Vector4(num(controls.m_flFinalTextureScaleU, 1), num(controls.m_flFinalTextureScaleV, 1), num(controls.m_flFinalTextureOffsetU, 0), num(controls.m_flFinalTextureOffsetV, 0));
+}
+
+// A trail's color and alpha at its tail, as scales of its head's
+function tailOf(def) {
+  const color = def.m_vecTailColorScale;
+  const rgb = Array.isArray(color) ? color : Array.isArray(color?.m_vLiteralValue) ? color.m_vLiteralValue : [1, 1, 1];
+  return new THREE.Vector4(rgb[0] ?? 1, rgb[1] ?? 1, rgb[2] ?? 1, num(def.m_flTailAlphaScale, 1));
+}
+
 // A layer that recolors the texture: its brightness looked up in a gradient
 function lookupOf(def) {
   const layer = (def.m_vecTexturesInput ?? []).find((input) => input.m_nTextureType === "SPRITECARD_TEXTURE_1D_COLOR_LOOKUP" && input.m_bReplaceTextureWithGradient);
@@ -131,6 +144,8 @@ const SPRITE_VERTEX = /* glsl */ `
   uniform int uOrientation;
   uniform vec4 uScreenSize;
   uniform float uCameraBias;
+  uniform vec4 uTexTransform;
+  uniform vec4 uTail;
   varying vec2 vUv;
   varying vec4 vColor;
   // Normalized, or a fallback where the vector is nothing (normalize gives NaN there on graphics cards)
@@ -141,8 +156,11 @@ const SPRITE_VERTEX = /* glsl */ `
   void main() {
     // Drawn a little towards the camera, so particles inside the model show, as the game does
     vec3 center = iPosition + safeNormalize(cameraPosition - iPosition) * uCameraBias;
-    vUv = iFrame.xy + uv * iFrame.zw;
+    // The texture's own scale and offset (a scale of -1 turns it round), within the frame
+    vUv = iFrame.xy + (uv * uTexTransform.xy + uTexTransform.zw) * iFrame.zw;
     vColor = iColor;
+    // A trail's color and alpha scaled towards its tail (uv.y 0), full at its head
+    if (uOrientation == 4) vColor *= mix(uTail, vec4(1.0), uv.y);
     // The game keeps sprites within a share of the screen and fades them as they grow on it:
     // x min, y max, z fade start, w fade end, as shares of the screen's height
     float distance = max(-(modelViewMatrix * vec4(center, 1.0)).z, 1e-3);
@@ -267,6 +285,8 @@ function material(def, vertexShader, orientation) {
       uMod: { value: 0 },
       uPremultiply: { value: 0 },
       uOrientation: { value: orientation },
+      uTexTransform: { value: textureTransformOf(def) },
+      uTail: { value: tailOf(def) },
       uCameraBias: { value: num(def.VisibilityInputs?.m_flCameraBias, 0) * UNIT },
       uScreenSize: {
         value: new THREE.Vector4(num(def.m_flMinSize, 0), num(def.m_flMaxSize, 5000), num(def.m_flStartFadeSize, 1e8), num(def.m_flEndFadeSize, 2e8)),

@@ -24,6 +24,11 @@ const SOURCE_TO_METRES = 0.0254;
 // Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
 const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
 
+// How much darker the pedestal is drawn, and how far the hero page camera is raised, as a share
+// of half the view's height
+const PEDESTAL_DARKNESS = 0.4;
+const CAMERA_RAISE = 0.15;
+
 // The pedestal's far side sinks into the dark behind the hero, as the game's depth fog hides it:
 // fading with how far a point lies beyond the hero along the camera's view on the ground
 const pedestalFog = { direction: { value: new THREE.Vector2(0, -1) }, near: { value: 0.5 }, far: { value: 4 } };
@@ -1042,10 +1047,14 @@ export class Stage {
                 node.receiveShadow = true;
                 fogBehind(node.userData.dota);
                 fogBehind(node.userData.pbr);
+                // The game's pedestal material is near black (its tint is about 0.23)
                 const tint = node.userData.vmatTint;
                 for (const material of [node.userData.dota, node.userData.pbr]) {
-                  if (tint && material?.color) {
-                    material.color.multiply(tint);
+                  if (material?.color) {
+                    if (tint) {
+                      material.color.multiply(tint);
+                    }
+                    material.color.multiplyScalar(PEDESTAL_DARKNESS);
                   }
                 }
               }
@@ -1210,6 +1219,11 @@ export class Stage {
       // Aimed at the point of the view nearest the hero's upright axis
       const across = Math.hypot(position.x, position.z);
       const target = position.clone().add(direction.clone().multiplyScalar(across / Math.max(Math.hypot(direction.x, direction.z), 0.01)));
+      // Raised a little: our scene starts under the top bar, the game's behind it, so the hero
+      // would stand too high in ours
+      const raise = across * Math.tan(THREE.MathUtils.degToRad(portrait.fov / 2)) * CAMERA_RAISE;
+      position.y += raise;
+      target.y += raise;
       this.camera.fov = portrait.fov;
       this.camera.near = across / 100;
       this.camera.far = across * 20;

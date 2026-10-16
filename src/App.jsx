@@ -1,6 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { prefetchModels } from "./viewer/stage.js";
 import { installUiSounds } from "./uiSounds.js";
+import TopNav, { sectionOf } from "./components/TopNav.jsx";
+import HeroGrid from "./components/HeroGrid.jsx";
+import HeroPage from "./components/HeroPage.jsx";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { List, X } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
@@ -167,6 +170,8 @@ export default function App() {
   const [browse, setBrowse] = useState(false);
   const [wardrobe, setWardrobe] = useState(false);
   const [panelView, setPanelView] = useState("hero");
+  // The hero grid, as the game opens on it, until a hero is picked
+  const [heroGrid, setHeroGrid] = useState(() => !window.location.hash);
   const wide = useWide();
   const [language, setLanguage] = useLanguage();
 
@@ -243,6 +248,7 @@ export default function App() {
   };
 
   const open = (next) => {
+    setHeroGrid(false);
     window.history.replaceState(null, "", routeHash(next));
     setRoute(next);
     setBrowse(false);
@@ -311,7 +317,7 @@ export default function App() {
   }
 
   const sidebar = (
-    <Sidebar catalog={catalog} tab={tab} onTab={setTab} route={route} onOpen={open} onPrefetch={prefetch} language={language} onLanguage={setLanguage} />
+    <Sidebar catalog={catalog} tab={tab} onTab={setTab} route={route} onOpen={open} onPrefetch={prefetch} language={language} onLanguage={setLanguage} embedded />
   );
   const wardrobeView = outfit?.hero && (
     <Wardrobe
@@ -326,42 +332,84 @@ export default function App() {
   const wardrobePanel = outfit?.hero && (
     <HeroPanel key={outfit.hero} catalog={catalog} outfit={outfit} language={language} wardrobe={wardrobeView} onView={setPanelView} />
   );
+  const section = sectionOf(tab);
+  const viewer = !page && (
+    <Viewer
+      catalog={catalog}
+      language={language}
+      hideTitle={route.type === "hero" && section.id === "heroes"}
+      frameShift={route.type === "hero" && section.id === "heroes" ? 0.17 : 0}
+      outfit={outfit}
+      urls={urls}
+      onStyle={(style) => open({ ...route, style })}
+      onAlone={(alone) => open({ ...route, alone })}
+      onVariant={(variant) => open({ ...route, variant })}
+      onBare={(bare) => open({ ...route, bare })}
+      onPersona={choosePersona}
+      onWardrobe={wide ? null : () => setWardrobe(true)}
+    />
+  );
+  // The heroes in the game's order of names, for the arrows to the previous and next one
+  const heroOrder = catalog.heroes.filter((entry) => entry.id !== "target_dummy").sort((a, b) => a.name.localeCompare(b.name));
+  const heroIndex = route.type === "hero" ? heroOrder.findIndex((entry) => entry.id === route.id) : -1;
+  const pickSection = (entry) => {
+    setTab(entry.tabs[0][0]);
+    setHeroGrid(entry.id === "heroes");
+  };
 
   return (
-    <main className="flex h-full">
-      <div className="hidden w-[23rem] shrink-0 border-r border-line lg:block xl:w-[26rem]">{sidebar}</div>
+    <main className="flex h-full flex-col">
+      <TopNav catalog={catalog} tab={tab} onTab={setTab} onSection={pickSection} language={language} onLanguage={setLanguage} />
 
-      <div className="relative min-w-0 flex-1">
-        {route.type === "shop" && <ShopPage catalog={catalog} id={route.id} language={language} onOpen={open} />}
-        {route.type === "treasure" && <TreasurePage catalog={catalog} id={route.id} onOpen={open} />}
-        {route.type === "audio" && <AudioPage catalog={catalog} id={route.id} />}
-        {!page && <Viewer
+      {section.id === "heroes" && heroGrid ? (
+        <HeroGrid catalog={catalog} language={language} onOpen={open} onPrefetch={prefetch} />
+      ) : section.id === "heroes" && route.type === "hero" && heroIndex >= 0 ? (
+        <HeroPage
           catalog={catalog}
+          hero={heroOrder[heroIndex]}
           language={language}
-          outfit={outfit}
-          urls={urls}
-          onStyle={(style) => open({ ...route, style })}
-          onAlone={(alone) => open({ ...route, alone })}
-          onVariant={(variant) => open({ ...route, variant })}
-          onBare={(bare) => open({ ...route, bare })}
-          onPersona={choosePersona}
-          onWardrobe={wide ? null : () => setWardrobe(true)}
-        />}
-        <button
-          onClick={() => setBrowse(true)}
-          className="absolute top-4 left-4 inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-panel/80 px-3 text-sm text-bone lg:hidden"
-        >
-          <List className="size-4" /> Browse
-        </button>
-      </div>
+          viewer={viewer}
+          loadout={
+            <Wardrobe
+              key={`${route.id}-${outfit.persona ?? 0}`}
+              tiles
+              catalog={catalog}
+              outfit={outfit}
+              onEquip={equip}
+              onEquipSet={equipSet}
+              onReset={() => open({ type: "hero", id: outfit.hero, slots: {}, persona: outfit.persona })}
+            />
+          }
+          previous={heroOrder[(heroIndex - 1 + heroOrder.length) % heroOrder.length]}
+          next={heroOrder[(heroIndex + 1) % heroOrder.length]}
+          onOpen={open}
+        />
+      ) : (
+        <div className="flex min-h-0 flex-1">
+          <div className="hidden w-[23rem] shrink-0 border-r border-line lg:block xl:w-[26rem]">{sidebar}</div>
 
-      {wide && wardrobePanel && (
-        <div
-          className={`shrink-0 border-l border-line transition-[width] duration-300 ${
-            panelView === "wardrobe" ? "w-[44rem] 2xl:w-[54rem]" : "w-[26rem] xl:w-[29rem]"
-          }`}
-        >
-          {wardrobePanel}
+          <div className="relative min-w-0 flex-1">
+            {route.type === "shop" && <ShopPage catalog={catalog} id={route.id} language={language} onOpen={open} />}
+            {route.type === "treasure" && <TreasurePage catalog={catalog} id={route.id} onOpen={open} />}
+            {route.type === "audio" && <AudioPage catalog={catalog} id={route.id} />}
+            {viewer}
+            <button
+              onClick={() => setBrowse(true)}
+              className="absolute top-4 left-4 inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-panel/80 px-3 text-sm text-bone lg:hidden"
+            >
+              <List className="size-4" /> Browse
+            </button>
+          </div>
+
+          {wide && wardrobePanel && (
+            <div
+              className={`shrink-0 border-l border-line transition-[width] duration-300 ${
+                panelView === "wardrobe" ? "w-[44rem] 2xl:w-[54rem]" : "w-[26rem] xl:w-[29rem]"
+              }`}
+            >
+              {wardrobePanel}
+            </div>
+          )}
         </div>
       )}
 

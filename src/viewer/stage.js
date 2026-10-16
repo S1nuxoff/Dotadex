@@ -11,7 +11,8 @@ import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
-import { playLoaded, preloadSound } from "./soundPlayer.js";
+import { playLoaded, playWhenReady, preloadSound } from "./soundPlayer.js";
+import { playUiSound } from "../uiSounds.js";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -353,6 +354,7 @@ const veilShader = {
 export class Stage {
   constructor(canvas) {
     this.canvas = canvas;
+
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -414,10 +416,13 @@ export class Stage {
     );
     this.veil.frustumCulled = false;
     this.veil.renderOrder = 1000;
-    this.veil.visible = false;
+    // The stage opens in fog, which parts once the first model is in and framed
+    this.veil.material.uniforms.uCover.value = 1;
+    this.veil.visible = true;
     this.veil.userData.skipGlow = true;
     this.scene.add(this.veil);
-    this.veilTarget = 0;
+    this.veilTarget = 1;
+    this.veilSince = performance.now();
     // Stony ground instead of the stone pedestal, with real shadows
     this.rockStage = new RockStage(this.scene);
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -486,6 +491,7 @@ export class Stage {
     this.glowComposer.setPixelRatio(this.renderer.getPixelRatio());
     this.glowComposer.setSize(clientWidth, clientHeight);
     this.camera.aspect = clientWidth / clientHeight;
+    this.applyShift();
     this.effects.hazeMaterial.uniforms.uAspect.value = this.camera.aspect;
     this.camera.updateProjectionMatrix();
   }
@@ -497,6 +503,9 @@ export class Stage {
   async show(urls, onProgress) {
     // A model on show is veiled in fog while the next one loads
     if (this.group && !reducedMotion.matches) {
+      if (this.veilTarget !== 1) {
+        playUiSound("veil-in", 0.8);
+      }
       this.veilTarget = 1;
       this.veilSince = performance.now();
     }
@@ -562,8 +571,12 @@ export class Stage {
       }
     }
     this.replace(group, gltfs[rootIndex].animations);
+    if (this.veilTarget === 1) {
+      playUiSound("veil-out", 0.7);
+    }
     this.veilTarget = 0;
-    this.onShow?.();
+    // Told once the fog has parted enough to see the model, not when it is swapped in behind it
+    this.pendingShow = true;
     try {
       this.measureTint(group);
     } catch {}
@@ -635,14 +648,17 @@ export class Stage {
     const idle = Object.keys(this.actions).find((name) => /^idle$|_idle$|^idle_anim$/i.test(name))
       ?? Object.keys(this.actions).find((name) => /idle/i.test(name))
       ?? Object.keys(this.actions)[0];
+    this.idleName = idle;
     // Heroes come in with their spawn animation, as in the game, then settle into idle
     const spawn = Object.keys(this.actions).find((name) => /spawn/i.test(name) && !/respawn|loadout/i.test(name));
-    // The frame and the ground are set from the idle pose: a spawn starts mid-leap or crouched
+    // The frame and the ground are set from the idle pose: a spawn starts mid-leap or crouched.
+    // The first model of a stage is framed at once, with no flight in from the starting camera.
     if (idle) {
       this.play(idle, 0);
       this.mixer.update(0);
     }
-    this.frameModel();
+    this.frameModel(!this.framedOnce);
+    this.framedOnce = true;
     if (spawn && idle && !reducedMotion.matches) {
       const action = this.actions[spawn];
       action.setLoop(THREE.LoopOnce, 1);
@@ -875,6 +891,22 @@ export class Stage {
     });
   }
 
+  // Moves the picture sideways by a share of the view's width, keeping the model framed:
+  // on a hero's page the model stands in the left half, under no text
+  setFrameShift(shift) {
+    this.frameShift = shift;
+    this.applyShift();
+  }
+
+  applyShift() {
+    const { clientWidth, clientHeight } = this.canvas.parentElement;
+    if (this.frameShift && clientWidth && clientHeight) {
+      this.camera.setViewOffset(clientWidth, clientHeight, clientWidth * this.frameShift, 0, clientWidth, clientHeight);
+    } else {
+      this.camera.clearViewOffset();
+    }
+  }
+
   setShading(mode) {
     this.shading = mode;
     [this.group, this.backdrop].forEach((object) => object?.traverse((node) => {
@@ -1082,7 +1114,7 @@ export class Stage {
     this.effects.update(delta);
     this.flash = Math.max(0, (this.flash ?? 0) - delta * 1.6);
     // Never left hanging if a load fails
-    if (this.veilTarget === 1 && performance.now() - (this.veilSince ?? 0) > 6000) {
+    if (this.veilTarget === 1 && this.group && performance.now() - (this.veilSince ?? 0) > 6000) {
       this.veilTarget = 0;
     }
     const veil = this.veil.material.uniforms;
@@ -1093,6 +1125,10 @@ export class Stage {
     veil.uTime.value += delta;
     veil.uAspect.value = this.camera.aspect;
     this.veil.visible = veil.uCover.value > 0.01;
+    if (this.pendingShow && veil.uCover.value < 0.35) {
+      this.pendingShow = false;
+      this.onShow?.();
+    }
     this.rockStage.flash = this.flash;
     // How the camera has turned round the model and tilted, for the background haze to follow:
     // a full turn slides it by about four screen widths
@@ -1200,6 +1236,62 @@ export class Stage {
       if (crossed) {
         this.playEvent(name, 0);
       }
+    }
+  }
+
+  // Plays an animation once, then settles back into the idle pose
+  playOnce(name) {
+    const action = this.actions[name];
+    if (!action) {
+      return false;
+    }
+    const idle = this.idleName;
+    this.play(name, 0.12);
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    this.onAnimation?.(name);
+    const settle = (event) => {
+      if (event.action !== action) {
+        return;
+      }
+      this.mixer.removeEventListener("finished", settle);
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      action.clampWhenFinished = false;
+      if (this.current === action && idle) {
+        this.play(idle, 0.3);
+        this.onAnimation?.(idle);
+      }
+    };
+    this.mixer.addEventListener("finished", settle);
+    return true;
+  }
+
+  // The first animation whose name matches one of the patterns, in their order
+  findAnimation(patterns) {
+    const names = Object.keys(this.actions).filter((name) => !/loadout|portrait|@/i.test(name));
+    for (const pattern of patterns) {
+      const found = names.find((name) => pattern.test(name));
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  // Casts an ability: its own cast animation when one is named after it, else the hero's cast
+  // animations in turn by the ability's place; its sound plays as soon as it has loaded
+  castAbility(ability, index, sounds = []) {
+    const words = ability.split("_").slice(1).filter((word) => word.length > 2);
+    const own = words.length ? this.findAnimation([new RegExp(`cast.*(${words.join("|")})|(${words.join("|")}).*cast`, "i")]) : null;
+    const casts = Object.keys(this.actions).filter((name) => /cast|ability/i.test(name) && !/loadout|portrait|@/i.test(name));
+    const name = own ?? casts.find((cast) => new RegExp(`(cast|ability)_?${index + 1}\b`, "i").test(cast)) ?? casts[index % Math.max(casts.length, 1)];
+    if (name) {
+      this.playOnce(name);
+    }
+    const event = sounds[0] && this.sound?.events[sounds[0]];
+    if (event?.files.length) {
+      playWhenReady(this.sound.base + event.files[Math.floor(Math.random() * event.files.length)], { volume: Math.min((event.volume ?? 1) * 0.8, 1) });
+      event.layers?.forEach((layer) => this.playEvent(layer, 1));
     }
   }
 

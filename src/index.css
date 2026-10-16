@@ -2,6 +2,58 @@
 
 /* After Dota's own interface: near-black blue panels with fine light edges, cold white and
    grey text, gold for what matters, square corners, bold capitals with wide spacing for titles */
+/* Dota's own interface font, from the game files */
+@font-face {
+  font-family: "Radiance";
+  src: url("/Dotadex/fonts/radiance-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Radiance";
+  src: url("/Dotadex/fonts/radiance-semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Radiance";
+  src: url("/Dotadex/fonts/radiance-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Radiance";
+  src: url("/Dotadex/fonts/radiance-black.woff2") format("woff2");
+  font-weight: 900;
+  font-display: swap;
+}
+
+/* Dota's title font: hero names, sections, tabs */
+@font-face {
+  font-family: "Reaver";
+  src: url("/Dotadex/fonts/reaver-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Reaver";
+  src: url("/Dotadex/fonts/reaver-semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Reaver";
+  src: url("/Dotadex/fonts/reaver-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Reaver";
+  src: url("/Dotadex/fonts/reaver-black.woff2") format("woff2");
+  font-weight: 900;
+  font-display: swap;
+}
+
 @theme {
   --color-stage: #0d1117;
   --color-panel: #161b22;
@@ -11,8 +63,8 @@
   --color-ash: #8b96a3;
   --color-aegis: #d1aa5a;
 
-  --font-sans: "Barlow", system-ui, sans-serif;
-  --font-display: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+  --font-sans: "Radiance", system-ui, sans-serif;
+  --font-display: "Reaver", "Radiance", system-ui, sans-serif;
 
   --radius-sm: 1px;
   --radius-md: 2px;
@@ -24,6 +76,18 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+/* Larger type on large screens, as the game's interface scales with the resolution */
+@media (min-width: 1600px) {
+  html {
+    font-size: 17px;
+  }
+}
+@media (min-width: 2200px) {
+  html {
+    font-size: 19px;
+  }
 }
 
 body {

@@ -17,11 +17,29 @@ export function unlockSound() {
   audioContext().resume().catch(() => {});
 }
 
+// Some of the game's sounds are WAV rather than MP3, a folder at a time: once a folder turns out
+// to hold WAVs, its other sounds are asked for as WAV first, sparing a failed request each
+const wavFolders = new Set();
+const folderOf = (url) => url.slice(0, url.lastIndexOf("/"));
+
+export function likelyUrl(url) {
+  return url.endsWith(".mp3") && wavFolders.has(folderOf(url)) ? url.replace(/\.mp3$/, ".wav") : url;
+}
+
+export function noteWav(url) {
+  wavFolders.add(folderOf(url));
+}
+
 async function fetchBuffer(url) {
-  // Some of the game's sounds are WAV rather than MP3
-  let res = await fetch(url).catch(() => null);
-  if (!res?.ok && url.endsWith(".mp3")) {
-    res = await fetch(url.replace(/\.mp3$/, ".wav")).catch(() => null);
+  const first = likelyUrl(url);
+  let res = await fetch(first).catch(() => null);
+  if (!res?.ok && first.endsWith(".mp3")) {
+    res = await fetch(first.replace(/\.mp3$/, ".wav")).catch(() => null);
+    if (res?.ok) {
+      noteWav(url);
+    }
+  } else if (!res?.ok && first !== url) {
+    res = await fetch(url).catch(() => null);
   }
   if (!res?.ok) {
     return null;
@@ -40,6 +58,12 @@ export function preloadSound(url) {
     );
   }
   return loading.get(url);
+}
+
+// Plays as soon as it has loaded, however long that takes: for sounds asked for once, like a cast
+export async function playWhenReady(url, options) {
+  await preloadSound(url);
+  playLoaded(url, options);
 }
 
 // Plays right away when loaded; a sound still loading is skipped rather than played late

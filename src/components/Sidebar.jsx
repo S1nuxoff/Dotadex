@@ -132,7 +132,8 @@ function isActive(row, route) {
   return `${route.type}/${route.id}` === row.key;
 }
 
-export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, onLanguage, onPrefetch }) {
+// embedded: under the top bar, which carries the title, the sections and the language
+export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, onLanguage, onPrefetch, embedded = false }) {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({ hero: ANY, slot: ANY, rarity: ANY, sort: "newest" });
   const [showFilters, setShowFilters] = useState(false);
@@ -206,11 +207,15 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
 
   return (
     <aside className="flex h-full flex-col bg-panel">
-      <div className="px-5 pt-6 pb-4">
-        <h1 className="font-display text-[1.9rem] leading-none text-bone">Dotadex</h1>
-        <p className="mt-1.5 text-sm text-aegis">The complete Dota 2 encyclopedia, in 3D</p>
-        <p className="mt-2 text-sm text-ash">Every Dota 2 hero, cosmetic, courier and ward from the game files, shown with Dota's hero shading.</p>
-        {ready < catalog.total && (
+      <div className={embedded ? "px-5 pt-4" : "px-5 pt-6 pb-4"}>
+        {!embedded && (
+          <>
+            <h1 className="font-display text-[1.9rem] leading-none text-bone">Dotadex</h1>
+            <p className="mt-1.5 text-sm text-aegis">The complete Dota 2 encyclopedia, in 3D</p>
+            <p className="mt-2 text-sm text-ash">Every Dota 2 hero, cosmetic, courier and ward from the game files, shown with Dota's hero shading.</p>
+          </>
+        )}
+        {!embedded && ready < catalog.total && (
           <div className="mt-3">
             <div className="h-1 overflow-hidden rounded-full bg-line" aria-hidden>
               <div className="h-full rounded-full bg-aegis transition-[width] duration-700" style={{ width: `${(ready / catalog.total) * 100}%` }} />
@@ -287,7 +292,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
         </div>
       )}
 
-      <nav className="mt-4 flex flex-wrap gap-1 px-5 pb-3" aria-label="Model types">
+      <nav className={embedded ? "hidden" : "mt-4 flex flex-wrap gap-1 px-5 pb-3"} aria-label="Model types">
         {TABS.filter((entry) => counts[entry.id]).map((entry) => (
           <button
             key={entry.id}
@@ -321,7 +326,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
                   <button
                     onClick={() => onOpen(row.route)}
                     onPointerEnter={() => onPrefetch?.(row.route)}
-                    data-sound={row.route?.type === "hero" ? "pick" : "click"}
+                    data-sound={row.route?.type === "hero" ? undefined : "click"}
                     data-hover
                     disabled={row.disabled}
                     title={row.disabled ? "The hero's model is not exported yet" : undefined}
@@ -356,7 +361,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
         )}
       </div>
 
-      <footer className="flex items-center justify-between gap-3 border-t border-line px-5 py-3 text-xs text-ash">
+      <footer className={embedded ? "hidden" : "flex items-center justify-between gap-3 border-t border-line px-5 py-3 text-xs text-ash"}>
         <Select
           label="Language"
           value={language}

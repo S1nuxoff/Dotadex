@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, Search } from "lucide-react";
 import { effectsVolume } from "../volume.js";
+import { likelyUrl, noteWav } from "../viewer/soundPlayer.js";
 
 // Where the sounds are: the sounds dataset next to the models one
 export function soundsBase(modelsBase) {
@@ -9,9 +10,17 @@ export function soundsBase(modelsBase) {
 
 // Some of the game's sounds are WAV rather than MP3: when the .mp3 is missing, try .wav
 export function createAudio(url) {
-  const audio = new Audio(url);
-  if (url.endsWith(".mp3")) {
-    audio.addEventListener("error", () => (audio.src = url.replace(/\.mp3$/, ".wav")), { once: true });
+  const first = likelyUrl(url);
+  const audio = new Audio(first);
+  if (first.endsWith(".mp3")) {
+    audio.addEventListener(
+      "error",
+      () => {
+        noteWav(url);
+        audio.src = url.replace(/\.mp3$/, ".wav");
+      },
+      { once: true }
+    );
   }
   return audio;
 }
@@ -30,7 +39,7 @@ export function playSound(url, onEnd) {
 }
 
 // Situations a voice line is for, from the words in its event name
-const CATEGORIES = [
+export const CATEGORIES = [
   ["Spawn", /spawn|respawn|battlebegins|horn/],
   ["Kills", /kill|firstblood|rampage|ownage|godlike|dominat|megakill|unstoppable|wicked|monster|holy|streak|ending/],
   ["Death", /death|dying|die\b|_die_|suicide/],
@@ -49,7 +58,7 @@ const CATEGORIES = [
   ["Rare", /rare/],
 ];
 
-function categoryOf(event) {
+export function categoryOf(event) {
   const words = event.toLowerCase();
   return CATEGORIES.find(([, pattern]) => pattern.test(words))?.[0] ?? "Other";
 }

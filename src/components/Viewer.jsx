@@ -20,7 +20,6 @@ import { Stage, T_POSE } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName } from "../catalog.js";
 import { IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
 import { playSound, soundsBase } from "./Voice.jsx";
-import SoundSettings from "./Music.jsx";
 import { ATTRIBUTES, abilityIcon, useGameData } from "../gamedata.js";
 import { unlockSound } from "../viewer/soundPlayer.js";
 
@@ -93,7 +92,7 @@ function AnimationPicker({ names, current, onPick }) {
         <span className="shrink-0 text-xs text-ash tabular-nums">{names.length}</span>
         <ChevronUp className={`size-4 shrink-0 text-ash transition-transform ${open ? "" : "rotate-180"}`} />
       </button>
-      <Popover open={open} className="top-11 left-0 w-72 overflow-hidden">
+      <Popover open={open} className="bottom-11 left-0 w-72 overflow-hidden">
         <label className="flex items-center gap-2 border-b border-line px-3 py-2.5">
           <Search className="size-4 text-ash" aria-hidden />
           <input
@@ -210,7 +209,7 @@ function useHeroLine(catalog, heroId, language) {
   return { attribute, roles: (hero.Role ?? "").split(",").filter(Boolean) };
 }
 
-export default function Viewer({ catalog, language, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
+export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -318,6 +317,36 @@ export default function Viewer({ catalog, language, outfit, urls, onStyle, onAlo
     };
   }, [sound, catalog.modelsBase]);
   useEffect(() => stageRef.current.setSpeed(speed), [speed]);
+  useEffect(() => stageRef.current.setFrameShift(frameShift), [frameShift]);
+
+  // Casting and emotes from the hero page: an animation, the ability's sound, a voice line
+  useEffect(() => {
+    const onCast = (event) => {
+      const { ability, index, sounds, lines } = event.detail;
+      unlockSound();
+      stageRef.current.castAbility(ability, index, sounds);
+      if (lines?.length && Math.random() < 0.6) {
+        playSound(soundsBase(catalog.modelsBase) + lines[Math.floor(Math.random() * lines.length)]);
+      }
+    };
+    const onEmote = (event) => {
+      const { animations, files } = event.detail;
+      unlockSound();
+      const name = stageRef.current.findAnimation(animations ?? []);
+      if (name) {
+        stageRef.current.playOnce(name);
+      }
+      if (files?.length) {
+        playSound(soundsBase(catalog.modelsBase) + files[Math.floor(Math.random() * files.length)]);
+      }
+    };
+    window.addEventListener("dotadex:cast", onCast);
+    window.addEventListener("dotadex:emote", onEmote);
+    return () => {
+      window.removeEventListener("dotadex:cast", onCast);
+      window.removeEventListener("dotadex:emote", onEmote);
+    };
+  }, [catalog.modelsBase]);
 
   // A hero comes in with one of its spawn lines, as in the game: fetched when the hero is
   // picked, spoken when its model shows up on the stage
@@ -388,8 +417,8 @@ export default function Viewer({ catalog, language, outfit, urls, onStyle, onAlo
         </div>
       )}
 
-      {/* Playback and outfit controls at the top, out of the way of the hero and its name */}
-      <div className="pointer-events-auto absolute top-4 left-4 right-72 flex flex-wrap items-center gap-2">
+      {/* Playback, outfit and view controls in one row at the bottom */}
+      <div className={`pointer-events-auto absolute bottom-4 left-4 flex flex-wrap items-center gap-2 ${hideTitle ? "w-[calc(55%-2rem)]" : "right-4"}`}>
         {animations.length > 0 && (
           <>
             <IconButton label={paused ? "Play" : "Pause"} onClick={() => setPaused(!paused)}>
@@ -405,6 +434,7 @@ export default function Viewer({ catalog, language, outfit, urls, onStyle, onAlo
             label="Scene"
             value={backdrop}
             onChange={setBackdrop}
+            up
             className="w-44"
             options={[{ value: "", label: "Pedestal" }, ...backdrops.map((entry) => ({ value: entry.id, label: entry.name, hint: `${(entry.size / 1e6).toFixed(0)} MB` }))]}
           />
@@ -484,8 +514,7 @@ export default function Viewer({ catalog, language, outfit, urls, onStyle, onAlo
             </a>
           ))}
         </div>
-      </div>
-      <div className="absolute top-4 right-4 flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2">
         <Toggle
           label="Shading"
           value={shading}
@@ -495,7 +524,6 @@ export default function Viewer({ catalog, language, outfit, urls, onStyle, onAlo
             { value: "plain", label: "Plain", icon: <Box className="size-3.5" /> },
           ]}
         />
-        <SoundSettings modelsBase={catalog.modelsBase} />
         <IconButton label={sound ? "Mute animation sounds" : "Play animation sounds"} onClick={() => {
             unlockSound();
             setSound(!sound);
@@ -514,6 +542,8 @@ export default function Viewer({ catalog, language, outfit, urls, onStyle, onAlo
           </IconButton>
         )}
       </div>
+</div>
+
 
       {error && (
         <div className="absolute inset-0 grid place-items-center p-6">
@@ -530,7 +560,7 @@ export default function Viewer({ catalog, language, outfit, urls, onStyle, onAlo
         </div>
       )}
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-stage via-stage/70 to-transparent px-5 pt-24 pb-5 sm:px-8 sm:pb-7">
+      <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-stage via-stage/70 to-transparent px-5 pt-24 pb-20 sm:px-8 sm:pb-20 ${hideTitle ? "hidden" : ""}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={item ? `item/${item.id}` : `hero/${hero?.id}`}

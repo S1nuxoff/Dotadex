@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, X } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { abilityIcon, useGameData } from "../gamedata.js";
 import { useUiScale } from "./ui.jsx";
 import HeroInfo from "./HeroInfo.jsx";
@@ -362,6 +362,15 @@ export default function HeroPage({ catalog, hero, language, viewer, summary, war
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  useEffect(() => {
+    if (!wardrobeOpen) {
+      return;
+    }
+    const onKey = (event) => event.key === "Escape" && onCloseWardrobe();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [wardrobeOpen, onCloseWardrobe]);
+
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden">
       <Backdrop base={catalog.modelsBase} heroId={hero.id} />
@@ -382,18 +391,12 @@ export default function HeroPage({ catalog, hero, language, viewer, summary, war
               {tab === "about" && <HeroInfo base={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} language={language} />}
             </div>
           ) : wardrobeOpen ? (
-            // Until the game's own outfit picker is made: the wardrobe over the right side
-            <div className="pointer-events-auto absolute top-[40px] right-[60px] bottom-[40px] w-[900px] shadow-[0_8px_32px_rgb(0_0_0/0.6)]">
-              {wardrobe}
-              <button
-                onClick={onCloseWardrobe}
-                data-sound="back"
-                aria-label="Close"
-                className="absolute -top-[14px] -right-[14px] grid size-[36px] place-items-center bg-[#2b3139] text-[#e6ebef] shadow-lg hover:brightness-150"
-              >
-                <X className="size-[20px]" />
-              </button>
-            </div>
+            // Until the game's own outfit picker is made: the wardrobe over the right side; a click
+            // beside it or Escape closes it
+            <>
+              <div className="pointer-events-auto absolute inset-0" onClick={onCloseWardrobe} />
+              <div className="pointer-events-auto absolute top-[40px] right-[60px] bottom-[40px] w-[900px] shadow-[0_8px_32px_rgb(0_0_0/0.6)]">{wardrobe}</div>
+            </>
           ) : (
             <div className="pointer-events-auto absolute top-[90px] right-[90px] w-[422px]">{summary}</div>
           )}

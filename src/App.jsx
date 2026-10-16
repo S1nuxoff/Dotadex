@@ -432,6 +432,7 @@ export default function App() {
               onEquip={equip}
               onEquipSet={equipSet}
               onReset={() => open({ type: "hero", id: outfit.hero, slots: {}, persona: outfit.persona })}
+              onClose={() => setWardrobe(false)}
             />
           }
           wardrobeOpen={wardrobe}

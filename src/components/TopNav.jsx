@@ -140,24 +140,25 @@ function SettingsMenu({ language, onLanguage }) {
           />
         </div>
         <VolumeSliders />
-        <FreeCameraToggle />
+        <SettingToggle name="freeCamera" label="Free camera" hint="Turn, zoom and pan on hero pages" />
+        <SettingToggle name="particles" label="Particles" hint="The game's effects on heroes and items" />
         <p className="border-t border-line pt-3 text-[11px] leading-snug text-ash/80">{VALVE_NOTICE}</p>
       </Popover>
     </div>
   );
 }
 
-// On a hero's page the camera is fixed as in the game; this lets it turn, zoom and pan
-function FreeCameraToggle() {
-  const [on, setOn] = useState(() => getViewSettings().freeCamera);
-  useEffect(() => onViewSettings((settings) => setOn(settings.freeCamera)), []);
+// A switch of the view settings kept on this device
+function SettingToggle({ name, label, hint }) {
+  const [on, setOn] = useState(() => getViewSettings()[name]);
+  useEffect(() => onViewSettings((settings) => setOn(settings[name])), [name]);
   return (
     <label className="flex cursor-pointer items-center justify-between gap-3 text-xs text-ash">
       <span>
-        Free camera
-        <span className="block text-[11px] text-ash/60">Turn, zoom and pan on hero pages</span>
+        {label}
+        <span className="block text-[11px] text-ash/60">{hint}</span>
       </span>
-      <input type="checkbox" checked={on} onChange={(event) => setViewSettings({ freeCamera: event.target.checked })} className="size-4 accent-[#c5dcff]" />
+      <input type="checkbox" checked={on} onChange={(event) => setViewSettings({ [name]: event.target.checked })} className="size-4 accent-[#c5dcff]" />
     </label>
   );
 }

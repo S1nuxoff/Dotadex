@@ -324,8 +324,10 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   const mask = useSceneMask(catalog.modelsBase);
   useEffect(() => stageRef.current.setLoadout(loadout), [loadout]);
   // The game's particle effects of what is on screen
-  const particlesKey = particles.join("|");
-  useEffect(() => stageRef.current.setParticles(catalog.modelsBase, particles), [particlesKey, catalog.modelsBase]);
+  const [particlesOn, setParticlesOn] = useState(() => getViewSettings().particles);
+  useEffect(() => onViewSettings((settings) => setParticlesOn(settings.particles)), []);
+  const particlesKey = particlesOn ? particles.join("|") : "";
+  useEffect(() => stageRef.current.setParticles(catalog.modelsBase, particlesOn ? particles : []), [particlesKey, catalog.modelsBase]);
   // The free camera of the settings, or the game's fixed one on a hero's page
   useEffect(() => {
     stageRef.current.setFreeCamera(getViewSettings().freeCamera);

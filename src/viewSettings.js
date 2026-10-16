@@ -1,6 +1,6 @@
 // How the stage may be handled, kept on this device. On a hero's page the camera is fixed as in
 // the game and a drag turns the hero; freeCamera lets it orbit, zoom and pan everywhere.
-const DEFAULTS = { freeCamera: false };
+const DEFAULTS = { freeCamera: false, particles: true };
 
 function load() {
   try {

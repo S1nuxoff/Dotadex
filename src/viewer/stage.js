@@ -1051,9 +1051,9 @@ export class Stage {
             const size = new THREE.Box3().setFromObject(this.pedestal).getSize(new THREE.Vector3());
             const radius = Math.max(size.x, size.z) / 2;
             pedestalFog.near.value = radius * 0.05;
-            pedestalFog.far.value = radius * 0.6;
-            pedestalFog.inner.value = radius * 0.4;
-            pedestalFog.outer.value = radius * 0.85;
+            pedestalFog.far.value = radius * 0.75;
+            pedestalFog.inner.value = radius * 0.3;
+            pedestalFog.outer.value = radius * 0.95;
             this.pedestal.traverse((node) => {
               if (node.isMesh) {
                 node.receiveShadow = true;

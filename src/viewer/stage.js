@@ -3,6 +3,10 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
 import { StageEffects } from "./effects.js";
 import { playLoaded, preloadSound } from "./soundPlayer.js";
@@ -84,7 +88,7 @@ async function loadSkin(modelUrl, skin) {
       const textures = {};
       await Promise.all(
         Object.entries(vmat.TextureParams).map(async ([param, path]) => {
-          textures[param] = await loadVariantTexture(base + path, param === "g_tColor" || param === "g_tCubeMap" || param === "g_tDetail").catch(() => null);
+          textures[param] = await loadVariantTexture(base + path, param === "g_tColor" || param === "g_tCubeMap" || param === "g_tDetail" || param === "g_tDetail2").catch(() => null);
         })
       );
       result[name] = { vmat, textures };
@@ -102,12 +106,77 @@ function dotaMaterialFor(material, textures) {
   for (const [param, name] of Object.entries(vmat.TextureParams ?? {})) {
     const texture = textures[name];
     if (texture) {
-      texture.colorSpace = param === "g_tColor" || param === "g_tCubeMap" || param === "g_tDetail" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      texture.colorSpace = param === "g_tColor" || param === "g_tCubeMap" || param === "g_tDetail" || param === "g_tDetail2" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
       texture.needsUpdate = true;
       byParam[param] = texture;
     }
   }
   return createDotaMaterial(material, vmat, byParam);
+}
+
+// The plain material with what the hero shader adds on top, the way the game's hero.vfx
+// does it: Masks1 is R detail mask, G diffuse warp mask, B metalness, A self-illumination
+// (Source2Viewer puts it in the emissive slot with no strength). Self-illuminated parts
+// show their color as it is instead of the light on it. The detail textures (F_DETAIL and
+// F_DETAIL_2) go where Masks1 R says: 1 add, 2 add and self-illuminate, 3 multiply by twice.
+// textures(param) gives the material's texture for a vmat parameter.
+function plainMaterial(material, textures) {
+  const vmat = material.userData?.vmat;
+  const masks = material.emissiveMap;
+  if (vmat?.ShaderName !== "hero.vfx" || !masks) {
+    return material;
+  }
+  const flags = vmat.IntParams ?? {};
+  const floats = vmat.FloatParams ?? {};
+  const vec = vmat.VectorParams ?? {};
+  const layers = [
+    { mode: flags.F_DETAIL ?? 0, texture: textures("g_tDetail"), scale: vec.g_vDetailTexCoordScale, tint: vec.g_vDetail1ColorTint, amount: floats.g_flDetailBlendFactor },
+    { mode: flags.F_DETAIL_2 ?? 0, texture: textures("g_tDetail2"), scale: vec.g_vDetail2TexCoordScale, tint: vec.g_vDetail2ColorTint, amount: floats.g_flDetail2BlendFactor },
+  ].filter((layer) => layer.mode > 0 && layer.texture && (layer.amount ?? 1) > 0);
+
+  const uniforms = {};
+  layers.forEach((layer, index) => {
+    layer.texture.colorSpace = THREE.SRGBColorSpace;
+    layer.texture.wrapS = layer.texture.wrapT = THREE.RepeatWrapping;
+    layer.texture.needsUpdate = true;
+    uniforms[`tDetail${index}`] = { value: layer.texture };
+    uniforms[`uDetailScale${index}`] = { value: new THREE.Vector2(layer.scale?.[0] || 1, layer.scale?.[1] || 1) };
+    uniforms[`uDetailTint${index}`] = { value: new THREE.Color(...(layer.tint ?? [1, 1, 1]).slice(0, 3)) };
+    uniforms[`uDetailAmount${index}`] = { value: layer.amount ?? 1 };
+  });
+  const declarations = layers
+    .map((_, index) => `uniform sampler2D tDetail${index}; uniform vec2 uDetailScale${index}; uniform vec3 uDetailTint${index}; uniform float uDetailAmount${index};`)
+    .join("\n");
+  const blend = layers
+    .map((layer, index) => {
+      const sample = `texture2D( tDetail${index}, vEmissiveMapUv * uDetailScale${index} ).rgb * uDetailTint${index}`;
+      const amount = `masks1.r * uDetailAmount${index}`;
+      if (layer.mode === 3) {
+        return `diffuseColor.rgb *= mix( vec3( 1.0 ), ${sample} * 2.0, ${amount} );`;
+      }
+      const add = `diffuseColor.rgb += ${sample} * ${amount};`;
+      return layer.mode === 2 ? `${add}\nselfIllum = max( selfIllum, ${amount} );` : add;
+    })
+    .join("\n");
+
+  const result = material.clone();
+  result.emissive = new THREE.Color(0, 0, 0);
+  result.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>\n${declarations}\nfloat selfIllum = 0.0;`)
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+        vec4 masks1 = texture2D( emissiveMap, vEmissiveMapUv );
+        selfIllum = masks1.a;
+        ${blend}`
+      )
+      .replace("#include <emissivemap_fragment>", "")
+      .replace("#include <opaque_fragment>", "outgoingLight = mix( outgoingLight, diffuseColor.rgb, selfIllum );\n#include <opaque_fragment>");
+  };
+  result.customProgramCacheKey = () => `dota-plain-${layers.map((layer) => layer.mode).join("-")}`;
+  return result;
 }
 
 // Helpers only the map editor shows: camera markers, the stand-in heroes scenes are laid
@@ -267,6 +336,22 @@ export class Stage {
     this.tween = null;
     this.request = 0;
 
+    // Glow around what is brighter than white: glowing parts and strong highlights, as in the game.
+    // The glow is added to the colors only, so the page still shows through around the model.
+    this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.45, 1.0);
+    Object.assign(this.bloom.blendMaterial, {
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneFactor,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
+    });
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass());
+
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas.parentElement);
     this.resize();
@@ -279,6 +364,8 @@ export class Stage {
       return;
     }
     this.renderer.setSize(clientWidth, clientHeight, false);
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(clientWidth, clientHeight);
     this.camera.aspect = clientWidth / clientHeight;
     this.camera.updateProjectionMatrix();
   }
@@ -361,10 +448,10 @@ export class Stage {
         const plain = original.clone();
         plain.map = variant.textures.g_tColor ?? plain.map;
         plain.normalMap = variant.textures.g_tNormal ?? plain.normalMap;
-        node.userData.pbr = plain;
+        node.userData.pbr = plainMaterial(plain, (param) => variant.textures[param] ?? textures?.[variant.vmat.TextureParams?.[param]]);
         node.userData.dota = createDotaMaterial(original, variant.vmat, variant.textures);
       } else {
-        node.userData.pbr = original;
+        node.userData.pbr = plainMaterial(original, (param) => textures?.[original.userData?.vmat?.TextureParams?.[param]]);
         node.userData.dota = dotaMaterialFor(original, textures) ?? environmentMaterial(original.clone());
       }
       node.material = this.shading === "dota" ? node.userData.dota : node.userData.pbr;
@@ -719,7 +806,7 @@ export class Stage {
     }
 
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.composer.render();
   }
 
   // sound: { base, events, byModel, attack: { [model]: { event, point } } } or null to mute

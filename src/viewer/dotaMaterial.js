@@ -41,6 +41,12 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D tFresnelWarp;
   uniform sampler2D tCubeMap;
   uniform sampler2D tDetail;
+  uniform sampler2D tDetail2;
+  uniform float uDetail2Mode;
+  uniform float uDetail2Factor;
+  uniform vec2 uDetail2Scale;
+  uniform vec3 uDetailTint;
+  uniform vec3 uDetail2Tint;
 
   uniform float uHasNormal;
   uniform float uHasMasks1;
@@ -113,10 +119,24 @@ const fragmentShader = /* glsl */ `
 
     // Detail texture, masked by Masks1 R, multiplied in at twice its value
     vec3 glow = vec3(0.0);
+    // Detail textures where Masks1 R says, by the game's modes: 1 add, 2 add and
+    // self-illuminate, 3 multiply by twice
+    float selfIllum = masks1.a * uSelfIllum;
+    float detailMask = uHasMasks1 > 0.5 ? masks1.r : 1.0;
     if (uDetailMode > 0.5) {
-      vec3 detail = texture2D(tDetail, vUv * uDetailScale).rgb;
-      float amount = (uHasMasks1 > 0.5 ? masks1.r : 1.0) * uDetailFactor;
-      albedo *= mix(vec3(1.0), detail * 2.0, amount);
+      vec3 detail = texture2D(tDetail, vUv * uDetailScale).rgb * uDetailTint;
+      float amount = detailMask * uDetailFactor;
+      if (uDetailMode > 2.5) {
+        albedo *= mix(vec3(1.0), detail * 2.0, amount);
+      } else {
+        albedo += detail * amount;
+        if (uDetailMode > 1.5) selfIllum = max(selfIllum, amount);
+      }
+    }
+    if (uDetail2Mode > 0.5) {
+      float amount = detailMask * uDetail2Factor;
+      albedo += texture2D(tDetail2, vUv * uDetail2Scale).rgb * uDetail2Tint * amount;
+      if (uDetail2Mode > 1.5) selfIllum = max(selfIllum, amount);
     }
 
     // Diffuse with Dota's warp ramp
@@ -138,7 +158,7 @@ const fragmentShader = /* glsl */ `
     // Specular, exponent and intensity from Masks2
     float exponent = uHasMasks2 > 0.5 ? max(masks2.a * 100.0, 1.0) : uSpecularExponent;
     // Materials push the scale up to 10; past a point that only turns cloth into silver
-    float intensity = (uHasMasks2 > 0.5 ? masks2.r : 0.2) * min(uSpecularScale, 4.0) * 0.08;
+    float intensity = (uHasMasks2 > 0.5 ? masks2.r : 0.2) * min(uSpecularScale, 6.0) * 0.12;
     vec3 h = normalize(uKeyDir + v);
     float spec = pow(max(dot(n, h), 0.0), exponent) * max(nl, 0.0);
     vec3 specColor = mix(uSpecularColor * mix(vec3(1.0), albedo * 2.0, 0.5), albedo, masks2.b);
@@ -148,16 +168,16 @@ const fragmentShader = /* glsl */ `
     float rimMask = uHasMasks2 > 0.5 ? masks2.g : 0.3;
     float rimUp = clamp(n.y * 0.6 + 0.4, 0.0, 1.0);
     // The material's own rim color (Terrorblade's is cyan), with a touch of the stage's
-    vec3 rim = min(fresnel.g * rimMask * uRimLightScale * 0.2, 0.5) * rimUp * mix(uRimLightColor, uStageRim, 0.2);
+    vec3 rim = min(fresnel.g * rimMask * uRimLightScale * 0.35, 0.9) * rimUp * mix(uRimLightColor, uStageRim, 0.25);
 
     // Reflections of a studio instead of the material's cube map: a softbox above,
     // strip lights at the sides, a dark floor and a back light in the rarity color.
     // Masked by metalness, tinted by the base color as much as Masks2 B says.
     vec3 r = reflect(-v, n);
     vec3 studio = mix(vec3(0.015, 0.018, 0.025), vec3(0.06, 0.07, 0.09), smoothstep(-0.6, 0.2, r.y));
-    studio += vec3(1.0, 0.97, 0.92) * softbox(r, vec3(-0.5, 0.55, 0.65), 0.55) * 0.9;
-    studio += vec3(0.8, 0.88, 1.0) * softbox(r, vec3(0.95, 0.15, 0.25), 0.3) * 0.5;
-    studio += vec3(0.9, 0.92, 1.0) * smoothstep(0.65, 0.95, r.y) * 0.4;
+    studio += vec3(1.0, 0.97, 0.92) * softbox(r, vec3(-0.5, 0.55, 0.65), 0.55) * 1.3;
+    studio += vec3(0.8, 0.88, 1.0) * softbox(r, vec3(0.95, 0.15, 0.25), 0.3) * 0.8;
+    studio += vec3(0.9, 0.92, 1.0) * smoothstep(0.65, 0.95, r.y) * 0.6;
     studio += uStageRim * softbox(r, vec3(0.0, 0.25, -1.0), 0.8) * 0.7;
     // Dota tints reflections by the base color unless the material blends that away
     vec3 tint = mix(albedo * 2.0, vec3(1.0), uReflectionsUntinted);
@@ -173,7 +193,8 @@ const fragmentShader = /* glsl */ `
     // Masks1 alpha is the hero shader's self-illumination mask (eyes, glowing parts)
     // it shows the base color as it is instead of the light on it, not on top of it
     vec3 lit = diffuse + specular + rim + env + glow;
-    vec3 outColor = mix(lit, albedo, masks1.a * uSelfIllum);
+    // Brighter than white, so the glow pass picks glowing parts up
+    vec3 outColor = mix(lit, albedo, selfIllum);
     gl_FragColor = vec4(outColor, color.a);
     #include <colorspace_fragment>
   }
@@ -213,29 +234,6 @@ export function setDotaKeyDir(viewDir) {
   stage.keyDir.copy(viewDir);
 }
 
-// How much of a mask's alpha is not white: masks without self-illumination come
-// with the alpha left white, which would make the whole material glow
-const glowCache = new WeakMap();
-function hasGlow(texture) {
-  const image = texture?.image;
-  if (!image?.width) {
-    return false;
-  }
-  if (!glowCache.has(image)) {
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 32;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    context.drawImage(image, 0, 0, 32, 32);
-    const pixels = context.getImageData(0, 0, 32, 32).data;
-    let white = 0;
-    for (let i = 3; i < pixels.length; i += 4) {
-      white += pixels[i] > 250 ? 1 : 0;
-    }
-    // Glowing parts are a small share of a texture; a mostly white alpha is no mask
-    glowCache.set(image, white / (pixels.length / 4) < 0.6);
-  }
-  return glowCache.get(image);
-}
 
 // Shared so a rarity change recolors every material at once
 export const stageRim = { value: new THREE.Color("#c9a45c") };
@@ -272,6 +270,12 @@ export function createDotaMaterial(original, vmat, textures) {
       uHasFresnelWarp: { value: pick("g_tFresnelWarp") ? 1 : 0 },
       uHasCubeMap: { value: pick("g_tCubeMap") ? 1 : 0 },
       tDetail: { value: pick("g_tDetail") },
+      tDetail2: { value: pick("g_tDetail2") },
+      uDetail2Mode: { value: pick("g_tDetail2") && (float.g_flDetail2BlendFactor ?? 1) > 0 ? (int.F_DETAIL_2 ?? 0) : 0 },
+      uDetail2Factor: { value: float.g_flDetail2BlendFactor ?? 1 },
+      uDetail2Scale: { value: new THREE.Vector2(vec.g_vDetail2TexCoordScale?.[0] || 1, vec.g_vDetail2TexCoordScale?.[1] || 1) },
+      uDetailTint: { value: vector(vec.g_vDetail1ColorTint, [1, 1, 1]) },
+      uDetail2Tint: { value: vector(vec.g_vDetail2ColorTint, [1, 1, 1]) },
       uDetailMode: { value: pick("g_tDetail") ? (int.F_DETAIL ?? 0) : 0 },
       uDetailFactor: { value: float.g_flDetailBlendFactor ?? 1 },
       uDetailScale: {
@@ -282,7 +286,7 @@ export function createDotaMaterial(original, vmat, textures) {
       },
       uAlphaTest: { value: int.F_ALPHA_TEST ? 0.5 : 0 },
       // The flag is often not set on materials whose mask still glows in the game
-      uSelfIllum: { value: int.F_SELF_ILLUM || (int.F_MASKS_1 && hasGlow(pick("g_tMasks1"))) ? 1 : 0 },
+      uSelfIllum: { value: int.F_MASKS_1 ? 1 : 0 },
       uSpecularExponent: { value: float.g_flSpecularExponent ?? 20 },
       uSpecularScale: { value: float.g_flSpecularScale ?? 1 },
       uRimLightScale: { value: float.g_flRimLightScale ?? 1 },

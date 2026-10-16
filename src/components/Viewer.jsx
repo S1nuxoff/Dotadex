@@ -53,7 +53,8 @@ function initialShading() {
   try {
     saved = localStorage.getItem("shading");
   } catch {}
-  return [fromLink, saved].find((value) => value === "dota" || value === "plain") ?? "dota";
+  // Plain is closer to the game than our take on its hero shader
+  return [fromLink, saved].find((value) => value === "dota" || value === "plain") ?? "plain";
 }
 
 function AnimationPicker({ names, current, onPick }) {

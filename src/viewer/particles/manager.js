@@ -60,6 +60,20 @@ export class ParticleManager {
     return systemCache.get(key);
   }
 
+  // An effect with every system it spawns, in one request (particles/bundles/); its systems are
+  // kept for the children to find, and a missing bundle falls back to the files one by one
+  async loadEffect(path) {
+    const key = path.toLowerCase().replace(/\.vpcf$/, "");
+    if (!systemCache.has(key)) {
+      const bundle = await fetchJson(`${this.base}particles/bundles/${key.replace(/^particles\//, "")}.json`);
+      for (const [file, system] of Object.entries(bundle ?? {})) {
+        const name = file.toLowerCase().replace(/\.vpcf$/, "");
+        if (!systemCache.has(name)) systemCache.set(name, Promise.resolve(system));
+      }
+    }
+    return this.loadSystem(path);
+  }
+
   loadTexture(path) {
     const key = path.toLowerCase().replace(/\.vtex$/, "");
     if (!textureCache.has(key)) {
@@ -111,7 +125,7 @@ export class ParticleManager {
     const request = ++this.request;
     this.clear();
     if (!this.model) return;
-    const defs = await Promise.all(this.paths.map((path) => this.loadSystem(path)));
+    const defs = await Promise.all(this.paths.map((path) => this.loadEffect(path)));
     if (request !== this.request) return;
     for (const def of defs) {
       if (!def) continue;

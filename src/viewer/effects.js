@@ -67,28 +67,108 @@ const motesShader = {
     uniform float uSize;
     varying float vAlpha;
     varying float vWarm;
+    varying float vCore;
     void main() {
-      float speed = 0.06 + fract(aSeed * 7.13) * 0.08;
+      float speed = 0.05 + fract(aSeed * 7.13) * 0.07;
       float rise = fract(fract(aSeed * 3.71) + uTime * speed);
-      float angle = aSeed * 6.2831 * 13.0 + uTime * 0.15 * (fract(aSeed * 5.3) - 0.5);
-      float r = uRadius * (0.35 + 0.65 * sqrt(fract(aSeed * 11.7)));
-      vec3 p = vec3(cos(angle) * r, rise * uHeight, sin(angle) * r);
+      // Embers spiral up around the model and drift outwards as they rise
+      float turn = (fract(aSeed * 5.3) - 0.5) * 2.0;
+      float angle = aSeed * 6.2831 * 13.0 + uTime * 0.25 * turn + rise * 2.5 * turn;
+      float r = uRadius * (0.3 + 0.7 * sqrt(fract(aSeed * 11.7))) * (0.85 + rise * 0.35);
+      float sway = sin(uTime * 1.3 + aSeed * 50.0) * uRadius * 0.03;
+      vec3 p = vec3(cos(angle) * r + sway, rise * uHeight, sin(angle) * r);
       vec4 mv = modelViewMatrix * vec4(p, 1.0);
       gl_Position = projectionMatrix * mv;
-      gl_PointSize = uSize * (0.6 + fract(aSeed * 17.0)) / -mv.z;
-      vAlpha = smoothstep(0.0, 0.15, rise) * smoothstep(1.0, 0.6, rise) * (0.55 + 0.45 * sin(uTime * 3.0 + aSeed * 40.0));
+      float big = step(0.93, fract(aSeed * 31.0));
+      gl_PointSize = uSize * (0.5 + fract(aSeed * 17.0) * 0.8 + big * 1.4) / -mv.z;
+      float twinkle = 0.45 + 0.55 * pow(0.5 + 0.5 * sin(uTime * (2.0 + fract(aSeed * 9.0) * 4.0) + aSeed * 40.0), 2.0);
+      vAlpha = smoothstep(0.0, 0.12, rise) * smoothstep(1.0, 0.55, rise) * twinkle;
       vWarm = fract(aSeed * 23.0);
+      vCore = 1.0 - big * 0.6;
     }
   `,
   fragmentShader: /* glsl */ `
     uniform vec3 uRim;
     varying float vAlpha;
     varying float vWarm;
+    varying float vCore;
     void main() {
-      float d = length(gl_PointCoord - 0.5);
-      float a = smoothstep(0.5, 0.0, d) * vAlpha;
-      vec3 color = mix(uRim, vec3(1.0, 0.85, 0.6), vWarm * 0.6);
-      gl_FragColor = vec4(color * a, a);
+      float d = length(gl_PointCoord - 0.5) * 2.0;
+      // A hot core in a soft halo
+      float halo = exp(-d * d * 5.0);
+      float core = exp(-d * d * 40.0) * vCore;
+      float a = (halo * 0.55 + core) * vAlpha;
+      vec3 color = mix(uRim, vec3(1.0, 0.82, 0.55), vWarm * 0.55);
+      color = mix(color, vec3(1.0, 0.97, 0.9), core * 0.7);
+      gl_FragColor = vec4(color * a * 1.6, a);
+    }
+  `,
+};
+
+// Soft drifting smoke on the floor around the pedestal
+const smokeShader = {
+  vertexShader: /* glsl */ `
+    attribute float aSeed;
+    uniform float uTime;
+    uniform float uRadius;
+    uniform float uSize;
+    varying float vSeed;
+    varying float vAlpha;
+    void main() {
+      vSeed = aSeed;
+      float angle = aSeed * 6.2831 * 7.0 + uTime * 0.04 * (fract(aSeed * 3.1) - 0.5);
+      float r = uRadius * (0.75 + fract(aSeed * 13.3) * 0.75);
+      float lift = fract(aSeed * 5.7) * 0.18 + 0.04 * sin(uTime * 0.3 + aSeed * 20.0);
+      vec3 p = vec3(cos(angle) * r, lift * uRadius, sin(angle) * r);
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = uSize * (0.8 + fract(aSeed * 19.0) * 0.7) / -mv.z;
+      vAlpha = 0.5 + 0.5 * sin(uTime * 0.25 + aSeed * 30.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform vec3 uRim;
+    uniform float uTime;
+    varying float vSeed;
+    varying float vAlpha;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p) {
+      vec2 i = floor(p), f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+    }
+    void main() {
+      vec2 uv = gl_PointCoord - 0.5;
+      float d = length(uv) * 2.0;
+      // Billowing: noise turning slowly inside a soft round puff
+      float c = cos(uTime * 0.05 + vSeed * 6.0), s = sin(uTime * 0.05 + vSeed * 6.0);
+      vec2 q = mat2(c, -s, s, c) * uv * 3.0 + vSeed * 10.0;
+      float n = noise(q) * 0.6 + noise(q * 2.3 + uTime * 0.05) * 0.4;
+      float a = smoothstep(1.0, 0.1, d) * smoothstep(0.25, 0.75, n) * 0.16 * (0.6 + 0.4 * vAlpha);
+      vec3 color = mix(vec3(0.55, 0.6, 0.68), uRim, 0.25);
+      gl_FragColor = vec4(color, a);
+    }
+  `,
+};
+
+// A pool of light on the pedestal under the model
+const poolShader = {
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform vec3 uRim;
+    uniform float uTime;
+    varying vec2 vUv;
+    void main() {
+      float d = length(vUv - 0.5) * 2.0;
+      float a = exp(-d * d * 3.5) * (0.85 + 0.15 * sin(uTime * 1.2));
+      vec3 color = mix(vec3(1.0, 0.95, 0.88), uRim, 0.45);
+      gl_FragColor = vec4(color * a * 0.35, 1.0);
     }
   `,
 };
@@ -124,7 +204,8 @@ const sparksShader = {
   `,
 };
 
-const MOTES = 140;
+const MOTES = 180;
+const SMOKE = 28;
 const SPARKS = 110;
 
 export class StageEffects {
@@ -161,6 +242,31 @@ export class StageEffects {
     this.motes.frustumCulled = false;
     this.group.add(this.motes);
 
+    const smokeGeometry = new THREE.BufferGeometry();
+    smokeGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(SMOKE * 3), 3));
+    smokeGeometry.setAttribute("aSeed", new THREE.BufferAttribute(new Float32Array(SMOKE).map(() => Math.random()), 1));
+    this.smokeMaterial = new THREE.ShaderMaterial({
+      ...smokeShader,
+      transparent: true,
+      depthWrite: false,
+      uniforms: { uRim: stageRim, uTime: { value: 0 }, uRadius: { value: 1 }, uSize: { value: 1 } },
+    });
+    this.smoke = new THREE.Points(smokeGeometry, this.smokeMaterial);
+    this.smoke.frustumCulled = false;
+    this.smoke.renderOrder = 2;
+    this.group.add(this.smoke);
+
+    this.poolMaterial = new THREE.ShaderMaterial({
+      ...poolShader,
+      ...additive,
+      uniforms: { uRim: stageRim, uTime: { value: 0 } },
+    });
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), this.poolMaterial);
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.y = 0.002;
+    pool.renderOrder = 1;
+    this.pedestal.add(pool);
+
     this.sparksGeometry = new THREE.BufferGeometry();
     this.sparksGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(SPARKS * 3), 3));
     this.sparksGeometry.setAttribute("aVelocity", new THREE.BufferAttribute(new Float32Array(SPARKS * 3), 3));
@@ -183,6 +289,9 @@ export class StageEffects {
     this.motesMaterial.uniforms.uRadius.value = radius * 1.05;
     this.motesMaterial.uniforms.uSize.value = radius * 70;
     this.sparksMaterial.uniforms.uSize.value = radius * 90;
+    this.smokeMaterial.uniforms.uRadius.value = radius;
+    this.smokeMaterial.uniforms.uSize.value = radius * 900;
+    this.smoke.visible = standing;
     this.radius = radius;
     this.height = height;
     // Parts shown alone float in the view without a pedestal
@@ -219,6 +328,8 @@ export class StageEffects {
       this.age += delta;
     }
     this.motesMaterial.uniforms.uTime.value = this.time;
+    this.smokeMaterial.uniforms.uTime.value = this.time;
+    this.poolMaterial.uniforms.uTime.value = this.time;
     this.pedestalMaterial.uniforms.uTime.value = this.time;
     this.sparksMaterial.uniforms.uAge.value = this.age;
     this.pedestalMaterial.uniforms.uWave.value = Math.min(this.age / 1.1, 2);

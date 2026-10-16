@@ -7,6 +7,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
 import { StageEffects } from "./effects.js";
 import { playLoaded, preloadSound } from "./soundPlayer.js";
@@ -375,6 +376,23 @@ export class Stage {
       blendDstAlpha: THREE.OneFactor,
     });
     this.composer.addPass(this.bloom);
+    // The materials' own halos (see createGlowMaterial): the model drawn again with only its
+    // glow, everything else black so it still hides what is behind it, then blurred
+    this.glowComposer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
+    this.glowComposer.renderToScreen = false;
+    this.glowComposer.addPass(new RenderPass(this.scene, this.camera, null, new THREE.Color(0, 0, 0), 0));
+    this.glowComposer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.95, 0.5, 0.12));
+    this.glowBlack = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    this.glowMix = new ShaderPass({
+      uniforms: { tDiffuse: { value: null }, tGlow: { value: this.glowComposer.renderTarget2.texture } },
+      vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform sampler2D tDiffuse; uniform sampler2D tGlow; varying vec2 vUv;
+        void main() { vec4 base = texture2D(tDiffuse, vUv); gl_FragColor = vec4(base.rgb + texture2D(tGlow, vUv).rgb, base.a); }`,
+    });
+    // ShaderPass copies its uniforms, and a copied render target texture comes out empty
+    this.glowMix.uniforms.tGlow.value = this.glowComposer.renderTarget2.texture;
+    this.glowMix.enabled = false;
+    this.composer.addPass(this.glowMix);
     this.composer.addPass(new OutputPass());
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -391,6 +409,8 @@ export class Stage {
     this.renderer.setSize(clientWidth, clientHeight, false);
     this.composer.setPixelRatio(this.renderer.getPixelRatio());
     this.composer.setSize(clientWidth, clientHeight);
+    this.glowComposer.setPixelRatio(this.renderer.getPixelRatio());
+    this.glowComposer.setSize(clientWidth, clientHeight);
     this.camera.aspect = clientWidth / clientHeight;
     this.camera.updateProjectionMatrix();
   }
@@ -803,6 +823,44 @@ export class Stage {
     };
   }
 
+  // Draws the halos of the model's glowing materials into the glow composer, when it has any
+  renderGlow() {
+    const glowing = [];
+    this.group?.traverse((node) => {
+      const glow = node.isMesh && node.visible && node.userData.dota?.userData?.glow;
+      if (glow) {
+        glowing.push([node, glow]);
+      }
+    });
+    this.glowMix.enabled = glowing.length > 0;
+    if (!glowing.length) {
+      return;
+    }
+    const swapped = [];
+    const hidden = [];
+    this.scene.traverse((node) => {
+      if (node.isPoints || node.isSprite) {
+        if (node.visible) {
+          node.visible = false;
+          hidden.push(node);
+        }
+      } else if (node.isMesh) {
+        swapped.push([node, node.material]);
+        node.material = this.glowBlack;
+      }
+    });
+    for (const [node, glow] of glowing) {
+      node.material = glow;
+    }
+    this.glowComposer.render();
+    for (const [node, material] of swapped) {
+      node.material = material;
+    }
+    for (const node of hidden) {
+      node.visible = true;
+    }
+  }
+
   frame() {
     const delta = Math.min(this.clock.getDelta(), 0.1);
     if (this.mixer && !this.paused) {
@@ -831,6 +889,7 @@ export class Stage {
     }
 
     this.controls.update();
+    this.renderGlow();
     this.composer.render();
   }
 

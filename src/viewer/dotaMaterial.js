@@ -324,5 +324,47 @@ export function createDotaMaterial(original, vmat, textures) {
     side: int.F_RENDER_BACKFACES ? THREE.DoubleSide : THREE.FrontSide,
   });
   material.name = original.name;
+  material.userData.glow = createGlowMaterial(vmat, textures, material.uniforms.tColor.value, material.side);
   return material;
+}
+
+// The halo the game puts around a material's glowing parts, in the material's own bloom
+// color and strength (g_vBloomColor, g_flBloomScale), drawn into a separate glow pass.
+// null for materials without one.
+function createGlowMaterial(vmat, textures, color, side) {
+  const float = vmat.FloatParams ?? {};
+  const scale = float.g_flBloomScale ?? 0;
+  const masks1 = textures.g_tMasks1;
+  if (scale <= 0 || (!masks1 && !float.g_flSelfIllumBlendToFull)) {
+    return null;
+  }
+  const tint = vmat.VectorParams?.g_vBloomColor ?? [1, 1, 1];
+  return new THREE.ShaderMaterial({
+    vertexShader,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tColor;
+      uniform sampler2D tMasks1;
+      uniform float uHasMasks1;
+      uniform float uToFull;
+      uniform float uAlphaTest;
+      uniform vec3 uGlow;
+      varying vec2 vUv;
+      void main() {
+        vec4 color = texture2D(tColor, vUv);
+        if (uAlphaTest > 0.0 && color.a < uAlphaTest) discard;
+        float mask = uHasMasks1 > 0.5 ? texture2D(tMasks1, vUv).a : 0.0;
+        // The surface's own color, tinted by the material's bloom color
+        gl_FragColor = vec4(color.rgb * uGlow * mix(mask, 1.0, uToFull), 1.0);
+      }
+    `,
+    uniforms: {
+      tColor: { value: color },
+      tMasks1: { value: masks1 ?? null },
+      uHasMasks1: { value: masks1 ? 1 : 0 },
+      uToFull: { value: float.g_flSelfIllumBlendToFull ?? 0 },
+      uAlphaTest: { value: vmat.IntParams?.F_ALPHA_TEST ? 0.5 : 0 },
+      uGlow: { value: new THREE.Color(tint[0], tint[1], tint[2]).multiplyScalar(scale) },
+    },
+    side,
+  });
 }

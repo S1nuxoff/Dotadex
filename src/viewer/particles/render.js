@@ -447,7 +447,9 @@ const ROPE_VERTEX = /* glsl */ `
 
 // A ribbon through the particles in the order they were made, as wide as each is
 function rope(def, system) {
-  const max = system.maxParticles;
+  // Each stretch between two particles cut into this many, along a smooth curve through them
+  const tess = Math.min(Math.max(Math.round(num(def.m_nMinTesselation, 0)), 0), 8);
+  const max = (system.maxParticles - 1) * (tess + 1) + 1;
   const geometry = new THREE.BufferGeometry();
   const positions = new THREE.BufferAttribute(new Float32Array(max * 2 * 3), 3).setUsage(THREE.DynamicDrawUsage);
   const uvs = new THREE.BufferAttribute(new Float32Array(max * 2 * 2), 2).setUsage(THREE.DynamicDrawUsage);
@@ -481,7 +483,10 @@ function rope(def, system) {
   const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;
   const alphaScale = num(def.m_flAlphaScale, 1);
   const worldSize = num(def.m_flTextureVWorldSize, 10) || 10;
+  // V along the rope: a texture's length every m_flTextureVWorldSize units, scrolling by
+  // m_flTextureVScrollRate units a second
   const scroll = num(def.m_flTextureVScrollRate, 0);
+  const vOffset = num(def.m_flTextureVOffset, 0);
   const a = new THREE.Vector3();
   const b = new THREE.Vector3();
   const tangent = new THREE.Vector3();
@@ -498,37 +503,64 @@ function rope(def, system) {
       const alpha = system.float(7);
       const alpha2 = system.float(16);
       const radius = system.float(3);
+      // The particles' places, widths and colors, then points on a Catmull-Rom curve through them
+      const at = (i, k) => p[Math.min(Math.max(i, 0), n - 1) * 3 + k];
+      const value = (i) => {
+        const j = Math.min(Math.max(i, 0), n - 1);
+        return [
+          Math.min(Math.max(tint[j * 3] || 0, 0), 4),
+          Math.min(Math.max(tint[j * 3 + 1] || 0, 0), 4),
+          Math.min(Math.max(tint[j * 3 + 2] || 0, 0), 4),
+          Math.min(Math.max(alpha[j], 0), 1) * Math.min(Math.max(alpha2[j], 0), 1) * alphaScale,
+          Math.max(0, radius[j]) * radiusScale,
+        ];
+      };
+      const curve = (a, b, c, d, t) => 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (3 * b - a - 3 * c + d) * t * t * t);
+      const count = (n - 1) * (tess + 1) + 1;
+      const points = new Float32Array(count * 8);
+      for (let q = 0; q < count; q++) {
+        const i = Math.floor(q / (tess + 1));
+        const t = (q % (tess + 1)) / (tess + 1);
+        const o = q * 8;
+        // Game axes to the scene's: x from y, y from z, z from x
+        for (const [axis, k] of [[0, 1], [1, 2], [2, 0]]) {
+          points[o + axis] = curve(at(i - 1, k), at(i, k), at(i + 1, k), at(i + 2, k), t) * UNIT;
+        }
+        const v0 = value(i);
+        const v1 = value(i + 1);
+        for (let c = 0; c < 5; c++) points[o + 3 + c] = v0[c] + (v1[c] - v0[c]) * t;
+      }
       let distance = 0;
-      for (let i = 0; i < n; i++) {
-        const j = i * 3;
-        a.set(p[j + 1] * UNIT, p[j + 2] * UNIT, p[j] * UNIT);
-        const k = Math.min(i + 1, n - 1);
-        const h = Math.max(i - 1, 0);
-        tangent.set(p[k * 3 + 1] - p[h * 3 + 1], p[k * 3 + 2] - p[h * 3 + 2], p[k * 3] - p[h * 3]).normalize();
+      for (let q = 0; q < count; q++) {
+        const o = q * 8;
+        a.set(points[o], points[o + 1], points[o + 2]);
+        const next = Math.min(q + 1, count - 1) * 8;
+        const prev = Math.max(q - 1, 0) * 8;
+        tangent.set(points[next] - points[prev], points[next + 1] - points[prev + 1], points[next + 2] - points[prev + 2]).normalize();
         toCamera.subVectors(camera.position, a).normalize();
-        side.crossVectors(tangent, toCamera).normalize().multiplyScalar(Math.max(0, radius[i]) * radiusScale);
-        if (i > 0) distance += a.distanceTo(b);
+        side.crossVectors(tangent, toCamera).normalize().multiplyScalar(points[o + 7]);
+        if (q > 0) distance += a.distanceTo(b) / UNIT;
         b.copy(a);
-        const v = distance / (worldSize * UNIT) + system.age * scroll * 0.01;
-        for (let s = 0; s < 2; s++) {
-          const o = (i * 2 + s) * 3;
-          const sign = s === 0 ? 1 : -1;
-          positions.array[o] = a.x + side.x * sign;
-          positions.array[o + 1] = a.y + side.y * sign;
-          positions.array[o + 2] = a.z + side.z * sign;
-          uvs.array[(i * 2 + s) * 2] = s;
-          uvs.array[(i * 2 + s) * 2 + 1] = v;
-          const c = (i * 2 + s) * 4;
-          colors.array[c] = Math.min(Math.max(tint[j] || 0, 0), 4);
-          colors.array[c + 1] = Math.min(Math.max(tint[j + 1] || 0, 0), 4);
-          colors.array[c + 2] = Math.min(Math.max(tint[j + 2] || 0, 0), 4);
-          colors.array[c + 3] = Math.min(Math.max(alpha[i], 0), 1) * Math.min(Math.max(alpha2[i], 0), 1) * alphaScale;
+        const v = distance / worldSize + system.age * scroll / worldSize + vOffset;
+        for (let e = 0; e < 2; e++) {
+          const w = (q * 2 + e) * 3;
+          const sign = e === 0 ? 1 : -1;
+          positions.array[w] = a.x + side.x * sign;
+          positions.array[w + 1] = a.y + side.y * sign;
+          positions.array[w + 2] = a.z + side.z * sign;
+          uvs.array[(q * 2 + e) * 2] = e;
+          uvs.array[(q * 2 + e) * 2 + 1] = v;
+          const c = (q * 2 + e) * 4;
+          colors.array[c] = points[o + 3];
+          colors.array[c + 1] = points[o + 4];
+          colors.array[c + 2] = points[o + 5];
+          colors.array[c + 3] = points[o + 6];
         }
       }
-      geometry.setDrawRange(0, (n - 1) * 6);
-      for (const value of [positions, uvs, colors]) {
-        value.addUpdateRange(0, n * 2 * value.itemSize);
-        value.needsUpdate = true;
+      geometry.setDrawRange(0, (count - 1) * 6);
+      for (const attribute of [positions, uvs, colors]) {
+        attribute.addUpdateRange(0, count * 2 * attribute.itemSize);
+        attribute.needsUpdate = true;
       }
     },
     dispose() {

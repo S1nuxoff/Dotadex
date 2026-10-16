@@ -106,7 +106,6 @@ function Backdrop({ base, heroId }) {
 
 // The name on one line, made smaller when it is too long for the column, as the game shrinks it
 const NAME_SIZE = 68;
-const NAME_WIDTH = 660;
 function HeroName({ name }) {
   const ref = useRef(null);
   const [size, setSize] = useState(NAME_SIZE);
@@ -117,10 +116,12 @@ function HeroName({ name }) {
       if (!current || !element) {
         return;
       }
+      // Both widths as drawn, so the page's zoom falls out of the ratio
       element.style.fontSize = `${NAME_SIZE}px`;
-      const fit = Math.min(NAME_SIZE, Math.floor((NAME_SIZE * NAME_WIDTH) / element.scrollWidth));
+      const text = element.getBoundingClientRect().width;
+      const room = element.parentElement.getBoundingClientRect().width;
       element.style.fontSize = "";
-      setSize(fit);
+      setSize(text > room ? Math.floor((NAME_SIZE * room) / text) : NAME_SIZE);
     };
     measure();
     // Measured again once the title font is in, as it is wider than the one standing in for it
@@ -131,7 +132,7 @@ function HeroName({ name }) {
   }, [name]);
   return (
     <h1 className="flex h-[75px] w-[660px] items-center">
-      <span ref={ref} className="font-display leading-none font-bold tracking-normal whitespace-nowrap text-white" style={{ fontSize: size }}>
+      <span ref={ref} className="shrink-0 font-display leading-none font-bold tracking-normal whitespace-nowrap text-white" style={{ fontSize: size }}>
         {name}
       </span>
     </h1>

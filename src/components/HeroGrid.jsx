@@ -115,7 +115,7 @@ function SortPicker({ value, options, onChange, label }) {
   );
 }
 
-function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetch }) {
+function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetch, onHover }) {
   const [hovered, setHovered] = useState(false);
   return (
     <li className="relative h-[83px] w-[51px] hover:z-20">
@@ -123,6 +123,7 @@ function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetc
         onClick={() => onOpen({ type: "hero", id: hero.id })}
         onPointerEnter={() => {
           setHovered(true);
+          onHover?.();
           onPrefetch?.({ type: "hero", id: hero.id });
         }}
         onPointerLeave={() => setHovered(false)}
@@ -157,6 +158,33 @@ function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetc
   );
 }
 
+// The animated portraits, downloaded ahead around the card under the pointer so the next one
+// starts at once; the most recent ones are kept, each about a megabyte
+const videoCache = new Map();
+const VIDEOS_KEPT = 48;
+
+function preloadVideo(url) {
+  const known = videoCache.get(url);
+  if (known) {
+    videoCache.delete(url);
+    videoCache.set(url, known);
+    return;
+  }
+  const entry = { blob: null };
+  videoCache.set(url, entry);
+  fetch(url)
+    .then((res) => (res.ok ? res.blob() : Promise.reject()))
+    .then((blob) => {
+      entry.blob = URL.createObjectURL(blob);
+    })
+    .catch(() => videoCache.delete(url));
+  while (videoCache.size > VIDEOS_KEPT) {
+    const [oldest, { blob }] = videoCache.entries().next().value;
+    blob && URL.revokeObjectURL(blob);
+    videoCache.delete(oldest);
+  }
+}
+
 // The three tiles under the hover card
 function factsOf({ attribute, info }) {
   const ranged = (info?.AttackCapabilities ?? "").includes("RANGED");
@@ -181,8 +209,10 @@ function factsOf({ attribute, info }) {
 // Plays once it can, over the still portrait, so a slow or missing video leaves the portrait.
 // The game keeps these 256x256, squeezed; drawn stretched to the card, as the game does, they
 // come out in the portrait's proportions
-function HeroMovie({ src }) {
+function HeroMovie({ src: url }) {
   const [ready, setReady] = useState(false);
+  // Already downloaded, it starts at once; otherwise from the dataset while it downloads
+  const [src] = useState(() => videoCache.get(url)?.blob ?? url);
   return (
     <video
       src={src}
@@ -258,17 +288,27 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
           name: GROUP_NAMES[name],
           heroes: heroes.filter((entry) => entry.group === key),
           width: key === "DOTA_ATTRIBUTE_ALL" ? "20%" : undefined,
+          perRow: key === "DOTA_ATTRIBUTE_ALL" ? 4 : 6,
         }))
-      : [{ key: "all", name: "Heroes", heroes }];
+      : [{ key: "all", name: "Heroes", heroes, perRow: 23 }];
 
-  const card = (entry) => (
+  const videoOf = (entry) => `${catalog.modelsBase}videos/heroes/npc_dota_hero_${entry.hero.id}.webm`;
+  // The card itself and those around it in its column, a row being 6 heroes, 4 for Universal
+  const preloadAround = (list, index, perRow) => {
+    for (const step of [0, -1, 1, -perRow, perRow, -perRow - 1, -perRow + 1, perRow - 1, perRow + 1]) {
+      list[index + step] && preloadVideo(videoOf(list[index + step]));
+    }
+  };
+
+  const card = (entry, index, list, perRow) => (
     <HeroCard
       key={entry.hero.id}
       hero={entry.hero}
       name={entry.name}
       portrait={imageUrl(catalog.modelsBase, `heroes/selection/npc_dota_hero_${entry.hero.id}`)}
       facts={factsOf(entry)}
-      video={`${catalog.modelsBase}videos/heroes/npc_dota_hero_${entry.hero.id}.webm`}
+      video={videoOf(entry)}
+      onHover={() => preloadAround(list, index, perRow)}
       state={stateOf(entry)}
       onOpen={onOpen}
       onPrefetch={onPrefetch}
@@ -276,7 +316,7 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
   );
 
   return (
-    <section className="relative min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(ellipse_70%_60%_at_50%_30%,#1b2530,#0b0f14_75%)] scrollbar-thin">
+    <section className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-[radial-gradient(ellipse_70%_60%_at_50%_30%,#1b2530,#0b0f14_75%)] scrollbar-thin">
       <div className="mx-auto pt-[60px]" style={{ width: GRID_WIDTH, zoom: scale * GRID_SCALE }}>
         <div className="flex flex-col" style={{ height: GRID_HEIGHT }}>
           <div className="relative flex min-h-0 flex-1">
@@ -286,7 +326,7 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
                   {category.icon && <img src={`${ICONS}${category.icon}.png`} alt="" className="ml-[4px] size-[18px]" />}
                   <span className="pl-[4px] text-[16px] font-semibold tracking-[2px] text-[#808fa6] uppercase [text-shadow:2px_2px_4px_#00000044]">{category.name}</span>
                 </h2>
-                <ul className="flex flex-wrap content-start p-[4px]">{category.heroes.map(card)}</ul>
+                <ul className="flex flex-wrap content-start p-[4px]">{category.heroes.map((entry, index, list) => card(entry, index, list, category.perRow))}</ul>
               </div>
             ))}
             <span

@@ -7,12 +7,13 @@ import { formatPrice, itemIcon, rarity } from "../catalog.js";
 // after it are too
 export const UI_WIDTH = 1920;
 export function useUiScale() {
-  const scaleFor = () => Math.max(window.innerWidth / UI_WIDTH, 0.5);
+  // The page's width without the scrollbar, which a scrollbar coming or going changes too
+  const scaleFor = () => Math.max(document.documentElement.clientWidth / UI_WIDTH, 0.5);
   const [scale, setScale] = useState(scaleFor);
   useEffect(() => {
-    const resize = () => setScale(scaleFor());
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
+    const observer = new ResizeObserver(() => setScale(scaleFor()));
+    observer.observe(document.documentElement);
+    return () => observer.disconnect();
   }, []);
   return scale;
 }

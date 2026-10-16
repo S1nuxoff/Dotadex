@@ -156,15 +156,15 @@ export default function TopNav({ catalog, tab, onTab, onSection, onHome, onBack,
   useMenuMusic(catalog.modelsBase);
   const [muted, toggleMute] = useMuted();
   const scale = useUiScale();
-  const width = Math.max(WIDTH, window.innerWidth / scale);
+  const width = Math.max(WIDTH, document.documentElement.clientWidth / scale);
   const section = sectionOf(tab);
   const active = SECTIONS.findIndex((entry) => entry.id === section.id);
   const dataset = catalog.modelsBase.split("/datasets/")[1]?.split("/resolve")[0];
 
   return (
-    <header className="relative z-30 shrink-0">
+    <header className="relative z-30 shrink-0 overflow-x-clip">
       {/* The bar, its shadow and the glow of the open tab hang below it, over the page */}
-      <div className={`relative ${scale * WIDTH > window.innerWidth + 1 ? "overflow-x-auto overflow-y-hidden" : ""}`} style={{ height: 61 * scale }}>
+      <div className="relative" style={{ height: 61 * scale }}>
         <div className="absolute top-0 left-0 h-[164px] origin-top-left" style={{ width, transform: `scale(${scale})` }}>
           <div
             aria-hidden

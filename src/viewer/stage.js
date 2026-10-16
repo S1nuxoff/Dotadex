@@ -24,6 +24,38 @@ const SOURCE_TO_METRES = 0.0254;
 // Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
 const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
 
+// The pedestal's far side sinks into the dark behind the hero, as the game's depth fog hides it:
+// fading with how far a point lies beyond the hero along the camera's view on the ground
+const pedestalFog = { direction: { value: new THREE.Vector2(0, -1) }, near: { value: 0.5 }, far: { value: 4 } };
+const fogged = new WeakSet();
+function fogBehind(material) {
+  if (!material || fogged.has(material)) {
+    return;
+  }
+  fogged.add(material);
+  material.transparent = true;
+  const key = material.customProgramCacheKey.bind(material);
+  material.customProgramCacheKey = () => `${key()}|pedestal-fog`;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uFogDirection = pedestalFog.direction;
+    shader.uniforms.uFogNear = pedestalFog.near;
+    shader.uniforms.uFogFar = pedestalFog.far;
+    shader.vertexShader = shader.vertexShader
+      .replace("void main() {", "varying vec3 vFogPosition;\nvoid main() {")
+      .replace("#include <project_vertex>", "#include <project_vertex>\n  vFogPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "void main() {",
+      "varying vec3 vFogPosition;\nuniform vec2 uFogDirection;\nuniform float uFogNear;\nuniform float uFogFar;\nvoid main() {"
+    );
+    const end = shader.fragmentShader.lastIndexOf("}");
+    shader.fragmentShader =
+      shader.fragmentShader.slice(0, end) +
+      "  gl_FragColor.a *= 1.0 - smoothstep(uFogNear, uFogFar, dot(vFogPosition.xz, uFogDirection));\n" +
+      shader.fragmentShader.slice(end);
+  };
+  material.needsUpdate = true;
+}
+
 
 // Starts downloading models ahead of time (the pointer resting on a hero in the list), so
 // they are ready, or nearly, when picked
@@ -1001,9 +1033,15 @@ export class Stage {
               }
             });
             this.applyMaterials(this.pedestal, gltf.userData.textures);
+            const size = new THREE.Box3().setFromObject(this.pedestal).getSize(new THREE.Vector3());
+            const radius = Math.max(size.x, size.z) / 2;
+            pedestalFog.near.value = radius * 0.05;
+            pedestalFog.far.value = radius * 0.6;
             this.pedestal.traverse((node) => {
               if (node.isMesh) {
                 node.receiveShadow = true;
+                fogBehind(node.userData.dota);
+                fogBehind(node.userData.pbr);
                 const tint = node.userData.vmatTint;
                 for (const material of [node.userData.dota, node.userData.pbr]) {
                   if (tint && material?.color) {
@@ -1385,6 +1423,12 @@ export class Stage {
       setDotaKeyDir(this.sunDir.clone().transformDirection(this.camera.matrixWorldInverse));
     } else if (this.portraitLit) {
       setDotaKeyDir(this.portraitDir.clone().transformDirection(this.camera.matrixWorldInverse));
+    }
+    // The pedestal's fog lies beyond the hero as the camera looks
+    if (this.pedestal?.visible) {
+      const view = new THREE.Vector3();
+      this.camera.getWorldDirection(view);
+      pedestalFog.direction.value.set(view.x, view.z).normalize();
     }
     stageRim.value.lerp(this.rimTarget, reducedMotion.matches ? 1 : Math.min(delta * 3, 1));
     if (this.tintTarget) {

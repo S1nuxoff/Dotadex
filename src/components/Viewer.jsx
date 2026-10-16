@@ -198,7 +198,7 @@ function useHeroLine(catalog, heroId, language) {
   return { attribute, roles: (hero.Role ?? "").split(",").filter(Boolean) };
 }
 
-const MASK_HEIGHT = 80;
+const MASK_HEIGHT = 100;
 // The mask the game sees a hero page's scene through; used only once it has loaded, as a mask
 // that fails to load would hide the whole scene
 function useSceneMask(base) {

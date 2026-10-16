@@ -1649,6 +1649,18 @@ function endCapFilter(def, instance) {
   return instance;
 }
 
+// An operator's strength, often a control point the game sets (16 turns on an effect's custom
+// color, 15 holds it): one at nothing does nothing
+function strengthFilter(def, instance) {
+  if (def.m_flOpStrength === undefined) return instance;
+  const strength = compileFloat(def.m_flOpStrength, 1);
+  for (const method of ["init", "update", "force", "emit"]) {
+    const original = instance[method];
+    if (original) instance[method] = (system, a, b) => strength(system, -1) > 0 && original.call(instance, system, a, b);
+  }
+  return instance;
+}
+
 export function createOperator(def, kind, system) {
   const name = def._class;
   const make = kind === "renderer" ? RENDERERS[name] : DEFS[name];
@@ -1657,7 +1669,7 @@ export function createOperator(def, kind, system) {
     return null;
   }
   try {
-    return endCapFilter(def, make(def, system));
+    return strengthFilter(def, endCapFilter(def, make(def, system)));
   } catch (error) {
     console.warn(`[particles] ${name}: ${error.message}`);
     return null;

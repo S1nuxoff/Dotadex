@@ -11,6 +11,22 @@ const textureCache = new Map();
 const attachmentCache = new Map();
 const textureLoader = new THREE.TextureLoader();
 
+// Whether an image has no see-through texel at all: a texture saved without its alpha
+const probe = document.createElement("canvas");
+probe.width = probe.height = 32;
+function isOpaque(image) {
+  try {
+    const context = probe.getContext("2d", { willReadFrequently: true });
+    context.clearRect(0, 0, 32, 32);
+    context.drawImage(image, 0, 0, 32, 32);
+    const pixels = context.getImageData(0, 0, 32, 32).data;
+    for (let i = 3; i < pixels.length; i += 4) if (pixels[i] < 250) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function fetchJson(url) {
   return fetch(url)
     .then((res) => (res.ok ? res.json() : null))
@@ -29,6 +45,7 @@ function boneRotation(rotation, target) {
 }
 
 const v1 = new THREE.Vector3();
+const v2 = new THREE.Vector3();
 const q1 = new THREE.Quaternion();
 const q2 = new THREE.Quaternion();
 const scale = new THREE.Vector3();
@@ -83,7 +100,7 @@ export class ParticleManager {
         Promise.all([textureLoader.loadAsync(`${url}.png`).catch(() => null), fetchJson(`${url}.json`)]).then(([texture, sheet]) => {
           if (!texture) return null;
           texture.colorSpace = THREE.SRGBColorSpace;
-          return { texture, sheet };
+          return { texture, sheet, opaque: isOpaque(texture.image) };
         })
       );
     }
@@ -229,8 +246,9 @@ export class ParticleManager {
       const bone = this.bones.get(name);
       if (!bone || !weight) continue;
       bone.updateWorldMatrix(true, false);
-      boneOffset(offset ?? [0, 0, 0], v1).applyMatrix4(bone.matrixWorld);
-      position.addScaledVector(v1, weight);
+      // Its own vector: the caller's position may be v1
+      boneOffset(offset ?? [0, 0, 0], v2).applyMatrix4(bone.matrixWorld);
+      position.addScaledVector(v2, weight);
       weightSum += weight;
       if (first) {
         bone.getWorldQuaternion(q2);

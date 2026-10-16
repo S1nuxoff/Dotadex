@@ -11,9 +11,49 @@ const toCamera = new THREE.Vector3();
 // value, or the default for anything that varies
 const num = (value, fallback) => (typeof value === "number" && Number.isFinite(value) ? value : typeof value?.m_flLiteralValue === "number" ? value.m_flLiteralValue : fallback);
 
-// The texture a renderer draws, and its sheet of frames
+// The texture a renderer draws, and its sheet of frames; none where the first layer is a
+// gradient in place of a texture (drawn here it would be a square)
 function textureOf(def) {
-  return def.m_vecTexturesInput?.[0]?.m_hTexture ?? def.m_hTexture ?? null;
+  const layer = def.m_vecTexturesInput?.[0];
+  if (layer?.m_bReplaceTextureWithGradient) return null;
+  return layer?.m_hTexture ?? def.m_hTexture ?? null;
+}
+
+// A layer that recolors the texture: its brightness looked up in a gradient
+function lookupOf(def) {
+  const layer = (def.m_vecTexturesInput ?? []).find((input) => input.m_nTextureType === "SPRITECARD_TEXTURE_1D_COLOR_LOOKUP" && input.m_bReplaceTextureWithGradient);
+  const stops = layer?.m_Gradient?.m_Stops;
+  if (!stops?.length) return null;
+  const sorted = [...stops].sort((a, b) => a.m_flPosition - b.m_flPosition);
+  const data = new Uint8Array(256 * 4);
+  for (let x = 0; x < 256; x++) {
+    const t = x / 255;
+    let i = 0;
+    while (i < sorted.length - 1 && sorted[i + 1].m_flPosition < t) i++;
+    const a = sorted[i];
+    const b = sorted[Math.min(i + 1, sorted.length - 1)];
+    const span = b.m_flPosition - a.m_flPosition;
+    const k = span > 0 ? Math.min(Math.max((t - a.m_flPosition) / span, 0), 1) : 0;
+    for (let c = 0; c < 3; c++) data[x * 4 + c] = Math.round((a.m_Color[c] ?? 0) + ((b.m_Color[c] ?? 0) - (a.m_Color[c] ?? 0)) * k);
+    data[x * 4 + 3] = 255;
+  }
+  const texture = new THREE.DataTexture(data, 256, 1);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = texture.minFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+// The texture's alpha from its brightness: asked for by the channel mix, or for a texture
+// without alpha drawn over what is behind (a dark texel must not cover it)
+function useTexture(def, mat, loaded) {
+  mat.uniforms.uMap.value = loaded.texture;
+  mat.uniforms.uHasMap.value = 1;
+  const channels = def.m_vecTexturesInput?.[0]?.m_nTextureChannels ?? "";
+  const over = mat.uniforms.uMod.value < 0.5 && mat.blendDst === THREE.OneMinusSrcAlphaFactor;
+  mat.uniforms.uAlphaFromColor.value = /RGBALPHA/.test(channels) || (loaded.opaque && over) ? 1 : 0;
+  // Only the alpha of the texture counts
+  mat.uniforms.uWhite.value = /MIX_A($|_)/.test(channels.replace("SPRITECARD_TEXTURE_CHANNEL_", "")) ? 1 : 0;
 }
 
 function blendingOf(def, material) {
@@ -155,6 +195,10 @@ const SPRITE_VERTEX = /* glsl */ `
 const FRAGMENT = /* glsl */ `
   uniform sampler2D uMap;
   uniform float uHasMap;
+  uniform sampler2D uLookup;
+  uniform float uHasLookup;
+  uniform float uAlphaFromColor;
+  uniform float uWhite;
   uniform float uOverbright;
   uniform float uHalf;
   uniform float uMod;
@@ -163,6 +207,10 @@ const FRAGMENT = /* glsl */ `
   varying vec4 vColor;
   void main() {
     vec4 texel = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0);
+    float bright = max(texel.r, max(texel.g, texel.b));
+    if (uAlphaFromColor > 0.5) texel.a *= bright;
+    if (uWhite > 0.5) texel.rgb = vec3(1.0);
+    if (uHasLookup > 0.5) texel.rgb = texture2D(uLookup, vec2(clamp(bright, 0.0, 1.0), 0.5)).rgb;
     float alpha = texel.a * vColor.a;
     if (uMod > 0.5) {
       // Mid grey where the particle is see-through, so it leaves what is behind as it is
@@ -210,6 +258,10 @@ function material(def, vertexShader, orientation) {
     uniforms: {
       uMap: { value: null },
       uHasMap: { value: 0 },
+      uLookup: { value: null },
+      uHasLookup: { value: 0 },
+      uAlphaFromColor: { value: 0 },
+      uWhite: { value: 0 },
       uOverbright: { value: num(def.m_flOverbrightFactor, 1) },
       uHalf: { value: 1 },
       uMod: { value: 0 },
@@ -225,6 +277,11 @@ function material(def, vertexShader, orientation) {
     depthTest: !def.m_bDisableZBuffering,
   });
   blendingOf(def, result);
+  const lookup = lookupOf(def);
+  if (lookup) {
+    result.uniforms.uLookup.value = lookup;
+    result.uniforms.uHasLookup.value = 1;
+  }
   if (flat) {
     result.blending = THREE.NormalBlending;
   }
@@ -269,13 +326,14 @@ function quads(def, system, trail) {
   mesh.visible = false;
 
   let sheet = null;
+  let ready = false;
   const texture = textureOf(def);
   if (texture) {
     system.host.loadTexture(texture).then((loaded) => {
       if (!loaded) return;
       sheet = loaded.sheet;
-      mat.uniforms.uMap.value = loaded.texture;
-      mat.uniforms.uHasMap.value = 1;
+      ready = true;
+      useTexture(def, mat, loaded);
     });
   }
   const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;
@@ -289,7 +347,7 @@ function quads(def, system, trail) {
     object: mesh,
     render(system) {
       const n = system.count;
-      mesh.visible = n > 0 && (!texture || sheet !== null);
+      mesh.visible = n > 0 && ready;
       geometry.instanceCount = n;
       if (!mesh.visible) return;
       const p = system.float(0);
@@ -379,14 +437,15 @@ function rope(def, system) {
   mesh.renderOrder = 10;
   mesh.visible = false;
   let sheet = null;
+  let ready = false;
   const texture = textureOf(def);
   if (texture) {
     system.host.loadTexture(texture).then((loaded) => {
       if (!loaded) return;
       sheet = loaded.sheet;
+      ready = true;
       loaded.texture.wrapS = loaded.texture.wrapT = THREE.RepeatWrapping;
-      mat.uniforms.uMap.value = loaded.texture;
-      mat.uniforms.uHasMap.value = 1;
+      useTexture(def, mat, loaded);
     });
   }
   const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;
@@ -402,7 +461,7 @@ function rope(def, system) {
     object: mesh,
     render(system, camera) {
       const n = system.count;
-      mesh.visible = n > 1 && (!texture || sheet !== null);
+      mesh.visible = n > 1 && ready;
       if (!mesh.visible) return;
       const p = system.float(0);
       const tint = system.float(6);
@@ -460,8 +519,9 @@ const kept = (kind, def) => {
 };
 
 // Renderers drawn nowhere here: refraction bends what is behind through a normal map (drawn as
-// a picture it is a pink square), and some only feed the game's bloom
-const drawn = (def) => !def.m_bRefract && !def.m_bOnlyRenderInEffectsBloomPass;
+// a picture it is a pink square), some only feed the game's bloom, and one without a texture
+// would be a bare square
+const drawn = (def) => !def.m_bRefract && !def.m_bOnlyRenderInEffectsBloomPass && textureOf(def) !== null;
 
 export const RENDERERS = {
   C_OP_RenderSprites: (def, system) => (drawn(def) && kept("sprites", def) ? quads(def, system, false) : {}),

@@ -407,6 +407,8 @@ const veilShader = {
 export class Stage {
   constructor(canvas) {
     this.canvas = canvas;
+    // While developing, the stage is at hand in the console
+    if (import.meta.env.DEV) window.__stage = this;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -508,6 +510,12 @@ export class Stage {
       blendDstAlpha: THREE.OneFactor,
     });
     this.composer.addPass(this.bloom);
+    // The particles after the bloom, over the frame and against its depth: their glow is in
+    // their textures, and the bloom made each bright one a halo far larger than the game's
+    this.particleScene = new THREE.Scene();
+    const particlePass = new RenderPass(this.particleScene, this.camera);
+    particlePass.clear = false;
+    this.composer.addPass(particlePass);
     // The materials' own halos (see createGlowMaterial): the model drawn again with only its
     // glow, everything else black so it still hides what is behind it, then blurred
     this.glowComposer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
@@ -1505,6 +1513,9 @@ export class Stage {
     // While developing, ?nobloom draws the frame without the bloom and the halos
     if (import.meta.env.DEV && window.location.search.includes("nobloom")) {
       this.renderer.render(this.scene, this.camera);
+      this.renderer.autoClear = false;
+      this.renderer.render(this.particleScene, this.camera);
+      this.renderer.autoClear = true;
       return;
     }
     this.renderGlow();
@@ -1603,7 +1614,7 @@ export class Stage {
       window.addEventListener("keydown", this.probeKey);
     }
     if (!this.particles) {
-      this.particles = new ParticleManager(this.scene, base);
+      this.particles = new ParticleManager(this.particleScene, base);
       if (this.group) {
         this.particles.setModel(this.group, this.modelUrls);
       }

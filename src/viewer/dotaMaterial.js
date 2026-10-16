@@ -366,6 +366,11 @@ export function createDotaMaterial(original, vmat, textures) {
   });
   material.name = original.name;
   material.userData.glow = createGlowMaterial(vmat, textures, material.uniforms.tColor.value, material.side);
+  // A material fully cloaked is not seen in the game, only what its effects draw (Io's body)
+  if (int.F_ENABLE_CLOAK && (float.g_flMaterialCloakFactor ?? 0) >= 0.99) {
+    material.visible = false;
+    if (material.userData.glow) material.userData.glow.visible = false;
+  }
   return material;
 }
 

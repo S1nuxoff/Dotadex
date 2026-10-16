@@ -209,7 +209,7 @@ function useHeroLine(catalog, heroId, language) {
   return { attribute, roles: (hero.Role ?? "").split(",").filter(Boolean) };
 }
 
-export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
+export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, portrait = null, portraitShot = "default", outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -319,6 +319,11 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   useEffect(() => stageRef.current.setSpeed(speed), [speed]);
   useEffect(() => stageRef.current.setFrameShift(frameShift), [frameShift]);
   useEffect(() => stageRef.current.setLoadout(loadout), [loadout]);
+  // The game's pedestal and camera for the hero on its page
+  useEffect(
+    () => stageRef.current.setPortrait(loadout ? portrait : null, loadout && portrait ? `${catalog.modelsBase}${portrait.pedestal}` : null, portraitShot),
+    [loadout, portrait, portraitShot, catalog.modelsBase]
+  );
 
   // Casting and emotes from the hero page: an animation, the ability's sound, a voice line
   useEffect(() => {

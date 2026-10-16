@@ -19,6 +19,8 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 // Loaded models are kept, switching back and forth does not download them again
 const cache = new Map();
 const loader = new GLTFLoader();
+// The models are exported in metres, the game's positions are in its units (inches)
+const SOURCE_TO_METRES = 0.0254;
 
 // Starts downloading models ahead of time (the pointer resting on a hero in the list), so
 // they are ready, or nearly, when picked
@@ -848,8 +850,12 @@ export class Stage {
 
   // The pedestal and its particles, unless a scene of the game is shown
   setLoadout(on) {
+    const changed = on !== this.loadout;
     this.loadout = on;
     this.updateShowcase();
+    if (changed && this.group) {
+      this.frameModel();
+    }
   }
 
   setShowcase(on) {
@@ -857,11 +863,46 @@ export class Stage {
     this.updateShowcase();
   }
 
+  // The hero's page scene as the game sets it (loadout_portraits.json): the pedestal it stands on
+  // and the cameras of the page, the set picker and each slot. shot picks the camera.
+  setPortrait(portrait, pedestalUrl, shot = "default") {
+    const changed = portrait !== this.portrait || shot !== this.portraitShot;
+    this.portrait = portrait;
+    this.portraitShot = shot;
+    if (pedestalUrl !== this.pedestalUrl) {
+      this.pedestalUrl = pedestalUrl;
+      if (this.pedestal) {
+        this.scene.remove(this.pedestal);
+        this.pedestal = null;
+      }
+      if (pedestalUrl) {
+        loader.loadAsync(pedestalUrl).then(
+          (gltf) => {
+            if (this.pedestalUrl !== pedestalUrl) {
+              return;
+            }
+            this.pedestal = gltf.scene;
+            this.scene.add(this.pedestal);
+            this.updateShowcase();
+          },
+          () => {}
+        );
+      }
+    }
+    this.updateShowcase();
+    if (changed && this.group) {
+      this.frameModel();
+    }
+  }
+
   // The pedestal and its smoke on their own; behind a model in a scene of the game, only the
   // embers and the haze, with fog that sinks the scene's distance into the dark
   updateShowcase() {
-    // A hero's page as the game has it now: the hero alone with a soft shadow, over the page's
-    // own backdrop; no rocks, embers or fog
+    if (this.pedestal) {
+      this.pedestal.visible = Boolean(this.loadout && this.portrait);
+    }
+    // A hero's page as the game has it now: the hero on its pedestal with a soft shadow, over the
+    // page's own backdrop; no rocks, embers or fog
     if (this.loadout) {
       this.effects.group.visible = false;
       this.rockStage.group.visible = false;
@@ -985,7 +1026,48 @@ export class Stage {
 
   // Fits the camera to the model, gliding there unless reduced motion is on
   frameModel(immediate = false) {
+    // On a hero's page, the game's own camera for the hero: Source units and axes (x ahead of the
+    // hero, y to its left, z up) to the scene's metres with y up and the hero facing +z
+    const portrait = this.loadout && this.group && (this.portrait?.cameras?.[this.portraitShot] ?? this.portrait?.cameras?.default);
+    if (portrait) {
+      const toScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
+      const [pitch, yaw] = portrait.angles.map((angle) => THREE.MathUtils.degToRad(angle));
+      const position = toScene(portrait.position);
+      const direction = toScene([Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)]).normalize();
+      // Aimed at the point of the view nearest the hero's upright axis
+      const across = Math.hypot(position.x, position.z);
+      const target = position.clone().add(direction.clone().multiplyScalar(across / Math.max(Math.hypot(direction.x, direction.z), 0.01)));
+      this.camera.fov = portrait.fov;
+      this.camera.near = across / 100;
+      this.camera.far = across * 20;
+      this.camera.updateProjectionMatrix();
+      this.controls.minDistance = across * 0.3;
+      this.controls.maxDistance = across * 3;
+      this.group.position.y = 0;
+      if (immediate || reducedMotion.matches || !this.framedOnce) {
+        this.tween = null;
+        this.controls.target.copy(target);
+        this.camera.position.copy(position);
+        return;
+      }
+      this.tween = {
+        start: performance.now(),
+        duration: 700,
+        fromTarget: this.controls.target.clone(),
+        fromPosition: this.camera.position.clone(),
+        target,
+        position,
+        lift: 0,
+        sweep: 0,
+      };
+      return;
+    }
     const shot = this.useSceneCamera && this.sceneLook?.camera;
+    // Back from a hero page's camera to the stage's own lens
+    if (!shot && this.camera.fov !== 28) {
+      this.camera.fov = 28;
+      this.camera.updateProjectionMatrix();
+    }
     if (shot) {
       // Source gives the horizontal field of view of a 4:3 screen
       this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(shot.fov / 2)) * 0.75));

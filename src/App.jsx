@@ -171,6 +171,16 @@ export default function App() {
   const [wardrobe, setWardrobe] = useState(false);
   // Where CHANGE OUTFIT opens: the full sets, or the slot whose tile was clicked
   const [pickerStart, setPickerStart] = useState("sets");
+  // Each hero's page scene as the game sets it: pedestal, light, cameras
+  const [portraits, setPortraits] = useState({});
+  useEffect(() => {
+    if (!base) {
+      return;
+    }
+    fetch(`${base.modelsBase}data/loadout_portraits.json`)
+      .then((res) => (res.ok ? res.json() : {}))
+      .then(setPortraits, () => {});
+  }, [base]);
   // Another hero opens on its page, not in the picker left open for the last one
   const routeHero = route?.type === "hero" ? route.id : null;
   useEffect(() => setWardrobe(false), [routeHero]);
@@ -383,6 +393,8 @@ export default function App() {
       hideTitle={route.type === "hero" && section.id === "heroes"}
       loadout={route.type === "hero" && section.id === "heroes"}
       frameShift={route.type === "hero" && section.id === "heroes" && wardrobe ? 0.26 : 0}
+      portrait={outfit?.hero ? portraits[`npc_dota_hero_${outfit.hero}`] ?? null : null}
+      portraitShot={wardrobe ? "econ_set_preview" : "default"}
       outfit={outfit}
       urls={urls}
       onStyle={(style) => open({ ...route, style })}

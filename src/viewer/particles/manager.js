@@ -40,6 +40,9 @@ function boneRotation(rotation, target) {
   return target.set(rotation[0] ?? 0, rotation[1] ?? 0, rotation[2] ?? 0, rotation[3] ?? 1);
 }
 
+// Pᵀ, the scene's axes back to the game's, as a turn
+const TO_SOURCE_AXES = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().set(0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1));
+
 const v1 = new THREE.Vector3();
 const v2 = new THREE.Vector3();
 const q1 = new THREE.Quaternion();
@@ -248,7 +251,10 @@ export class ParticleManager {
       weightSum += weight;
       if (first) {
         bone.getWorldQuaternion(q2);
-        quaternion.copy(q2).multiply(boneRotation(rotation ?? [0, 0, 0, 1], q1.clone()));
+        // The bone's axes are the game's, so its turn is put in the scene's terms the other way
+        // round from the model's (whose axes are the scene's): turned back by the axes'
+        // permutation here, as the control point takes it through quaternionToSource
+        quaternion.copy(q2).multiply(boneRotation(rotation ?? [0, 0, 0, 1], q1.clone())).multiply(TO_SOURCE_AXES);
         first = false;
       }
     }

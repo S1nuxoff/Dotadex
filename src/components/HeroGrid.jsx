@@ -149,7 +149,9 @@ function HeroCard({ hero, name, portrait, video, state, onOpen, onPrefetch }) {
   );
 }
 
-// Plays once it can, over the still portrait, so a slow or missing video leaves the portrait
+// Plays once it can, over the still portrait, so a slow or missing video leaves the portrait.
+// The game keeps these 256x256, squeezed; drawn stretched to the card, as the game does, they
+// come out in the portrait's proportions
 function HeroMovie({ src }) {
   const [ready, setReady] = useState(false);
   return (
@@ -160,7 +162,7 @@ function HeroMovie({ src }) {
       muted
       playsInline
       onCanPlay={() => setReady(true)}
-      className={`absolute inset-0 size-full object-cover transition-opacity duration-150 ${ready ? "opacity-100" : "opacity-0"}`}
+      className={`absolute inset-0 size-full object-fill transition-opacity duration-150 ${ready ? "opacity-100" : "opacity-0"}`}
     />
   );
 }

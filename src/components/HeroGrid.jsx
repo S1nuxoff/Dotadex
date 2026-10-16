@@ -115,7 +115,7 @@ function SortPicker({ value, options, onChange, label }) {
   );
 }
 
-function HeroCard({ hero, name, portrait, video, state, onOpen, onPrefetch }) {
+function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetch }) {
   const [hovered, setHovered] = useState(false);
   return (
     <li className="relative h-[83px] w-[51px] hover:z-20">
@@ -143,10 +143,39 @@ function HeroCard({ hero, name, portrait, video, state, onOpen, onPrefetch }) {
           <img src={portrait} alt="" className="absolute inset-0 size-full object-cover" />
           {hovered && <HeroMovie src={video} />}
           <span className="absolute inset-x-0 bottom-0 bg-black/80 px-[4px] pt-[5px] pb-[2px] text-center text-[16px] leading-[20px] tracking-[2px] text-white uppercase">{name}</span>
+          {/* Where the game puts its event tokens, what does not change: attribute, attack, complexity */}
+          <span className="absolute top-full left-1/2 mt-[4px] flex -translate-x-1/2 gap-[4px]">
+            {facts.map((fact) => (
+              <span key={fact.key} className="hero-card-fact grid h-[30px] w-[26px] place-items-center">
+                {fact.icon}
+              </span>
+            ))}
+          </span>
         </span>
       </button>
     </li>
   );
+}
+
+// The three tiles under the hover card
+function factsOf({ attribute, info }) {
+  const ranged = (info?.AttackCapabilities ?? "").includes("RANGED");
+  const level = Number(info?.Complexity) || 1;
+  const mask = (icon) => ({ mask: `url(${ICONS}${icon}.png) center / contain no-repeat`, WebkitMask: `url(${ICONS}${icon}.png) center / contain no-repeat` });
+  return [
+    { key: "attribute", icon: <img src={`${ICONS}${attribute}.png`} alt="" className="size-[18px]" /> },
+    { key: "attack", icon: <span className="size-[20px] bg-[#d6e2f0]" style={mask(ranged ? "ranges" : "melee")} /> },
+    {
+      key: "complexity",
+      icon: (
+        <span className="flex flex-col items-center gap-[2px]">
+          {[3, 2, 1].map((step) => (
+            <span key={step} className={`size-[5px] rotate-45 ${step <= level ? "bg-[#d6e2f0]" : "border border-[#d6e2f0]/40"}`} />
+          ))}
+        </span>
+      ),
+    },
+  ];
 }
 
 // Plays once it can, over the still portrait, so a slow or missing video leaves the portrait.
@@ -238,6 +267,7 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
       hero={entry.hero}
       name={entry.name}
       portrait={imageUrl(catalog.modelsBase, `heroes/selection/npc_dota_hero_${entry.hero.id}`)}
+      facts={factsOf(entry)}
       video={`${catalog.modelsBase}videos/heroes/npc_dota_hero_${entry.hero.id}.webm`}
       state={stateOf(entry)}
       onOpen={onOpen}

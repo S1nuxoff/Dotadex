@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
-  Box,
   Check,
   ChevronUp,
   Download,
@@ -12,7 +11,6 @@ import {
   RotateCw,
   Search,
   Shirt,
-  Sparkles,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -65,16 +63,6 @@ const NIGHT = {
   points: [],
 };
 
-// ?shading=plain in the link, or the last choice on this device
-function initialShading() {
-  const fromLink = new URLSearchParams(window.location.search).get("shading");
-  let saved = null;
-  try {
-    saved = localStorage.getItem("shading");
-  } catch {}
-  // Plain is closer to the game than our take on its hero shader
-  return [fromLink, saved].find((value) => value === "dota" || value === "plain") ?? "plain";
-}
 
 function AnimationPicker({ names, current, onPick }) {
   const [open, setOpen] = useState(false);
@@ -238,7 +226,6 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   const [current, setCurrent] = useState(null);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [shading, setShading] = useState(initialShading);
   const [copied, setCopied] = useState(false);
   const [attempt, setAttempt] = useState(0);
   // On from the start; browsers let it play once the page has been clicked
@@ -300,12 +287,6 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlsKey, attempt]);
 
-  useEffect(() => {
-    stageRef.current.setShading(shading);
-    try {
-      localStorage.setItem("shading", shading);
-    } catch {}
-  }, [shading]);
   useEffect(() => stageRef.current.setPaused(paused), [paused]);
   // The game's light and camera for the scene on screen
   useEffect(() => {
@@ -556,15 +537,6 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
           ))}
         </div>
             <div className="ml-auto flex items-center gap-2">
-        <Toggle
-          label="Shading"
-          value={shading}
-          onChange={setShading}
-          options={[
-            { value: "dota", label: "Dota", icon: <Sparkles className="size-3.5" /> },
-            { value: "plain", label: "Plain", icon: <Box className="size-3.5" /> },
-          ]}
-        />
         <IconButton label={sound ? "Mute animation sounds" : "Play animation sounds"} onClick={() => {
             unlockSound();
             setSound(!sound);

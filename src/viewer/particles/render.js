@@ -172,10 +172,10 @@ const FRAGMENT = /* glsl */ `
       return;
     }
     vec4 color = vec4(texel.rgb * vColor.rgb * uOverbright * uHalf, alpha);
-    // Kept finite and within what the bloom can take: an infinite or broken value spreads into
-    // black squares through the bloom's blur on graphics cards
+    // Kept finite and little above white: the frame's bloom starts at 1.3, and an overbright
+    // particle let through spreads into a halo far bigger than the game's
     if (any(isnan(color)) || color.a < 0.002) discard;
-    vec3 rgb = clamp(color.rgb, 0.0, 8.0);
+    vec3 rgb = clamp(color.rgb, 0.0, 1.5);
     float a = clamp(color.a, 0.0, 1.0);
     gl_FragColor = vec4(uPremultiply > 0.5 ? rgb * a : rgb, a);
     #include <colorspace_fragment>
@@ -459,8 +459,12 @@ const kept = (kind, def) => {
   return words.includes(kind) || words.includes(blend) || words.includes(`${kind}-${blend}`) || words.some((word) => word.length > 3 && texture.includes(word));
 };
 
+// Renderers drawn nowhere here: refraction bends what is behind through a normal map (drawn as
+// a picture it is a pink square), and some only feed the game's bloom
+const drawn = (def) => !def.m_bRefract && !def.m_bOnlyRenderInEffectsBloomPass;
+
 export const RENDERERS = {
-  C_OP_RenderSprites: (def, system) => (kept("sprites", def) ? quads(def, system, false) : {}),
-  C_OP_RenderTrails: (def, system) => (kept("trails", def) ? quads(def, system, true) : {}),
-  C_OP_RenderRopes: (def, system) => (kept("ropes", def) ? rope(def, system) : {}),
+  C_OP_RenderSprites: (def, system) => (drawn(def) && kept("sprites", def) ? quads(def, system, false) : {}),
+  C_OP_RenderTrails: (def, system) => (drawn(def) && kept("trails", def) ? quads(def, system, true) : {}),
+  C_OP_RenderRopes: (def, system) => (drawn(def) && kept("ropes", def) ? rope(def, system) : {}),
 };

@@ -21,6 +21,8 @@ const cache = new Map();
 const loader = new GLTFLoader();
 // The models are exported in metres, the game's positions are in its units (inches)
 const SOURCE_TO_METRES = 0.0254;
+// Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
+const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
 
 // Starts downloading models ahead of time (the pointer resting on a hero in the list), so
 // they are ready, or nearly, when picked
@@ -818,6 +820,9 @@ export class Stage {
       this.scene.environmentIntensity = 0.6;
       this.camera.fov = 28;
       this.camera.updateProjectionMatrix();
+      // A hero's page keeps the game's light for the hero
+      this.portraitLit = false;
+      this.updatePortraitLight();
       this.frameModel();
       return;
     }
@@ -849,9 +854,59 @@ export class Stage {
   }
 
   // The pedestal and its particles, unless a scene of the game is shown
+  // The hero page's light as the game sets it for the hero: its key light from where the game puts
+  // it, in its color, the ambient in the hero's own, and a sun casting the hero's shadow on the pedestal
+  updatePortraitLight() {
+    const on = Boolean(this.loadout && this.portrait?.light && !this.sceneLook);
+    if (on && !this.portraitSun) {
+      this.portraitSun = new THREE.DirectionalLight(0xffffff, 0);
+      this.portraitSun.castShadow = true;
+      this.portraitSun.shadow.mapSize.set(2048, 2048);
+      this.portraitSun.shadow.bias = -0.0005;
+      this.portraitSun.shadow.normalBias = 0.02;
+      Object.assign(this.portraitSun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 0.1, far: 40 });
+      this.portraitSun.target.position.set(0, 1, 0);
+      this.scene.add(this.portraitSun, this.portraitSun.target);
+    }
+    if (this.portraitSun) {
+      this.portraitSun.visible = on;
+    }
+    if (on) {
+      const { light, ambient } = this.portrait;
+      const color = (values, scale) => new THREE.Color(...(values ?? [1, 1, 1]).map((value) => value * scale));
+      const strength = THREE.MathUtils.clamp(light.scale ?? 1, 1, 2.5);
+      const look = {
+        key: color(light.color, 1.1 * strength),
+        fill: color(ambient.color, (ambient.scale ?? 1) * 0.12),
+        sky: color(ambient.color, (ambient.scale ?? 1) * 0.1),
+        ground: color(ambient.color, (ambient.scale ?? 1) * 0.05),
+      };
+      setDotaLighting(look);
+      this.portraitDir = sourceToScene(light.position).normalize();
+      this.portraitSun.color.copy(look.key);
+      this.portraitSun.intensity = 2;
+      this.portraitSun.position.copy(this.portraitDir).multiplyScalar(15).add(this.portraitSun.target.position);
+      this.key.intensity = 0;
+      this.hemi.color.copy(look.sky);
+      this.hemi.groundColor.copy(look.ground);
+      this.hemi.intensity = 2;
+      this.scene.environmentIntensity = 0.2;
+      this.portraitLit = true;
+    } else if (this.portraitLit) {
+      this.portraitLit = false;
+      setDotaLighting(null);
+      this.key.intensity = 2.2;
+      this.hemi.color.set(0xb8c4d6);
+      this.hemi.groundColor.set(0x1a1714);
+      this.hemi.intensity = 1.2;
+      this.scene.environmentIntensity = 0.6;
+    }
+  }
+
   setLoadout(on) {
     const changed = on !== this.loadout;
     this.loadout = on;
+    this.updatePortraitLight();
     this.updateShowcase();
     if (changed && this.group) {
       this.frameModel();
@@ -876,12 +931,19 @@ export class Stage {
         this.pedestal = null;
       }
       if (pedestalUrl) {
-        loader.loadAsync(pedestalUrl).then(
+        loadModel(pedestalUrl).then(
           (gltf) => {
             if (this.pedestalUrl !== pedestalUrl) {
               return;
             }
+            // Shaded like the heroes, and taking the hero's shadow
             this.pedestal = gltf.scene;
+            this.applyMaterials(this.pedestal, gltf.userData.textures);
+            this.pedestal.traverse((node) => {
+              if (node.isMesh) {
+                node.receiveShadow = true;
+              }
+            });
             this.scene.add(this.pedestal);
             this.updateShowcase();
           },
@@ -889,6 +951,7 @@ export class Stage {
         );
       }
     }
+    this.updatePortraitLight();
     this.updateShowcase();
     if (changed && this.group) {
       this.frameModel();
@@ -907,13 +970,17 @@ export class Stage {
       this.effects.group.visible = false;
       this.rockStage.group.visible = false;
       this.floor.visible = this.standing !== false;
-      if (this.renderer.shadowMap.enabled) {
-        this.renderer.shadowMap.enabled = false;
+      // Shadows only under the game's own light for the hero
+      const shadows = Boolean(this.portraitLit);
+      if (this.renderer.shadowMap.enabled !== shadows) {
+        this.renderer.shadowMap.enabled = shadows;
         this.scene.traverse((node) => node.isMesh && node.material && (node.material.needsUpdate = true));
       }
-      this.key.intensity = 2.2;
-      this.scene.environmentIntensity = 0.6;
-      this.hemi.intensity = 1.2;
+      if (!this.portraitLit) {
+        this.key.intensity = 2.2;
+        this.scene.environmentIntensity = 0.6;
+        this.hemi.intensity = 1.2;
+      }
       this.scene.fog = null;
       return;
     }
@@ -971,7 +1038,7 @@ export class Stage {
 
   setShading(mode) {
     this.shading = mode;
-    [this.group, this.backdrop].forEach((object) => object?.traverse((node) => {
+    [this.group, this.backdrop, this.pedestal].forEach((object) => object?.traverse((node) => {
       if (node.isMesh) {
         node.material = mode === "dota" ? node.userData.dota : node.userData.pbr;
       }
@@ -1030,10 +1097,9 @@ export class Stage {
     // hero, y to its left, z up) to the scene's metres with y up and the hero facing +z
     const portrait = this.loadout && this.group && (this.portrait?.cameras?.[this.portraitShot] ?? this.portrait?.cameras?.default);
     if (portrait) {
-      const toScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
       const [pitch, yaw] = portrait.angles.map((angle) => THREE.MathUtils.degToRad(angle));
-      const position = toScene(portrait.position);
-      const direction = toScene([Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)]).normalize();
+      const position = sourceToScene(portrait.position);
+      const direction = sourceToScene([Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)]).normalize();
       // Aimed at the point of the view nearest the hero's upright axis
       const across = Math.hypot(position.x, position.z);
       const target = position.clone().add(direction.clone().multiplyScalar(across / Math.max(Math.hypot(direction.x, direction.z), 0.01)));
@@ -1248,6 +1314,8 @@ export class Stage {
 
     if (this.sceneLook) {
       setDotaKeyDir(this.sunDir.clone().transformDirection(this.camera.matrixWorldInverse));
+    } else if (this.portraitLit) {
+      setDotaKeyDir(this.portraitDir.clone().transformDirection(this.camera.matrixWorldInverse));
     }
     stageRim.value.lerp(this.rimTarget, reducedMotion.matches ? 1 : Math.min(delta * 3, 1));
     if (this.tintTarget) {

@@ -32,6 +32,9 @@ function fadeOut(material, fade) {
   }
   material.userData.fades = true;
   material.transparent = true;
+  // Its own program, not the one of the same shader without the fade compiled for the hero
+  const key = material.customProgramCacheKey.bind(material);
+  material.customProgramCacheKey = () => `${key()}|fade`;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uFadeInner = fade.inner;
     shader.uniforms.uFadeOuter = fade.outer;
@@ -658,6 +661,10 @@ export class Stage {
     this.flash = 1;
 
     this.group = group;
+    // A new hero comes in facing ahead, its pedestal with it
+    if (this.pedestal) {
+      this.pedestal.rotation.y = 0;
+    }
     group.traverse((node) => {
       // The model's shadow falls on the rocks
       if (node.isMesh) {
@@ -946,6 +953,9 @@ export class Stage {
     this.turnLocked = locked;
     if (!locked && this.group) {
       this.group.rotation.y = 0;
+      if (this.pedestal) {
+        this.pedestal.rotation.y = 0;
+      }
     }
     if (this.turnListeners) {
       return;
@@ -962,7 +972,11 @@ export class Stage {
       if (last === null || !this.turnLocked || !this.group) {
         return;
       }
+      // The pedestal turns with the hero, as in the game
       this.group.rotation.y += (event.clientX - last) * 0.01;
+      if (this.pedestal) {
+        this.pedestal.rotation.y = this.group.rotation.y;
+      }
       last = event.clientX;
     });
     const stop = () => {
@@ -1010,7 +1024,13 @@ export class Stage {
             // Shaded like the heroes, taking the hero's shadow, and fading into the dark away from
             // the hero as the game's fog hides its edge
             this.pedestal = gltf.scene;
+            this.pedestal.rotation.y = this.group?.rotation.y ?? 0;
             this.applyMaterials(this.pedestal, gltf.userData.textures);
+            // Seen round the hero's feet, gone into the dark well before its edge
+            const size = new THREE.Box3().setFromObject(this.pedestal).getSize(new THREE.Vector3());
+            const radius = Math.max(size.x, size.z) / 2;
+            this.pedestalFade.inner.value = radius * 0.3;
+            this.pedestalFade.outer.value = radius * 0.8;
             this.pedestal.traverse((node) => {
               if (node.isMesh) {
                 node.receiveShadow = true;
@@ -1185,11 +1205,6 @@ export class Stage {
       this.controls.minDistance = across * 0.3;
       this.controls.maxDistance = across * 3;
       this.group.position.y = 0;
-      // The pedestal shows round the hero's feet and sinks into the dark a little further out
-      const footprint = new THREE.Box3().setFromObject(this.group, true).getSize(new THREE.Vector3());
-      const reach = Math.max(footprint.x, footprint.z, 1) * 0.5;
-      this.pedestalFade.inner.value = reach * 1.1;
-      this.pedestalFade.outer.value = reach * 3;
       if (immediate || reducedMotion.matches || !this.framedOnce) {
         this.tween = null;
         this.controls.target.copy(target);

@@ -1494,6 +1494,11 @@ export class Stage {
 
     this.controls.update();
     this.particles?.update(delta, this.camera);
+    // While developing, ?nobloom draws the frame without the bloom and the halos
+    if (import.meta.env.DEV && window.location.search.includes("nobloom")) {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
     this.renderGlow();
     this.composer.render();
   }

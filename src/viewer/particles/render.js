@@ -28,7 +28,14 @@ function blendingOf(def, material) {
     material.blendDstAlpha = THREE.OneFactor;
     material.uniforms.uMod.value = 1;
   } else if (/ADD/.test(mode)) {
-    material.blending = THREE.AdditiveBlending;
+    // Light added to the colors only: the scene's canvas is see-through to the page's backdrop,
+    // and a black texel must not make it opaque (black squares over the backdrop and the hero)
+    material.blending = THREE.CustomBlending;
+    material.blendEquation = THREE.AddEquation;
+    material.blendSrc = THREE.SrcAlphaFactor;
+    material.blendDst = THREE.OneFactor;
+    material.blendSrcAlpha = THREE.ZeroFactor;
+    material.blendDstAlpha = THREE.OneFactor;
   } else {
     material.blending = THREE.NormalBlending;
   }
@@ -162,10 +169,31 @@ const FRAGMENT = /* glsl */ `
   }
 `;
 
+// While developing, ?flatparticles draws every particle as a see-through pink quad, nothing else
+// (=tex the texture alone, =color the particle's color, =alpha its alpha as grey)
+const flatMode = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("flatparticles") : null;
+const flat = flatMode !== null;
+const FLAT = /* glsl */ `
+  uniform sampler2D uMap;
+  varying vec2 vUv;
+  varying vec4 vColor;
+  void main() {
+    ${
+      flatMode === "tex"
+        ? "gl_FragColor = vec4(texture2D(uMap, vUv).rgb, 1.0);"
+        : flatMode === "color"
+        ? "gl_FragColor = vec4(vColor.rgb, 1.0);"
+        : flatMode === "alpha"
+        ? "gl_FragColor = vec4(vec3(vColor.a), 1.0);"
+        : "gl_FragColor = vec4(1.0, 0.2, 0.8, 0.5);"
+    }
+  }
+`;
+
 function material(def, vertexShader, orientation) {
   const result = new THREE.ShaderMaterial({
     vertexShader,
-    fragmentShader: FRAGMENT,
+    fragmentShader: flat ? FLAT : FRAGMENT,
     uniforms: {
       uMap: { value: null },
       uHasMap: { value: 0 },
@@ -183,6 +211,9 @@ function material(def, vertexShader, orientation) {
     depthTest: !def.m_bDisableZBuffering,
   });
   blendingOf(def, result);
+  if (flat) {
+    result.blending = THREE.NormalBlending;
+  }
   return result;
 }
 

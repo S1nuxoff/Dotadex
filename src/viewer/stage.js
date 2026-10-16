@@ -1509,10 +1509,99 @@ export class Stage {
     }
     this.renderGlow();
     this.composer.render();
+    if (import.meta.env.DEV && this.probeRequested) {
+      this.probeRequested = false;
+      this.probeParticles();
+    }
+  }
+
+  // While developing, K: the frame drawn with and without the particles on this graphics card,
+  // and what the particles darkened, by the renderer whose sprite lies there, in the console
+  probeParticles() {
+    const gl = this.renderer.getContext();
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
+    const read = () => {
+      const pixels = new Uint8Array(width * height * 4);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      return pixels;
+    };
+    const group = this.particles?.group;
+    if (!group) return;
+    // The blend state WebGL really has while each particle mesh draws, and its material's
+    const states = [];
+    const names = { 0: "ZERO", 1: "ONE", 768: "SRC_COLOR", 769: "1-SRC_COLOR", 770: "SRC_ALPHA", 771: "1-SRC_ALPHA", 772: "DST_ALPHA", 774: "DST_COLOR" };
+    group.children.forEach((mesh) => {
+      mesh.onAfterRender = () => {
+        const m = mesh.material;
+        states.push(
+          `blend=${gl.isEnabled(gl.BLEND)} src=${names[gl.getParameter(gl.BLEND_SRC_RGB)]} dst=${names[gl.getParameter(gl.BLEND_DST_RGB)]} srcA=${names[gl.getParameter(gl.BLEND_SRC_ALPHA)]} dstA=${names[gl.getParameter(gl.BLEND_DST_ALPHA)]} | material blending=${m.blending} src=${m.blendSrc} dst=${m.blendDst} transparent=${m.transparent} premult=${m.uniforms?.uPremultiply?.value} visible=${mesh.visible} count=${mesh.geometry.instanceCount}`
+        );
+        mesh.onAfterRender = () => {};
+      };
+    });
+    this.renderGlow();
+    this.composer.render();
+    const withParticles = read();
+    group.visible = false;
+    this.renderGlow();
+    this.composer.render();
+    const without = read();
+    group.visible = true;
+    // Each sprite's place on screen, to name what darkened a pixel
+    const quads = [];
+    const v = new THREE.Vector3();
+    for (const effect of this.particles.effects) {
+      const visit = (system) => {
+        system.renderers.forEach((renderer, index) => {
+          const def = (system.def.m_Renderers ?? []).filter((op) => !op.m_bDisableOperator)[index] ?? {};
+          const name = `${def._class?.replace("C_OP_Render", "")}/${(def.m_nOutputBlendMode ?? "ALPHA").replace("PARTICLE_OUTPUT_BLEND_MODE_", "")} ${(def.m_vecTexturesInput?.[0]?.m_hTexture ?? "").split("/").pop()} ${renderer.object?.material?.blending}`;
+          const p = system.float(0);
+          const r = system.float(3);
+          for (let i = 0; i < system.count; i++) {
+            v.set(p[i * 3 + 1] * 0.0254, p[i * 3 + 2] * 0.0254, p[i * 3] * 0.0254).project(this.camera);
+            const size = (r[i] * 0.0254 * this.camera.projectionMatrix.elements[5]) / Math.max(this.camera.position.distanceTo(v.clone().unproject(this.camera)), 0.01);
+            quads.push({ name, x: ((v.x + 1) / 2) * width, y: ((v.y + 1) / 2) * height, half: (size * height) / 2 });
+          }
+        });
+        for (const child of system.children) if (child.system) visit(child.system);
+      };
+      visit(effect.system);
+    }
+    const blame = new Map();
+    let darker = 0;
+    let brighter = 0;
+    let sample = null;
+    for (let y = 0; y < height; y += 2) {
+      for (let x = 0; x < width; x += 2) {
+        const i = (y * width + x) * 4;
+        const change = withParticles[i] + withParticles[i + 1] + withParticles[i + 2] - (without[i] + without[i + 1] + without[i + 2]);
+        if (change > 30) brighter++;
+        if (change < -30) {
+          darker++;
+          sample ??= `at ${x},${y}: with ${[...withParticles.slice(i, i + 4)]} without ${[...without.slice(i, i + 4)]}`;
+          for (const quad of quads) {
+            if (Math.abs(quad.x - x) < quad.half && Math.abs(quad.y - y) < quad.half) blame.set(quad.name, (blame.get(quad.name) ?? 0) + 1);
+          }
+        }
+      }
+    }
+    console.warn(
+      `[particles probe] ${width}x${height}: ${darker} darker, ${brighter} brighter; ${sample ?? ""}\n` +
+        [...new Set(states)].map((state) => `  GL ${state}`).join("\n") +
+        "\n" +
+        [...blame.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => `  ${count}  ${name}`).join("\n")
+    );
   }
 
   // The game's particle effects on the model, systems by their path in the game
   setParticles(base, paths) {
+    if (import.meta.env.DEV && !this.probeKey) {
+      this.probeKey = (event) => {
+        if (event.key === "k" || event.key === "K" || event.code === "KeyK") this.probeRequested = true;
+      };
+      window.addEventListener("keydown", this.probeKey);
+    }
     if (!this.particles) {
       this.particles = new ParticleManager(this.scene, base);
       if (this.group) {

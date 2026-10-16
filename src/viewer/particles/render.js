@@ -18,7 +18,9 @@ function textureOf(def) {
 
 function blendingOf(def, material) {
   const mode = def.m_nOutputBlendMode ?? (def.m_bAdditive ? "PARTICLE_OUTPUT_BLEND_MODE_ADD" : "PARTICLE_OUTPUT_BLEND_MODE_ALPHA");
-  if (/MOD/.test(mode) || def.m_bMod2X) {
+  // The mode's own name, past "PARTICLE_OUTPUT_BLEND_MODE_" (which itself has "MOD" in it)
+  const name = mode.replace("PARTICLE_OUTPUT_BLEND_MODE_", "");
+  if (/^MOD/.test(name) || def.m_bMod2X) {
     // dst × src × 2: the particle darkens and brightens what is behind it, mid grey leaves it
     material.blending = THREE.CustomBlending;
     material.blendEquation = THREE.AddEquation;
@@ -27,7 +29,7 @@ function blendingOf(def, material) {
     material.blendSrcAlpha = THREE.ZeroFactor;
     material.blendDstAlpha = THREE.OneFactor;
     material.uniforms.uMod.value = 1;
-  } else if (/ADD/.test(mode)) {
+  } else if (/ADD/.test(name)) {
     // The shader gives its color already times its alpha; it is added to the colors only, and
     // the see-through canvas's alpha is left as it is (a black texel must not cover anything)
     material.blending = THREE.CustomBlending;
@@ -47,7 +49,7 @@ function blendingOf(def, material) {
     material.blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
     material.uniforms.uPremultiply.value = 1;
   }
-  material.uniforms.uHalf.value = /HALF_BLEND/.test(mode) ? 0.5 : 1;
+  material.uniforms.uHalf.value = /HALF_BLEND/.test(name) ? 0.5 : 1;
 }
 
 // The frame of a particle's sequence at its age, as a uv rectangle of the sheet

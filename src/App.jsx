@@ -171,6 +171,9 @@ export default function App() {
   const [wardrobe, setWardrobe] = useState(false);
   // Where CHANGE OUTFIT opens: the full sets, or the slot whose tile was clicked
   const [pickerStart, setPickerStart] = useState("sets");
+  // Another hero opens on its page, not in the picker left open for the last one
+  const routeHero = route?.type === "hero" ? route.id : null;
+  useEffect(() => setWardrobe(false), [routeHero]);
   const [panelView, setPanelView] = useState("hero");
   // The hero grid, as the game opens on it, always, until a hero is picked
   const [heroGrid, setHeroGrid] = useState(true);

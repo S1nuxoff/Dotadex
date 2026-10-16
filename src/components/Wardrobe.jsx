@@ -645,7 +645,7 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
   };
 
   return (
-    <div className="absolute top-[40px] right-[60px] bottom-[40px] left-[885px] flex flex-col">
+    <div className="pointer-events-auto absolute top-[40px] right-[60px] bottom-[40px] left-[885px] flex flex-col">
       <div className="flex h-[70px] shrink-0 items-center">
         <h2 className="flex-1 truncate text-[34px] text-[#e6ebef]">
           <span className="font-display font-bold tracking-normal">{hero.name}</span>

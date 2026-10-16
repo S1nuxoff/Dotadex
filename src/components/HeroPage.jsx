@@ -379,7 +379,7 @@ export default function HeroPage({ catalog, hero, language, viewer, summary, war
       <div className="pointer-events-none absolute inset-0 flex flex-col" style={{ zoom: scale }}>
         {wardrobeOpen && tab === "loadout" ? (
           // CHANGE OUTFIT takes the page; the model steps to the left meanwhile
-          <div className="pointer-events-auto relative min-h-0 flex-1">{wardrobe}</div>
+          <div className="relative min-h-0 flex-1">{wardrobe}</div>
         ) : (
           <>
             <div className="pointer-events-auto">

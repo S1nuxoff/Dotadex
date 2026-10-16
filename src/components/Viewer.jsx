@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
-  Box,
   Check,
   ChevronUp,
   Download,
@@ -12,7 +11,6 @@ import {
   RotateCw,
   Search,
   Shirt,
-  Sparkles,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -46,15 +44,9 @@ function loadSoundData(modelsBase) {
 
 const SPEEDS = [0.5, 1, 1.5];
 
-// ?shading=plain in the link, or the last choice on this device
+// One look for everything; ?shading=plain in the link shows the plain glTF materials to compare
 function initialShading() {
-  const fromLink = new URLSearchParams(window.location.search).get("shading");
-  let saved = null;
-  try {
-    saved = localStorage.getItem("shading");
-  } catch {}
-  // Plain is closer to the game than our take on its hero shader
-  return [fromLink, saved].find((value) => value === "dota" || value === "plain") ?? "plain";
+  return new URLSearchParams(window.location.search).get("shading") === "plain" ? "plain" : "dota";
 }
 
 function AnimationPicker({ names, current, onPick }) {
@@ -121,7 +113,7 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
   const [current, setCurrent] = useState(null);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [shading, setShading] = useState(initialShading);
+  const [shading] = useState(initialShading);
   const [copied, setCopied] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [sound, setSound] = useState(false);
@@ -172,9 +164,6 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
 
   useEffect(() => {
     stageRef.current.setShading(shading);
-    try {
-      localStorage.setItem("shading", shading);
-    } catch {}
   }, [shading]);
   useEffect(() => stageRef.current.setPaused(paused), [paused]);
   // The game's light and camera for the scene on screen
@@ -242,15 +231,6 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
       )}
 
       <div className="absolute top-4 right-4 flex items-center gap-2">
-        <Toggle
-          label="Shading"
-          value={shading}
-          onChange={setShading}
-          options={[
-            { value: "dota", label: "Dota", icon: <Sparkles className="size-3.5" /> },
-            { value: "plain", label: "Plain", icon: <Box className="size-3.5" /> },
-          ]}
-        />
         <IconButton label={sound ? "Mute animation sounds" : "Play animation sounds"} onClick={() => {
             unlockSound();
             setSound(!sound);

@@ -102,9 +102,11 @@ function dotaMaterialFor(material, textures) {
   if (!vmat || vmat.ShaderName !== "hero.vfx") {
     return null;
   }
+  // Found by name, or else from the glTF slots Source2Viewer put them in
+  const slots = { g_tColor: material.map, g_tNormal: material.normalMap, g_tMasks1: material.emissiveMap };
   const byParam = {};
   for (const [param, name] of Object.entries(vmat.TextureParams ?? {})) {
-    const texture = textures[name];
+    const texture = textures[name] ?? slots[param];
     if (texture) {
       texture.colorSpace = param === "g_tColor" || param === "g_tCubeMap" || param === "g_tDetail" || param === "g_tDetail2" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
       texture.needsUpdate = true;

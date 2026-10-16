@@ -170,8 +170,8 @@ export default function App() {
   const [browse, setBrowse] = useState(false);
   const [wardrobe, setWardrobe] = useState(false);
   const [panelView, setPanelView] = useState("hero");
-  // The hero grid, as the game opens on it, until a hero is picked
-  const [heroGrid, setHeroGrid] = useState(() => !window.location.hash);
+  // The hero grid, as the game opens on it, always, until a hero is picked
+  const [heroGrid, setHeroGrid] = useState(true);
   const wide = useWide();
   const [language, setLanguage] = useLanguage();
 
@@ -187,7 +187,9 @@ export default function App() {
         setBase(loaded);
         setExported(done);
         setRoute(first);
-        setTab(tabFor(ready, first));
+        // The site opens on the hero grid whatever the link; the hero or item of the link waits
+        // behind it
+        window.history.replaceState(null, "", window.location.pathname);
       })
       .catch((reason) => setError(reason.message));
   }, []);

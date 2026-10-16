@@ -270,8 +270,9 @@ export function createDotaMaterial(original, vmat, textures) {
       tFresnelWarp: { value: pick("g_tFresnelWarp") },
       tCubeMap: { value: pick("g_tCubeMap") },
       uHasNormal: { value: pick("g_tNormal") ? 1 : 0 },
-      uHasMasks1: { value: int.F_MASKS_1 && pick("g_tMasks1") ? 1 : 0 },
-      uHasMasks2: { value: int.F_MASKS_2 && pick("g_tMasks2") ? 1 : 0 },
+      // A mask the material has is used, whether or not its flag made it into the data
+      uHasMasks1: { value: pick("g_tMasks1") ? 1 : 0 },
+      uHasMasks2: { value: pick("g_tMasks2") ? 1 : 0 },
       uHasDiffuseWarp: { value: int.F_DIFFUSE_WARP && pick("g_tDiffuseWarp") ? 1 : 0 },
       uHasFresnelWarp: { value: pick("g_tFresnelWarp") ? 1 : 0 },
       uHasCubeMap: { value: pick("g_tCubeMap") ? 1 : 0 },
@@ -292,7 +293,7 @@ export function createDotaMaterial(original, vmat, textures) {
       },
       uAlphaTest: { value: int.F_ALPHA_TEST ? 0.5 : 0 },
       // The flag is often not set on materials whose mask still glows in the game
-      uSelfIllum: { value: int.F_MASKS_1 || float.g_flSelfIllumBlendToFull ? 1 : 0 },
+      uSelfIllum: { value: pick("g_tMasks1") || float.g_flSelfIllumBlendToFull ? 1 : 0 },
       // "Blend to full" turns a mask all the way on for the whole material
       uSelfIllumToFull: { value: float.g_flSelfIllumBlendToFull ?? 0 },
       uDetailToFull: { value: float.g_flDetailBlendToFull ?? 0 },

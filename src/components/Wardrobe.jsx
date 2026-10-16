@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ChevronLeft, ChevronRight, Layers, RotateCcw, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Layers, RotateCcw, Search, Shuffle, X } from "lucide-react";
 import {
   SORTS,
+  formatPrice,
   heroPortrait,
   heroSlots,
   personaOf,
@@ -566,5 +567,190 @@ export function EquippedSummary({ catalog, outfit, onChange }) {
         Change outfit
       </button>
     </div>
+  );
+}
+
+// CHANGE OUTFIT as the game has it now: the hero's name and what is picked over a column of the
+// sets and every slot, each with what it wears now, and the cards of that slot in a grid beside
+// it; the model stands on the left meanwhile. Sizes in the game's pixels, on a 1920 wide screen.
+export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquipSet, onReset, onClose }) {
+  const hero = catalog.heroesById[outfit.hero];
+  const slots = useMemo(() => heroSlots(catalog, hero.id, outfit.persona ?? 0), [catalog, hero, outfit.persona]);
+  const sets = useMemo(
+    () => catalog.sets.filter((set) => set.hero === hero.id && personaOf(set.items.map((id) => catalog.itemsById[id]).find(Boolean)?.slot) === (outfit.persona ?? 0)),
+    [catalog, hero, outfit.persona]
+  );
+  const [selected, setSelected] = useState(start === "sets" && sets.length === 0 ? slots[0]?.slot : start);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("newest");
+  const words = query.trim().toLowerCase();
+  const wornSet = sets.find((set) => set.items.every((id) => outfit.slots[catalog.itemsById[id]?.slot]?.id === id));
+  const changed = Object.keys(outfit.slots).length > 0;
+
+  const rows = [
+    ...(sets.length ? [{ id: "sets", name: "Full sets", image: wornSet?.icon ? itemIcon(wornSet) : heroCrop(hero) }] : []),
+    ...slots.map((slot) => {
+      const chosen = outfit.slots[slot.slot];
+      const item = chosen ? catalog.itemsById[chosen.id] : slot.defaultItem;
+      return { id: slot.slot, name: slotName(slot.slot), image: item?.icon ? itemIcon(item) : heroCrop(hero) };
+    }),
+  ];
+
+  const first = (set) => catalog.itemsById[set.items.find((id) => catalog.itemsById[id])];
+  let cards = [];
+  if (selected === "sets") {
+    const list = sets.filter((set) => !words || set.name.toLowerCase().includes(words));
+    const ordered =
+      sort === "name"
+        ? [...list].sort((a, b) => a.name.localeCompare(b.name))
+        : sort === "rarity"
+        ? [...list].sort((a, b) => rarity(first(b) ?? {}).rank - rarity(first(a) ?? {}).rank)
+        : [...list].sort((a, b) => (first(b)?.date ?? "").localeCompare(first(a)?.date ?? ""));
+    cards = [
+      { key: "default", name: hero.name, image: heroPortrait(hero), look: rarity({ rarity: "common" }), worn: !changed, onPick: onReset },
+      ...ordered.map((set) => ({
+        key: set.id,
+        name: set.name,
+        image: set.icon ? itemIcon(set) : null,
+        look: first(set) ? rarity(first(set)) : null,
+        worn: set === wornSet,
+        onPick: () => onEquipSet(set),
+      })),
+    ];
+  } else {
+    const slot = slots.find((entry) => entry.slot === selected);
+    const chosen = outfit.slots[selected]?.id;
+    const items = slot ? sortItems(itemsForSlot(catalog, hero.id, selected).filter((item) => !words || item.name.toLowerCase().includes(words)), sort) : [];
+    cards = [
+      ...(slot?.defaultItem
+        ? [{ key: "default", name: slot.defaultItem.name, image: itemIcon(slot.defaultItem), look: rarity(slot.defaultItem), worn: !chosen, onPick: () => onEquip(selected, null) }]
+        : []),
+      ...items.map((item) => ({
+        key: item.id,
+        name: item.name,
+        image: itemIcon(item),
+        look: rarity(item),
+        price: formatPrice(item.price),
+        worn: chosen === item.id,
+        onPick: () => onEquip(selected, item.id),
+      })),
+    ];
+  }
+
+  const title = rows.find((row) => row.id === selected)?.name ?? "";
+  // Something else of the slot at random, as the game's shuffle does
+  const shuffle = () => {
+    const pool = cards.filter((card) => !card.worn);
+    pool.length && pool[Math.floor(Math.random() * pool.length)].onPick();
+  };
+
+  return (
+    <div className="absolute top-[40px] right-[60px] bottom-[40px] left-[885px] flex flex-col">
+      <div className="flex h-[70px] shrink-0 items-center">
+        <h2 className="flex-1 truncate text-[34px] text-[#e6ebef]">
+          <span className="font-display font-bold tracking-normal">{hero.name}</span>
+          <span className="font-light uppercase"> - {title}</span>
+        </h2>
+        <button
+          onClick={onClose}
+          data-sound="back"
+          aria-label="Close"
+          className="grid h-[34px] w-[64px] place-items-center rounded-[2px] bg-gradient-to-b from-[#3b434e] to-[#262c34] text-[#e6ebef] shadow-[0_2px_8px_rgb(0_0_0/0.5)] hover:brightness-150"
+        >
+          <X className="size-[24px]" strokeWidth={2.5} />
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-1 bg-black/40 shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
+        {/* Full sets, then every slot with what it wears now */}
+        <ul className="w-[210px] shrink-0 overflow-y-auto bg-[#1b1f26]/90 scrollbar-thin">
+          {rows.map((row) => (
+            <li key={row.id}>
+              <button
+                onClick={() => setSelected(row.id)}
+                data-sound="click"
+                className={`relative flex h-[92px] w-full items-center gap-[14px] border-b border-black/40 pl-[8px] text-left text-[18px] transition-colors ${
+                  selected === row.id ? "bg-[#3a414b] text-white" : "text-[#c9d1da] hover:bg-white/5"
+                }`}
+              >
+                <img src={row.image} alt="" loading="lazy" className="size-[76px] shrink-0 object-cover shadow-[0_2px_6px_rgb(0_0_0/0.6)]" />
+                <span className="line-clamp-2 pr-[18px] leading-tight">{row.name}</span>
+                {selected === row.id && <span aria-hidden className="absolute right-[6px] border-y-[7px] border-l-[8px] border-y-transparent border-l-[#e6ebef]" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex h-[46px] shrink-0 items-center gap-[12px] border-b border-black/40 bg-[#1b1f26]/80 px-[16px]">
+            <label className="flex h-[30px] w-[260px] items-center gap-2 border px-2">
+              <Search className="size-[16px] shrink-0 text-ash" aria-hidden />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search"
+                aria-label={`Search ${title}`}
+                className="w-full bg-transparent text-[16px] text-bone placeholder:text-ash/70 focus:outline-none"
+              />
+            </label>
+            <span className="ml-auto text-[15px] tracking-[1px] text-[#808fa6] uppercase">Sort</span>
+            <Select label="Sort" value={sort} onChange={setSort} align="right" className="w-[150px]" options={SORTS.map((entry) => ({ value: entry.id, label: entry.name }))} />
+            <button onClick={shuffle} data-sound="click" title="Something at random" aria-label="Something at random" className="grid size-[30px] place-items-center text-[#c9d1da] hover:text-white">
+              <Shuffle className="size-[20px]" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-[16px] scrollbar-thin">
+            {cards.length > 0 ? (
+              <ul className="grid grid-cols-[repeat(auto-fill,minmax(234px,1fr))] gap-[12px]">
+                {cards.map(({ key, ...card }) => (
+                  <OutfitCard key={key} {...card} tall={selected === "sets"} />
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[16px] text-ash">{words ? `Nothing matches "${query}".` : "Nothing else for this slot is exported yet."}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A card of the picker: the picture, the name, the price or SELECTED, a strip of the rarity's color
+const TOP_RARITIES = ["immortal", "arcana", "legendary", "ancient"];
+function OutfitCard({ name, image, look, price, worn, tall, onPick }) {
+  const showRarity = look && TOP_RARITIES.includes(String(look.name).toLowerCase());
+  return (
+    <li>
+      <button
+        onClick={worn ? undefined : onPick}
+        data-sound={worn ? undefined : "equip"}
+        className={`group relative flex w-full flex-col overflow-hidden bg-gradient-to-b from-[#2a2f38] to-[#14171c] text-left shadow-[0_4px_12px_rgb(0_0_0/0.5)] ${
+          worn ? "outline-2 -outline-offset-2 outline-white/80" : "hover:brightness-125"
+        }`}
+        style={showRarity && !worn ? { boxShadow: `inset 0 0 0 2px ${look.color}aa, 0 4px 12px rgb(0 0 0 / 0.5)` } : undefined}
+      >
+        <span className={`relative block w-full ${tall ? "aspect-[234/300]" : "aspect-[234/156]"}`}>
+          {image && <img src={image} alt="" loading="lazy" className={`absolute inset-0 size-full ${tall ? "object-cover object-top" : "object-contain"}`} />}
+          {showRarity && (
+            <span className="absolute inset-x-0 top-[10px] text-center text-[16px] [text-shadow:0_1px_4px_#000]" style={{ color: look.color }}>
+              {look.name}
+            </span>
+          )}
+          {worn && <span aria-hidden className="absolute top-0 right-0 size-0 border-t-[22px] border-l-[22px] border-t-white/80 border-l-transparent" />}
+          <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-[8px] pt-[24px] pb-[8px] text-center text-[16px] text-[#e6ebef] [text-shadow:0_1px_3px_#000]">
+            <span className="line-clamp-1">{name}</span>
+          </span>
+        </span>
+        <span className="flex h-[44px] items-center justify-center px-[10px]">
+          {worn ? (
+            <span className="text-[16px] font-semibold tracking-[2px] text-white uppercase">Selected</span>
+          ) : (
+            <span className="w-full bg-gradient-to-b from-[#3f8f63] to-[#2b6847] py-[5px] text-center text-[16px] tracking-[1px] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] group-hover:from-[#4aa673]">
+              {price ?? "Equip"}
+            </span>
+          )}
+        </span>
+        <span aria-hidden className="h-[3px] w-full" style={{ background: look?.color ?? "transparent" }} />
+      </button>
+    </li>
   );
 }

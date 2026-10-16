@@ -377,30 +377,30 @@ export default function HeroPage({ catalog, hero, language, viewer, summary, war
       {/* The model fills the page under the columns */}
       <div className="absolute inset-0">{viewer}</div>
       <div className="pointer-events-none absolute inset-0 flex flex-col" style={{ zoom: scale }}>
-        <div className="pointer-events-auto">
-          <HeroNav hero={hero} base={catalog.modelsBase} tab={tab} onTab={setTab} previous={previous} next={next} onOpen={onOpen} />
-        </div>
-        <div className="relative min-h-0 flex-1">
-          <div className="pointer-events-auto absolute top-[90px] left-[90px] w-[540px]">
-            <HeroSummary catalog={catalog} hero={hero} info={info} data={data} onAbout={() => setTab("about")} onCast={cast} />
-          </div>
-          {tab !== "loadout" ? (
-            <div className="pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] overflow-y-auto bg-black/55 p-[24px] shadow-[0_8px_32px_rgb(0_0_0/0.5)] scrollbar-thin">
-              {tab === "voice" && <Voice modelsBase={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} />}
-              {tab === "stats" && <Stats info={info} />}
-              {tab === "about" && <HeroInfo base={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} language={language} />}
+        {wardrobeOpen && tab === "loadout" ? (
+          // CHANGE OUTFIT takes the page; the model steps to the left meanwhile
+          <div className="pointer-events-auto relative min-h-0 flex-1">{wardrobe}</div>
+        ) : (
+          <>
+            <div className="pointer-events-auto">
+              <HeroNav hero={hero} base={catalog.modelsBase} tab={tab} onTab={setTab} previous={previous} next={next} onOpen={onOpen} />
             </div>
-          ) : wardrobeOpen ? (
-            // Until the game's own outfit picker is made: the wardrobe over the right side; a click
-            // beside it or Escape closes it
-            <>
-              <div className="pointer-events-auto absolute inset-0" onClick={onCloseWardrobe} />
-              <div className="pointer-events-auto absolute top-[40px] right-[60px] bottom-[40px] w-[900px] shadow-[0_8px_32px_rgb(0_0_0/0.6)]">{wardrobe}</div>
-            </>
-          ) : (
-            <div className="pointer-events-auto absolute top-[90px] right-[90px] w-[422px]">{summary}</div>
-          )}
-        </div>
+            <div className="relative min-h-0 flex-1">
+              <div className="pointer-events-auto absolute top-[90px] left-[90px] w-[540px]">
+                <HeroSummary catalog={catalog} hero={hero} info={info} data={data} onAbout={() => setTab("about")} onCast={cast} />
+              </div>
+              {tab !== "loadout" ? (
+                <div className="pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] overflow-y-auto bg-black/55 p-[24px] shadow-[0_8px_32px_rgb(0_0_0/0.5)] scrollbar-thin">
+                  {tab === "voice" && <Voice modelsBase={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} />}
+                  {tab === "stats" && <Stats info={info} />}
+                  {tab === "about" && <HeroInfo base={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} language={language} />}
+                </div>
+              ) : (
+                <div className="pointer-events-auto absolute top-[90px] right-[90px] w-[422px]">{summary}</div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -422,7 +422,7 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
       {/* On a hero's page they sit under the model, between the page's two columns */}
       <div
         className={`pointer-events-auto absolute flex flex-wrap items-center gap-2 ${
-          loadout ? "bottom-6 left-1/2 max-w-[40%] -translate-x-1/2 justify-center" : `bottom-4 left-4 ${hideTitle ? "w-[calc(55%-2rem)]" : "right-4"}`
+          loadout ? `bottom-6 ${frameShift > 0 ? "left-[24%]" : "left-1/2"} max-w-[40%] -translate-x-1/2 justify-center` : `bottom-4 left-4 ${hideTitle ? "w-[calc(55%-2rem)]" : "right-4"}`
         }`}
       >
         {animations.length > 0 && (

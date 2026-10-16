@@ -8,7 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { List, X } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
 import Viewer from "./components/Viewer.jsx";
-import Wardrobe, { EquippedSummary } from "./components/Wardrobe.jsx";
+import Wardrobe, { EquippedSummary, OutfitPicker } from "./components/Wardrobe.jsx";
 import HeroInfo from "./components/HeroInfo.jsx";
 import Voice from "./components/Voice.jsx";
 import { AudioPage, ShopPage, TreasurePage } from "./components/InfoPages.jsx";
@@ -169,6 +169,8 @@ export default function App() {
   const [tab, setTab] = useState("heroes");
   const [browse, setBrowse] = useState(false);
   const [wardrobe, setWardrobe] = useState(false);
+  // Where CHANGE OUTFIT opens: the full sets, or the slot whose tile was clicked
+  const [pickerStart, setPickerStart] = useState("sets");
   const [panelView, setPanelView] = useState("hero");
   // The hero grid, as the game opens on it, always, until a hero is picked
   const [heroGrid, setHeroGrid] = useState(true);
@@ -377,6 +379,7 @@ export default function App() {
       language={language}
       hideTitle={route.type === "hero" && section.id === "heroes"}
       loadout={route.type === "hero" && section.id === "heroes"}
+      frameShift={route.type === "hero" && section.id === "heroes" && wardrobe ? 0.26 : 0}
       outfit={outfit}
       urls={urls}
       onStyle={(style) => open({ ...route, style })}
@@ -423,10 +426,20 @@ export default function App() {
           hero={heroOrder[heroIndex]}
           language={language}
           viewer={viewer}
-          summary={<EquippedSummary catalog={catalog} outfit={outfit} onChange={() => setWardrobe(true)} />}
+          summary={
+            <EquippedSummary
+              catalog={catalog}
+              outfit={outfit}
+              onChange={(start) => {
+                setPickerStart(start);
+                setWardrobe(true);
+              }}
+            />
+          }
           wardrobe={
-            <Wardrobe
-              key={`${route.id}-${outfit.persona ?? 0}`}
+            <OutfitPicker
+              key={`${route.id}-${outfit.persona ?? 0}-${pickerStart}`}
+              start={pickerStart}
               catalog={catalog}
               outfit={outfit}
               onEquip={equip}

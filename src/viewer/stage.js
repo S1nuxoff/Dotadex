@@ -24,36 +24,6 @@ const SOURCE_TO_METRES = 0.0254;
 // Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
 const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
 
-// Makes a material fade out with the distance from the scene's upright axis, between
-// fade.inner and fade.outer (uniforms), for the pedestal's edge to sink into the dark
-function fadeOut(material, fade) {
-  if (!material || material.userData.fades) {
-    return;
-  }
-  material.userData.fades = true;
-  material.transparent = true;
-  // Its own program, not the one of the same shader without the fade compiled for the hero
-  const key = material.customProgramCacheKey.bind(material);
-  material.customProgramCacheKey = () => `${key()}|fade`;
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uFadeInner = fade.inner;
-    shader.uniforms.uFadeOuter = fade.outer;
-    shader.vertexShader = shader.vertexShader
-      .replace("void main() {", "varying vec3 vFadePosition;\nvoid main() {")
-      .replace("#include <project_vertex>", "#include <project_vertex>\n  vFadePosition = (modelMatrix * vec4(transformed, 1.0)).xyz;");
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "void main() {",
-      "varying vec3 vFadePosition;\nuniform float uFadeInner;\nuniform float uFadeOuter;\nvoid main() {"
-    );
-    // After the material's own output, wherever it ends
-    const end = shader.fragmentShader.lastIndexOf("}");
-    shader.fragmentShader =
-      shader.fragmentShader.slice(0, end) +
-      "  gl_FragColor.a *= 1.0 - smoothstep(uFadeInner, uFadeOuter, length(vFadePosition.xz));\n" +
-      shader.fragmentShader.slice(end);
-  };
-  material.needsUpdate = true;
-}
 
 // Starts downloading models ahead of time (the pointer resting on a hero in the list), so
 // they are ready, or nearly, when picked
@@ -1005,7 +975,6 @@ export class Stage {
   // The hero's page scene as the game sets it (loadout_portraits.json): the pedestal it stands on
   // and the cameras of the page, the set picker and each slot. shot picks the camera.
   setPortrait(portrait, pedestalUrl, shot = "default") {
-    this.pedestalFade ??= { inner: { value: 1.5 }, outer: { value: 4 } };
     const changed = portrait !== this.portrait || shot !== this.portraitShot;
     this.portrait = portrait;
     this.portraitShot = shot;
@@ -1021,21 +990,26 @@ export class Stage {
             if (this.pedestalUrl !== pedestalUrl) {
               return;
             }
-            // Shaded like the heroes, taking the hero's shadow, and fading into the dark away from
-            // the hero as the game's fog hides its edge
+            // Shaded like the heroes and taking the hero's shadow; dark, in the tint its material
+            // gives (the page's mask fades its edge, as in the game)
             this.pedestal = gltf.scene;
             this.pedestal.rotation.y = this.group?.rotation.y ?? 0;
+            this.pedestal.traverse((node) => {
+              const tint = node.isMesh && node.material?.userData?.vmat?.VectorParams?.g_vColorTint;
+              if (Array.isArray(tint)) {
+                node.userData.vmatTint = new THREE.Color(tint[0], tint[1], tint[2]);
+              }
+            });
             this.applyMaterials(this.pedestal, gltf.userData.textures);
-            // Seen round the hero's feet, gone into the dark well before its edge
-            const size = new THREE.Box3().setFromObject(this.pedestal).getSize(new THREE.Vector3());
-            const radius = Math.max(size.x, size.z) / 2;
-            this.pedestalFade.inner.value = radius * 0.3;
-            this.pedestalFade.outer.value = radius * 0.8;
             this.pedestal.traverse((node) => {
               if (node.isMesh) {
                 node.receiveShadow = true;
-                fadeOut(node.userData.dota, this.pedestalFade);
-                fadeOut(node.userData.pbr, this.pedestalFade);
+                const tint = node.userData.vmatTint;
+                for (const material of [node.userData.dota, node.userData.pbr]) {
+                  if (tint && material?.color) {
+                    material.color.multiply(tint);
+                  }
+                }
               }
             });
             this.scene.add(this.pedestal);

@@ -210,6 +210,23 @@ function useHeroLine(catalog, heroId, language) {
   return { attribute, roles: (hero.Role ?? "").split(",").filter(Boolean) };
 }
 
+// The mask the game sees a hero page's scene through; used only once it has loaded, as a mask
+// that fails to load would hide the whole scene
+function useSceneMask(base) {
+  const src = `${base}images/masks/hero_model_preview_mask_loadout_psd.png`;
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const image = new Image();
+    image.onload = () => setReady(true);
+    image.src = src;
+  }, [src]);
+  if (!ready) {
+    return undefined;
+  }
+  const url = `url(${src})`;
+  return { maskImage: url, WebkitMaskImage: url, maskMode: "luminance", maskSize: "100% 100%", WebkitMaskSize: "100% 100%", maskRepeat: "no-repeat" };
+}
+
 export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, portrait = null, portraitShot = "default", outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
@@ -319,6 +336,7 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   }, [sound, catalog.modelsBase]);
   useEffect(() => stageRef.current.setSpeed(speed), [speed]);
   useEffect(() => stageRef.current.setFrameShift(frameShift), [frameShift]);
+  const mask = useSceneMask(catalog.modelsBase);
   useEffect(() => stageRef.current.setLoadout(loadout), [loadout]);
   // The free camera of the settings, or the game's fixed one on a hero's page
   useEffect(() => {
@@ -421,7 +439,13 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
 
   return (
     <section className={`${loadout ? "" : "stage-backdrop "}relative h-full overflow-hidden`} style={{ "--rim": color }}>
-      <canvas ref={canvasRef} className="absolute inset-0 size-full touch-none" aria-label={`3D model of ${title}`} />
+      {/* On a hero's page the scene is seen through the game's mask, its sides and floor fading out */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 size-full touch-none"
+        aria-label={`3D model of ${title}`}
+        style={loadout ? mask : undefined}
+      />
 
       {progress !== null && (
         <div className="absolute inset-x-0 top-0 h-[2px] bg-line/60" role="progressbar" aria-valuenow={Math.round(progress * 100)}>

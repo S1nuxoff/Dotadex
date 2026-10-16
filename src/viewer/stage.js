@@ -26,7 +26,7 @@ const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(S
 
 // How much darker the pedestal is drawn, and how far the hero page camera is raised, as a share
 // of half the view's height
-const PEDESTAL_DARKNESS = 0.4;
+const PEDESTAL_DARKNESS = 0.22;
 const CAMERA_RAISE = 0.15;
 
 // The pedestal's far side sinks into the dark behind the hero, as the game's depth fog hides it:

@@ -273,6 +273,8 @@ function material(def, vertexShader, orientation) {
       },
     },
     transparent: true,
+    // Both faces, as the game draws them: a sprite lying on the ground faces down here
+    side: THREE.DoubleSide,
     depthWrite: false,
     depthTest: !def.m_bDisableZBuffering,
   });
@@ -379,13 +381,15 @@ function quads(def, system, trail) {
         sizeRoll.array[i * 2 + 1] = roll[i];
         if (trail) {
           // The trail reaches back as far as the particle went in its trail time
+          // (its direction from the movement alone: a trail held at its minimum length still points
+          // the way the particle goes)
           const speedScale = (trailLength[i] / (1 / 60)) * lengthScale;
-          let vx = (p[j + 1] - q[j + 1]) * UNIT * speedScale;
-          let vy = (p[j + 2] - q[j + 2]) * UNIT * speedScale;
-          let vz = (p[j] - q[j]) * UNIT * speedScale;
-          const length = Math.hypot(vx, vy, vz);
-          const clamped = Math.min(Math.max(length, minLength), maxLength);
-          const k = length > 1e-9 ? clamped / length : 0;
+          const vx = (p[j + 1] - q[j + 1]) * UNIT;
+          const vy = (p[j + 2] - q[j + 2]) * UNIT;
+          const vz = (p[j] - q[j]) * UNIT;
+          const moved = Math.hypot(vx, vy, vz);
+          const clamped = Math.min(Math.max(moved * Math.max(speedScale, 0), minLength), maxLength);
+          const k = moved > 1e-9 ? clamped / moved : 0;
           velocity.array[j] = vx * k;
           velocity.array[j + 1] = vy * k;
           velocity.array[j + 2] = vz * k;

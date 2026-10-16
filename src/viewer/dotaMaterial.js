@@ -59,6 +59,10 @@ const fragmentShader = /* glsl */ `
   uniform vec2 uDetailScale;
   uniform float uAlphaTest;
   uniform float uSelfIllum;
+  uniform float uSelfIllumToFull;
+  uniform float uDetailToFull;
+  uniform float uMetalToFull;
+  uniform float uSpecularToFull;
 
   uniform float uSpecularExponent;
   uniform float uSpecularScale;
@@ -121,8 +125,8 @@ const fragmentShader = /* glsl */ `
     vec3 glow = vec3(0.0);
     // Detail textures where Masks1 R says, by the game's modes: 1 add, 2 add and
     // self-illuminate, 3 multiply by twice
-    float selfIllum = masks1.a * uSelfIllum;
-    float detailMask = uHasMasks1 > 0.5 ? masks1.r : 1.0;
+    float selfIllum = mix(masks1.a, 1.0, uSelfIllumToFull) * uSelfIllum;
+    float detailMask = uHasMasks1 > 0.5 ? mix(masks1.r, 1.0, uDetailToFull) : 1.0;
     if (uDetailMode > 0.5) {
       vec3 detail = texture2D(tDetail, vUv * uDetailScale).rgb * uDetailTint;
       float amount = detailMask * uDetailFactor;
@@ -147,7 +151,7 @@ const fragmentShader = /* glsl */ `
       : vec3(halfLambert * halfLambert);
     float fill = max(dot(n, uFillDir), 0.0);
     vec3 ambient = mix(uGroundColor, uSkyColor, n.y * 0.5 + 0.5) * uAmbientScale;
-    float metal = masks1.b;
+    float metal = mix(masks1.b, 1.0, uMetalToFull);
     // Metal gets its color from reflections, not from diffuse light
     vec3 diffuse = albedo * (keyDiffuse * uKeyColor + fill * uFillColor + ambient) * (1.0 - metal * 0.6);
 
@@ -158,7 +162,7 @@ const fragmentShader = /* glsl */ `
     // Specular, exponent and intensity from Masks2
     float exponent = uHasMasks2 > 0.5 ? max(masks2.a * 100.0, 1.0) : uSpecularExponent;
     // Materials push the scale up to 10; past a point that only turns cloth into silver
-    float intensity = (uHasMasks2 > 0.5 ? masks2.r : 0.2) * min(uSpecularScale, 6.0) * 0.12;
+    float intensity = mix(uHasMasks2 > 0.5 ? masks2.r : 0.2, 1.0, uSpecularToFull) * min(uSpecularScale, 6.0) * 0.12;
     vec3 h = normalize(uKeyDir + v);
     float spec = pow(max(dot(n, h), 0.0), exponent) * max(nl, 0.0);
     vec3 specColor = mix(uSpecularColor * mix(vec3(1.0), albedo * 2.0, 0.5), albedo, masks2.b);
@@ -194,7 +198,8 @@ const fragmentShader = /* glsl */ `
     // it shows the base color as it is instead of the light on it, not on top of it
     vec3 lit = diffuse + specular + rim + env + glow;
     // Brighter than white, so the glow pass picks glowing parts up
-    vec3 outColor = mix(lit, albedo, selfIllum);
+    // A little brighter than the game, so glowing parts catch the glow pass
+    vec3 outColor = mix(lit, albedo * 1.35, selfIllum);
     gl_FragColor = vec4(outColor, color.a);
     #include <colorspace_fragment>
   }
@@ -286,7 +291,12 @@ export function createDotaMaterial(original, vmat, textures) {
       },
       uAlphaTest: { value: int.F_ALPHA_TEST ? 0.5 : 0 },
       // The flag is often not set on materials whose mask still glows in the game
-      uSelfIllum: { value: int.F_MASKS_1 ? 1 : 0 },
+      uSelfIllum: { value: int.F_MASKS_1 || float.g_flSelfIllumBlendToFull ? 1 : 0 },
+      // "Blend to full" turns a mask all the way on for the whole material
+      uSelfIllumToFull: { value: float.g_flSelfIllumBlendToFull ?? 0 },
+      uDetailToFull: { value: float.g_flDetailBlendToFull ?? 0 },
+      uMetalToFull: { value: float.g_flMetalnessBlendToFull ?? 0 },
+      uSpecularToFull: { value: float.g_flSpecularBlendToFull ?? 0 },
       uSpecularExponent: { value: float.g_flSpecularExponent ?? 20 },
       uSpecularScale: { value: float.g_flSpecularScale ?? 1 },
       uRimLightScale: { value: float.g_flRimLightScale ?? 1 },

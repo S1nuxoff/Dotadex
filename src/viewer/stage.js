@@ -122,12 +122,30 @@ function dotaMaterialFor(material, textures) {
 // textures(param) gives the material's texture for a vmat parameter.
 function plainMaterial(material, textures) {
   const vmat = material.userData?.vmat;
-  const masks = material.emissiveMap;
-  if (vmat?.ShaderName !== "hero.vfx" || !masks) {
+  if (vmat?.ShaderName !== "hero.vfx") {
     return material;
   }
   const flags = vmat.IntParams ?? {};
   const floats = vmat.FloatParams ?? {};
+  const masks = material.emissiveMap;
+  // How the material is laid over what is behind it
+  const blended = flags.F_TRANSLUCENT || flags.F_ADDITIVE_BLEND || (flags.F_RENDER_BACKFACES && material.side !== THREE.DoubleSide);
+  const setBlend = (target) => {
+    if (flags.F_TRANSLUCENT || flags.F_ADDITIVE_BLEND) {
+      target.transparent = true;
+      target.depthWrite = false;
+    }
+    if (flags.F_ADDITIVE_BLEND) {
+      target.blending = THREE.AdditiveBlending;
+    }
+    if (flags.F_RENDER_BACKFACES) {
+      target.side = THREE.DoubleSide;
+    }
+    return target;
+  };
+  if (!masks) {
+    return blended ? setBlend(material.clone()) : material;
+  }
   const vec = vmat.VectorParams ?? {};
   const layers = [
     { mode: flags.F_DETAIL ?? 0, texture: textures("g_tDetail"), scale: vec.g_vDetailTexCoordScale, tint: vec.g_vDetail1ColorTint, amount: floats.g_flDetailBlendFactor },
@@ -159,7 +177,10 @@ function plainMaterial(material, textures) {
     })
     .join("\n");
 
-  const result = material.clone();
+  // "Blend to full" turns a mask all the way on for the whole material
+  const selfIllumToFull = floats.g_flSelfIllumBlendToFull ?? 0;
+  const detailToFull = floats.g_flDetailBlendToFull ?? 0;
+  const result = setBlend(material.clone());
   result.emissive = new THREE.Color(0, 0, 0);
   result.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -169,11 +190,13 @@ function plainMaterial(material, textures) {
         "#include <map_fragment>",
         `#include <map_fragment>
         vec4 masks1 = texture2D( emissiveMap, vEmissiveMapUv );
-        selfIllum = masks1.a;
+        selfIllum = mix( masks1.a, 1.0, ${selfIllumToFull.toFixed(3)} );
+        masks1.r = mix( masks1.r, 1.0, ${detailToFull.toFixed(3)} );
         ${blend}`
       )
       .replace("#include <emissivemap_fragment>", "")
-      .replace("#include <opaque_fragment>", "outgoingLight = mix( outgoingLight, diffuseColor.rgb, selfIllum );\n#include <opaque_fragment>");
+      // Glowing parts a little brighter than the game, so the glow pass catches them
+      .replace("#include <opaque_fragment>", "outgoingLight = mix( outgoingLight, diffuseColor.rgb * 1.35, selfIllum );\n#include <opaque_fragment>");
   };
   result.customProgramCacheKey = () => `dota-plain-${layers.map((layer) => layer.mode).join("-")}`;
   return result;
@@ -340,7 +363,7 @@ export class Stage {
     // The glow is added to the colors only, so the page still shows through around the model.
     this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.45, 1.0);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.7, 0.45, 1.0);
     Object.assign(this.bloom.blendMaterial, {
       blending: THREE.CustomBlending,
       blendEquation: THREE.AddEquation,

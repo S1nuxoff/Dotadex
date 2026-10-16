@@ -1,23 +1,23 @@
 import { effectsVolume } from "./volume.js";
 
-// The game's own interface sounds, played for elements marked with data-sound="<name>",
+// The game's own interface sounds (WAV, as the game keeps them), played for elements marked
+// with data-sound="<name>",
 // and a soft rollover for those marked data-hover. Installed once for the whole page.
 const FILES = {
-  toptab: ["sounds/ui/menu/click_toptab.mp3"],
-  click: ["sounds/ui/menu/click_forward.mp3"],
-  back: ["sounds/ui/menu/click_back.mp3"],
-  toggle: ["sounds/ui/menu/option_toggle.mp3"],
-  settings: ["sounds/ui/menu/settings_open.mp3"],
-  pick: ["sounds/ui/hero_picked.mp3"],
-  hover: ["sounds/ui/buttonrollover.mp3"],
-  unequip: ["sounds/ui/inventory/inv_unequip.mp3"],
-  equip: ["sounds/ui/inventory/common_equip.mp3"],
-  "equip-blade": ["sounds/ui/inventory/metalblade_equip_01.mp3", "sounds/ui/inventory/metalblade_equip_02.mp3"],
-  "equip-armour": ["sounds/ui/inventory/metalarmour_equip_01.mp3", "sounds/ui/inventory/metalarmour_equip_02.mp3"],
-  "equip-metal": ["sounds/ui/inventory/metalsmall_equip_01.mp3", "sounds/ui/inventory/metalsmall_equip_02.mp3"],
-  "equip-heavy": ["sounds/ui/inventory/metalheavy_equip_01.mp3", "sounds/ui/inventory/metalheavy_equip_02.mp3"],
-  "equip-staff": ["sounds/ui/inventory/staff_equip_01.mp3", "sounds/ui/inventory/staff_equip_02.mp3"],
-  "equip-robes": ["sounds/ui/inventory/robes_equip_01.mp3", "sounds/ui/inventory/robes_equip_02.mp3"],
+  toptab: ["sounds/ui/menu/click_toptab.wav"],
+  click: ["sounds/ui/menu/click_forward.wav"],
+  back: ["sounds/ui/menu/click_back.wav"],
+  toggle: ["sounds/ui/menu/option_toggle.wav"],
+  settings: ["sounds/ui/menu/settings_open.wav"],
+  pick: ["sounds/ui/hero_picked.wav"],
+  hover: ["sounds/ui/buttonrollover.wav"],
+  unequip: ["sounds/ui/inventory/inv_unequip.wav"],
+  equip: ["sounds/ui/inventory/common_equip.wav"],
+  "equip-blade": ["sounds/ui/inventory/metalblade_equip_01.wav", "sounds/ui/inventory/metalblade_equip_02.wav"],
+  "equip-armour": ["sounds/ui/inventory/metalarmour_equip_01.wav", "sounds/ui/inventory/metalarmour_equip_02.wav"],
+  "equip-metal": ["sounds/ui/inventory/metalsmall_equip_01.wav", "sounds/ui/inventory/metalsmall_equip_02.wav"],
+  "equip-heavy": ["sounds/ui/inventory/metalheavy_equip_01.wav", "sounds/ui/inventory/metalheavy_equip_02.wav"],
+  "equip-staff": ["sounds/ui/inventory/staff_equip_01.wav", "sounds/ui/inventory/staff_equip_02.wav"],
 };
 
 // The equip sound of a slot, by what it usually is made of
@@ -27,7 +27,6 @@ export function equipSound(slot = "") {
   if (/armor|shoulder|arms|gloves/.test(name)) return "equip-armour";
   if (/head|helm|mask/.test(name)) return "equip-metal";
   if (/mount|legs/.test(name)) return "equip-heavy";
-  if (/back|belt|cape|tail|neck/.test(name)) return "equip-robes";
   return "equip";
 }
 

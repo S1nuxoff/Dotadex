@@ -27,16 +27,25 @@ function blendingOf(def, material) {
     material.blendSrcAlpha = THREE.ZeroFactor;
     material.blendDstAlpha = THREE.OneFactor;
     material.uniforms.uMod.value = 1;
+  } else if (/ADD/.test(mode)) {
+    // The shader gives its color already times its alpha; it is added to the colors only, and
+    // the see-through canvas's alpha is left as it is (a black texel must not cover anything)
+    material.blending = THREE.CustomBlending;
+    material.blendEquation = THREE.AddEquation;
+    material.blendSrc = THREE.OneFactor;
+    material.blendDst = THREE.OneFactor;
+    material.blendSrcAlpha = THREE.ZeroFactor;
+    material.blendDstAlpha = THREE.OneFactor;
+    material.uniforms.uPremultiply.value = 1;
   } else {
-    // One blend for every particle, premultiplied: the shader gives color × alpha, and alpha 0
-    // for additive ones so they only add light; it works alike on every graphics card
+    // Over what is behind as its alpha says, the color already times its alpha
     material.blending = THREE.CustomBlending;
     material.blendEquation = THREE.AddEquation;
     material.blendSrc = THREE.OneFactor;
     material.blendDst = THREE.OneMinusSrcAlphaFactor;
-    material.blendSrcAlpha = THREE.ZeroFactor;
-    material.blendDstAlpha = THREE.OneFactor;
-    material.uniforms.uAdditive.value = /ADD/.test(mode) ? 1 : 0;
+    material.blendSrcAlpha = THREE.OneFactor;
+    material.blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
+    material.uniforms.uPremultiply.value = 1;
   }
   material.uniforms.uHalf.value = /HALF_BLEND/.test(mode) ? 0.5 : 1;
 }
@@ -147,15 +156,11 @@ const FRAGMENT = /* glsl */ `
   uniform float uOverbright;
   uniform float uHalf;
   uniform float uMod;
-  uniform float uAdditive;
-  uniform float uLumaAlpha;
+  uniform float uPremultiply;
   varying vec2 vUv;
   varying vec4 vColor;
   void main() {
     vec4 texel = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0);
-    // A texture with no transparency of its own (glows and sparks on black) is cut out by its
-    // brightness, as a green screen would: its black is see-through
-    if (uLumaAlpha > 0.5) texel.a = max(texel.r, max(texel.g, texel.b));
     float alpha = texel.a * vColor.a;
     if (uMod > 0.5) {
       // Mid grey where the particle is see-through, so it leaves what is behind as it is
@@ -170,7 +175,7 @@ const FRAGMENT = /* glsl */ `
     if (any(isnan(color)) || color.a < 0.002) discard;
     vec3 rgb = clamp(color.rgb, 0.0, 8.0);
     float a = clamp(color.a, 0.0, 1.0);
-    gl_FragColor = vec4(rgb * a, uAdditive > 0.5 ? 0.0 : a);
+    gl_FragColor = vec4(uPremultiply > 0.5 ? rgb * a : rgb, a);
     #include <colorspace_fragment>
   }
 `;
@@ -206,8 +211,7 @@ function material(def, vertexShader, orientation) {
       uOverbright: { value: num(def.m_flOverbrightFactor, 1) },
       uHalf: { value: 1 },
       uMod: { value: 0 },
-      uAdditive: { value: 0 },
-      uLumaAlpha: { value: 0 },
+      uPremultiply: { value: 0 },
       uOrientation: { value: orientation },
       uCameraBias: { value: num(def.VisibilityInputs?.m_flCameraBias, 0) * UNIT },
       uScreenSize: {
@@ -270,7 +274,6 @@ function quads(def, system, trail) {
       sheet = loaded.sheet;
       mat.uniforms.uMap.value = loaded.texture;
       mat.uniforms.uHasMap.value = 1;
-      mat.uniforms.uLumaAlpha.value = loaded.opaque ? 1 : 0;
     });
   }
   const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;
@@ -382,7 +385,6 @@ function rope(def, system) {
       loaded.texture.wrapS = loaded.texture.wrapT = THREE.RepeatWrapping;
       mat.uniforms.uMap.value = loaded.texture;
       mat.uniforms.uHasMap.value = 1;
-      mat.uniforms.uLumaAlpha.value = loaded.opaque ? 1 : 0;
     });
   }
   const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;

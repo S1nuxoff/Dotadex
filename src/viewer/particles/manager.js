@@ -11,25 +11,6 @@ const textureCache = new Map();
 const attachmentCache = new Map();
 const textureLoader = new THREE.TextureLoader();
 
-// Whether an image's alpha is full everywhere: a glow or spark on black, made for adding light
-function hasNoTransparency(image) {
-  try {
-    const canvas = document.createElement("canvas");
-    const scale = Math.min(1, 128 / Math.max(image.width, image.height));
-    canvas.width = Math.max(1, Math.round(image.width * scale));
-    canvas.height = Math.max(1, Math.round(image.height * scale));
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
-    for (let i = 3; i < data.length; i += 4) {
-      if (data[i] < 250) return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function fetchJson(url) {
   return fetch(url)
     .then((res) => (res.ok ? res.json() : null))
@@ -102,7 +83,7 @@ export class ParticleManager {
         Promise.all([textureLoader.loadAsync(`${url}.png`).catch(() => null), fetchJson(`${url}.json`)]).then(([texture, sheet]) => {
           if (!texture) return null;
           texture.colorSpace = THREE.SRGBColorSpace;
-          return { texture, sheet, opaque: hasNoTransparency(texture.image) };
+          return { texture, sheet };
         })
       );
     }

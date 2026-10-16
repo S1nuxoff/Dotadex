@@ -33,15 +33,11 @@ function fetchJson(url) {
     .catch(() => null);
 }
 
-// The game's axes for an offset in a bone's own space: the permutation the export applies
-const boneOffset = (offset, target) => target.set((offset[1] ?? 0) * UNIT, (offset[2] ?? 0) * UNIT, (offset[0] ?? 0) * UNIT);
-const P = new THREE.Matrix4().set(0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1);
-const PT = P.clone().transpose();
-const rotationMatrix = new THREE.Matrix4();
+// An attachment's offset and turn in its bone's own space: the bones keep the game's axes, so
+// both apply as they are (only inches to metres)
+const boneOffset = (offset, target) => target.set((offset[0] ?? 0) * UNIT, (offset[1] ?? 0) * UNIT, (offset[2] ?? 0) * UNIT);
 function boneRotation(rotation, target) {
-  target.set(rotation[0] ?? 0, rotation[1] ?? 0, rotation[2] ?? 0, rotation[3] ?? 1);
-  rotationMatrix.makeRotationFromQuaternion(target).premultiply(P).multiply(PT);
-  return target.setFromRotationMatrix(rotationMatrix);
+  return target.set(rotation[0] ?? 0, rotation[1] ?? 0, rotation[2] ?? 0, rotation[3] ?? 1);
 }
 
 const v1 = new THREE.Vector3();

@@ -198,6 +198,7 @@ function useHeroLine(catalog, heroId, language) {
   return { attribute, roles: (hero.Role ?? "").split(",").filter(Boolean) };
 }
 
+const MASK_HEIGHT = 88;
 // The mask the game sees a hero page's scene through; used only once it has loaded, as a mask
 // that fails to load would hide the whole scene
 function useSceneMask(base) {
@@ -212,7 +213,10 @@ function useSceneMask(base) {
     return undefined;
   }
   const url = `url(${src})`;
-  return { maskImage: url, WebkitMaskImage: url, maskMode: "luminance", maskSize: "100% 100%", WebkitMaskSize: "100% 100%", maskRepeat: "no-repeat" };
+  // The game's scene runs under the top bar to the screen's top; ours starts below it, so the mask
+  // is drawn a little shorter for its floor to fade where the game's does, the rest left dark
+  const size = `100% ${MASK_HEIGHT}%`;
+  return { maskImage: url, WebkitMaskImage: url, maskMode: "luminance", maskSize: size, WebkitMaskSize: size, maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat" };
 }
 
 export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, portrait = null, portraitShot = "default", outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {

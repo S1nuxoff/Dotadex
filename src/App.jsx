@@ -231,7 +231,7 @@ export default function App() {
   };
   // A persona's set switches to the persona, a plain set back from it
   const equipSet = (set) => {
-    const persona = personaOf(catalog.itemsById[set.items[0]].slot);
+    const persona = personaOf(set.items.map((id) => catalog.itemsById[id]).find(Boolean)?.slot);
     const slots = persona === outfit.persona ? { ...outfit.slots } : {};
     for (const id of set.items) {
       slots[catalog.itemsById[id].slot] = { id, style: 0 };

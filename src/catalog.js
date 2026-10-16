@@ -76,6 +76,8 @@ export function slotName(slot) {
   if (!slot) {
     return null;
   }
+  // A persona's slots are named like the hero's own: "weapon_persona_1" is a weapon
+  slot = slot.replace(/_persona_\d+$/, "");
   if (SLOT_NAMES[slot]) {
     return SLOT_NAMES[slot];
   }
@@ -84,7 +86,7 @@ export function slotName(slot) {
 }
 
 function slotRank(slot) {
-  const rank = SLOT_ORDER.indexOf(slot);
+  const rank = SLOT_ORDER.indexOf(slot.replace(/_persona_\d+$/, ""));
   return rank < 0 ? SLOT_ORDER.length : rank;
 }
 

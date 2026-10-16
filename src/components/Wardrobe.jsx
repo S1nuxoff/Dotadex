@@ -518,3 +518,53 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
     </div>
   );
 }
+
+// The hero page's SELECTED column, as the game has it now: what is worn, the set's name and
+// rarity when one is worn in full, a tile per slot, and CHANGE OUTFIT for the full picker
+export function EquippedSummary({ catalog, outfit, onChange }) {
+  const hero = catalog.heroesById[outfit.hero];
+  const slots = useMemo(() => heroSlots(catalog, hero.id, outfit.persona ?? 0), [catalog, hero, outfit.persona]);
+  const sets = catalog.sets.filter((set) => set.hero === hero.id);
+  const worn = sets.find((set) => set.items.every((id) => outfit.slots[catalog.itemsById[id]?.slot]?.id === id));
+  const pieces = slots.map((slot) => {
+    const chosen = outfit.slots[slot.slot];
+    return { slot: slot.slot, item: chosen ? catalog.itemsById[chosen.id] : slot.defaultItem };
+  });
+  const look = worn ? rarity(catalog.itemsById[worn.items[0]] ?? {}) : Object.keys(outfit.slots).length ? null : rarity({ rarity: "common" });
+  return (
+    <div className="flex flex-col">
+      <h2 className="flex items-center gap-[10px] text-[20px] font-semibold tracking-[2px] text-[#e6ebef] uppercase">
+        <Layers className="size-[20px]" aria-hidden /> Selected
+      </h2>
+      <p className="mt-[6px] font-display text-[24px] font-normal tracking-normal text-[#e6ebef]/90 normal-case">
+        {worn ? worn.name : Object.keys(outfit.slots).length ? "Custom" : hero.name}
+      </p>
+      {look && (
+        <p className="text-[14px] font-semibold tracking-[1px] uppercase brightness-125" style={{ color: look.color }}>
+          {look.name}
+        </p>
+      )}
+      <div className="mt-[16px] -mb-[8px] flex flex-wrap">
+        {pieces.map(({ slot, item }) => (
+          <button
+            key={slot}
+            onClick={() => onChange(slot)}
+            data-sound="click"
+            title={`${slotName(slot)}${item ? `: ${item.name}` : ""}`}
+            className="group relative mr-[8px] mb-[8px] size-[76px] overflow-hidden border border-black/80 bg-gradient-to-b from-[#3a4250] to-[#232831] shadow-[0_2px_8px_rgb(0_0_0/0.5)] hover:brightness-125"
+          >
+            <img src={item?.icon ? itemIcon(item) : heroCrop(hero)} alt="" loading="lazy" className="size-full object-cover" />
+            <span aria-hidden className="absolute top-0 right-0 size-0 border-t-[12px] border-l-[12px] border-t-white/70 border-l-transparent" />
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={() => onChange("sets")}
+        data-sound="click"
+        className="mt-[24px] h-[56px] w-[232px] rounded-[2px] bg-gradient-to-b from-[#5d6673] to-[#3d444e] text-[20px] font-semibold tracking-[3px] text-white uppercase shadow-[0_4px_24px_-2px_rgb(0_0_0/0.4),inset_0_1px_0_rgb(255_255_255/0.2)] hover:brightness-125"
+      >
+        Change outfit
+      </button>
+    </div>
+  );
+}

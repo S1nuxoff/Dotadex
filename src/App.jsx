@@ -8,7 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { List, X } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
 import Viewer from "./components/Viewer.jsx";
-import Wardrobe from "./components/Wardrobe.jsx";
+import Wardrobe, { EquippedSummary } from "./components/Wardrobe.jsx";
 import HeroInfo from "./components/HeroInfo.jsx";
 import Voice from "./components/Voice.jsx";
 import { AudioPage, ShopPage, TreasurePage } from "./components/InfoPages.jsx";
@@ -376,7 +376,7 @@ export default function App() {
       catalog={catalog}
       language={language}
       hideTitle={route.type === "hero" && section.id === "heroes"}
-      frameShift={route.type === "hero" && section.id === "heroes" ? 0.17 : 0}
+      loadout={route.type === "hero" && section.id === "heroes"}
       outfit={outfit}
       urls={urls}
       onStyle={(style) => open({ ...route, style })}
@@ -423,10 +423,10 @@ export default function App() {
           hero={heroOrder[heroIndex]}
           language={language}
           viewer={viewer}
-          loadout={
+          summary={<EquippedSummary catalog={catalog} outfit={outfit} onChange={() => setWardrobe(true)} />}
+          wardrobe={
             <Wardrobe
               key={`${route.id}-${outfit.persona ?? 0}`}
-              tiles
               catalog={catalog}
               outfit={outfit}
               onEquip={equip}
@@ -434,6 +434,8 @@ export default function App() {
               onReset={() => open({ type: "hero", id: outfit.hero, slots: {}, persona: outfit.persona })}
             />
           }
+          wardrobeOpen={wardrobe}
+          onCloseWardrobe={() => setWardrobe(false)}
           previous={heroOrder[(heroIndex - 1 + heroOrder.length) % heroOrder.length]}
           next={heroOrder[(heroIndex + 1) % heroOrder.length]}
           onOpen={open}

@@ -209,7 +209,7 @@ function useHeroLine(catalog, heroId, language) {
   return { attribute, roles: (hero.Role ?? "").split(",").filter(Boolean) };
 }
 
-export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
+export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -318,6 +318,7 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   }, [sound, catalog.modelsBase]);
   useEffect(() => stageRef.current.setSpeed(speed), [speed]);
   useEffect(() => stageRef.current.setFrameShift(frameShift), [frameShift]);
+  useEffect(() => stageRef.current.setLoadout(loadout), [loadout]);
 
   // Casting and emotes from the hero page: an animation, the ability's sound, a voice line
   useEffect(() => {
@@ -408,7 +409,7 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   const styles = item?.styles;
 
   return (
-    <section className="stage-backdrop relative h-full overflow-hidden" style={{ "--rim": color }}>
+    <section className={`${loadout ? "" : "stage-backdrop "}relative h-full overflow-hidden`} style={{ "--rim": color }}>
       <canvas ref={canvasRef} className="absolute inset-0 size-full touch-none" aria-label={`3D model of ${title}`} />
 
       {progress !== null && (
@@ -418,7 +419,12 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
       )}
 
       {/* Playback, outfit and view controls in one row at the bottom */}
-      <div className={`pointer-events-auto absolute bottom-4 left-4 flex flex-wrap items-center gap-2 ${hideTitle ? "w-[calc(55%-2rem)]" : "right-4"}`}>
+      {/* On a hero's page they sit under the model, between the page's two columns */}
+      <div
+        className={`pointer-events-auto absolute flex flex-wrap items-center gap-2 ${
+          loadout ? "bottom-6 left-1/2 max-w-[40%] -translate-x-1/2 justify-center" : `bottom-4 left-4 ${hideTitle ? "w-[calc(55%-2rem)]" : "right-4"}`
+        }`}
+      >
         {animations.length > 0 && (
           <>
             <IconButton label={paused ? "Play" : "Pause"} onClick={() => setPaused(!paused)}>

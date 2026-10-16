@@ -847,6 +847,11 @@ export class Stage {
   }
 
   // The pedestal and its particles, unless a scene of the game is shown
+  setLoadout(on) {
+    this.loadout = on;
+    this.updateShowcase();
+  }
+
   setShowcase(on) {
     this.showcase = on;
     this.updateShowcase();
@@ -855,6 +860,22 @@ export class Stage {
   // The pedestal and its smoke on their own; behind a model in a scene of the game, only the
   // embers and the haze, with fog that sinks the scene's distance into the dark
   updateShowcase() {
+    // A hero's page as the game has it now: the hero alone with a soft shadow, over the page's
+    // own backdrop; no rocks, embers or fog
+    if (this.loadout) {
+      this.effects.group.visible = false;
+      this.rockStage.group.visible = false;
+      this.floor.visible = this.standing !== false;
+      if (this.renderer.shadowMap.enabled) {
+        this.renderer.shadowMap.enabled = false;
+        this.scene.traverse((node) => node.isMesh && node.material && (node.material.needsUpdate = true));
+      }
+      this.key.intensity = 2.2;
+      this.scene.environmentIntensity = 0.6;
+      this.hemi.intensity = 1.2;
+      this.scene.fog = null;
+      return;
+    }
     const on = this.showcase !== false && !this.backdrop;
     const scene = this.showcase !== false && Boolean(this.backdrop);
     this.effects.group.visible = on || scene;

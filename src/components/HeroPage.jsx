@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import { abilityIcon, useGameData } from "../gamedata.js";
-import { attributeIcon } from "./HeroGrid.jsx";
+import { useUiScale } from "./ui.jsx";
 import HeroInfo from "./HeroInfo.jsx";
 import Voice from "./Voice.jsx";
 import ChatWheel from "./ChatWheel.jsx";
@@ -21,13 +21,21 @@ function castKeys(abilities, known) {
   const basic = ["Q", "W", "E", "D", "F"];
   let next = 0;
   for (const name of abilities) {
-    keys[name] = known[name]?.AbilityType === "DOTA_ABILITY_TYPE_ULTIMATE" ? "R" : basic[next++];
+    keys[name] = /ULTIMATE/.test(known[name]?.AbilityType ?? "") ? "R" : basic[next++];
   }
   return keys;
 }
 
-// A hero's page as the game shows it: the model on the left; on the right its name, attribute,
-// complexity, attack type and roles, its abilities, then LOADOUT / VOICE / STATS / ABOUT
+// The abilities cast from the keyboard: not the innate, not hidden ones
+function castable(info, known) {
+  return Array.from({ length: 9 }, (_, index) => info[`Ability${index + 1}`]).filter(
+    (name) => name && name !== "generic_hidden" && !name.startsWith("special_bonus") && known[name] && known[name].Innate !== "1" && !/HIDDEN/.test(known[name].AbilityBehavior ?? "")
+  );
+}
+
+// A hero's page as the game has it now (dashboard_page_hero_new_v2): the hero's backdrop, the
+// model in the middle; on the left its name, attribute, complexity, attack type and tags, its
+// abilities and stats; on the right what it wears. Sizes are the game's, on a 1920 wide screen.
 
 const TABS = [
   ["loadout", "Loadout"],
@@ -36,71 +44,206 @@ const TABS = [
   ["about", "About"],
 ];
 
-function HeroHeader({ catalog, hero, info, data, onAbout, onCast }) {
+// The game's numbers for what each point of an attribute gives
+const HEALTH_PER_STRENGTH = 22;
+const HEALTH_REGEN_PER_STRENGTH = 0.1;
+const MANA_PER_INTELLIGENCE = 12;
+const MANA_REGEN_PER_INTELLIGENCE = 0.05;
+const ARMOR_PER_AGILITY = 1 / 6;
+const UNIVERSAL_DAMAGE = 0.45;
+
+const ATTRIBUTES = {
+  DOTA_ATTRIBUTE_STRENGTH: "strength",
+  DOTA_ATTRIBUTE_AGILITY: "agility",
+  DOTA_ATTRIBUTE_INTELLECT: "intelligence",
+  DOTA_ATTRIBUTE_ALL: "all",
+};
+const image = (base, path) => `${base}images/${path}.png`;
+const mask = (url) => ({ mask: `url(${url}) center / contain no-repeat`, WebkitMask: `url(${url}) center / contain no-repeat` });
+
+// Which backdrop each hero has, loaded once
+let backgrounds = null;
+function loadBackgrounds(base) {
+  backgrounds ??= fetch(`${base}data/loadout_backgrounds.json`)
+    .then((res) => (res.ok ? res.json() : null))
+    .catch(() => null);
+  return backgrounds;
+}
+
+// The picture behind the hero: the game's backdrop for it, blurred, faded and washed in its
+// color over a gradient of its own, the edges sinking into the dark
+function Backdrop({ base, heroId }) {
+  const [all, setAll] = useState(null);
+  useEffect(() => {
+    loadBackgrounds(base).then(setAll);
+  }, [base]);
+  const look = all?.heroes[heroId];
+  const maskUrl = all?.mask && `url(${base}${all.mask})`;
+  return (
+    <div className="absolute inset-0 overflow-hidden" style={{ background: look?.from ? `linear-gradient(${look.from}, ${look.to})` : "linear-gradient(#1b1f2a, #0d0e12)" }}>
+      {look?.image && (
+        <div
+          className="absolute inset-0 mx-auto max-w-[1920px]"
+          style={{
+            backgroundImage: `url(${base}${look.image})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            filter: "blur(6px) saturate(0.52)",
+            maskImage: maskUrl,
+            WebkitMaskImage: maskUrl,
+            maskSize: "100% 100%",
+            WebkitMaskSize: "100% 100%",
+            maskMode: "luminance",
+          }}
+        >
+          {look.wash && <div className="absolute inset-0 mix-blend-color" style={{ background: look.wash }} />}
+        </div>
+      )}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_75%_70%_at_50%_45%,transparent_55%,rgb(0_0_0/0.65))]" />
+    </div>
+  );
+}
+
+function Label({ children }) {
+  return <span className="text-[16px] tracking-[2px] text-[#e6ebef]/50 uppercase">{children}</span>;
+}
+
+function HeroSummary({ catalog, hero, info, data, onAbout, onCast }) {
+  const base = catalog.modelsBase;
   const roles = (info?.Role ?? "").split(",").filter(Boolean);
   const ranged = (info?.AttackCapabilities ?? "").includes("RANGED");
   const complexity = Number(info?.Complexity ?? 1);
   const known = data?.abilities ?? {};
   const texts = data?.texts ?? {};
-  const abilities = info
-    ? Array.from({ length: 9 }, (_, index) => info[`Ability${index + 1}`]).filter(
-        (name) => name && name !== "generic_hidden" && !name.startsWith("special_bonus") && known[name] && !/HIDDEN/.test(known[name].AbilityBehavior ?? "")
-      )
+  const innate = info
+    ? Array.from({ length: 9 }, (_, index) => info[`Ability${index + 1}`]).filter((name) => name && known[name]?.Innate === "1")
     : [];
+  const abilities = info ? castable(info, known) : [];
   const keys = castKeys(abilities, known);
+  const attribute = ATTRIBUTES[info?.AttributePrimary] ?? "all";
+  const ability = (name, round) => {
+    const title = texts[`DOTA_Tooltip_ability_${name}`] ?? name.replace(/_/g, " ");
+    const key = keys[name];
+    return (
+      <button key={name} onClick={() => !round && onCast(name)} title={`${title}${key ? ` (${key})` : ""}`} className="group mr-[8px] mb-[8px] size-[52px]">
+        <img
+          src={abilityIcon(base, name, known[name])}
+          alt=""
+          className={`size-full object-cover shadow-[0_4px_8px_#000] transition group-hover:brightness-125 group-active:scale-95 ${round ? "rounded-full border-2 border-[#5c6470]" : ""}`}
+          onError={(event) => (event.currentTarget.style.visibility = "hidden")}
+        />
+      </button>
+    );
+  };
+
   return (
     <div>
-      <h1 className="font-display text-5xl leading-none tracking-[0.04em] text-bone 2xl:text-6xl">{hero.name}</h1>
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-        {info && <img src={attributeIcon(info.AttributePrimary)} alt="" className="size-8" />}
-        <span className="flex gap-1" title={`Complexity ${complexity}`}>
+      <h1 className="h-[75px] font-display text-[68px] leading-[75px] font-bold tracking-normal text-white">{hero.name}</h1>
+      {/* Attribute, complexity, attack type and tags in one row */}
+      <div className="mt-[4px] mb-[2px] flex items-center">
+        <img src={image(base, `primary_attribute_icons/primary_attribute_icon_${attribute}_psd`)} alt="" title={attribute} className="mr-[12px] size-[32px]" />
+        <span className="mr-[14px] flex items-center gap-[9px]" title={`Complexity ${complexity}`}>
           {[1, 2, 3].map((level) => (
-            <span key={level} className={`size-3 rotate-45 border ${level <= complexity ? "border-bone bg-bone" : "border-ash/60"}`} />
+            <span key={level} className={`size-[11px] rotate-45 ${level <= complexity ? "bg-[#dedede]" : "border-2 border-[#dedede]"}`} />
           ))}
         </span>
-        <span className="flex flex-wrap gap-x-5 font-sans text-[17px] font-semibold uppercase tracking-[0.2em] text-ash">
-          {[ranged ? "Ranged" : "Melee", ...roles].map((word) => (
-            <span key={word}>{word}</span>
-          ))}
+        <span className="mr-[16px] flex items-center gap-[6px]">
+          <Label>Attack type:</Label>
+          <span title={ranged ? "Ranged" : "Melee"} className="size-[30px] bg-[#c4c9cf]" style={mask(image(base, `control_icons/filter_${ranged ? "ranges" : "melee"}_png`))} />
+        </span>
+        <span className="flex items-center gap-[6px]">
+          <Label>Tags:</Label>
+          <span className="flex">
+            {roles.map((role) => (
+              <span key={role} title={role} className="-mr-[2px] size-[30px] bg-[#c4c9cf] hover:bg-[#dfe3e7]" style={mask(image(base, `control_icons/filter_${role.toLowerCase()}_png`))} />
+            ))}
+          </span>
         </span>
       </div>
-      {abilities.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-start gap-2">
-          {abilities.map((name) => {
-            const title = texts[`DOTA_Tooltip_ability_${name}`] ?? name.replace(/_/g, " ");
-            const key = keys[name];
-            return (
-              <button key={name} onClick={() => onCast(name)} className="group w-[60px]" title={`${title}${key ? ` (${key})` : ""}`}>
-                <span className="relative mx-auto block size-[52px]">
-                  <img
-                    src={abilityIcon(catalog.modelsBase, name, known[name])}
-                    alt=""
-                    className="size-full border border-black/80 object-cover shadow-[0_2px_8px_rgb(0_0_0/0.6)] transition group-hover:brightness-125 group-active:scale-95"
-                    onError={(event) => (event.currentTarget.style.visibility = "hidden")}
-                  />
-                  {key && (
-                    <span className="absolute -top-1.5 -left-1.5 grid size-5 place-items-center border border-black/80 bg-[#1a1f25] font-sans text-[11px] font-semibold text-bone">
-                      {key}
-                    </span>
-                  )}
-                </span>
-                <span className="mt-1 line-clamp-2 block text-center text-[11px] leading-tight text-bone/75">{title}</span>
-              </button>
-            );
-          })}
-          {/* The talent tree and Aghanim's Scepter and Shard, as the game puts them after the abilities */}
-          {[
-            ["talents.svg", "Talents"],
-            ["aghs_off_large.png", "Aghanim's"],
-          ].map(([file, label]) => (
-            <button key={file} onClick={onAbout} data-sound="click" data-hover className="w-[60px] text-center" title={label}>
-              <img src={`${import.meta.env.BASE_URL}ui/${file}`} alt="" className="mx-auto size-[52px] object-contain p-0.5 opacity-80 transition-opacity hover:opacity-100" />
-              <span className="mt-1 block text-[11px] leading-tight text-bone/75">{label}</span>
-            </button>
+      {/* The talent tree, the innate, the abilities, then Aghanim's */}
+      <div className="mt-[12px] flex flex-wrap items-center">
+        <button onClick={onAbout} data-sound="click" title="Talents" className="mr-[8px] mb-[8px] size-[52px]">
+          <img src={`${import.meta.env.BASE_URL}ui/talents.svg`} alt="" className="size-full object-contain opacity-80 hover:opacity-100" />
+        </button>
+        {innate.map((name) => ability(name, true))}
+        {abilities.map((name) => ability(name, false))}
+        <button onClick={onAbout} data-sound="click" title="Aghanim's Scepter and Shard" className="mr-[8px] mb-[8px] size-[52px]">
+          <img src={`${import.meta.env.BASE_URL}ui/aghs_off_large.png`} alt="" className="size-full object-contain p-[4px] opacity-80 hover:opacity-100" />
+        </button>
+        <ChatWheel modelsBase={base} heroId={hero.id} />
+      </div>
+      {info && <StatsSummary base={base} info={info} />}
+    </div>
+  );
+}
+
+// Attributes on the left; damage, armor, speed, attack time and speed, range, then health and
+// mana at level 1, as the game works them out from the attributes
+function StatsSummary({ base, info }) {
+  const number = (key, fallback = 0) => Number(info[key] ?? fallback);
+  const strength = number("AttributeBaseStrength");
+  const agility = number("AttributeBaseAgility");
+  const intelligence = number("AttributeBaseIntelligence");
+  const bonus = {
+    DOTA_ATTRIBUTE_STRENGTH: strength,
+    DOTA_ATTRIBUTE_AGILITY: agility,
+    DOTA_ATTRIBUTE_INTELLECT: intelligence,
+  }[info.AttributePrimary] ?? Math.floor((strength + agility + intelligence) * UNIVERSAL_DAMAGE);
+  const round = (value) => Math.round(value * 10) / 10;
+  const derived = [
+    ["icon_damage_psd", "Damage", `${number("AttackDamageMin") + bonus} - ${number("AttackDamageMax") + bonus}`],
+    ["icon_armor_psd", "Armor", round(number("ArmorPhysical") + agility * ARMOR_PER_AGILITY)],
+    ["icon_speed_psd", "Movement speed", number("MovementSpeed")],
+    ["icon_attack_speed_psd", "Base attack time", number("AttackRate")],
+    ["icon_attack_speed2_psd", "Attack speed", number("BaseAttackSpeed", 100) + agility],
+    ["icon_attack_range_psd", "Attack range", number("AttackRange")],
+  ];
+  const attributes = [
+    ["Strength", "strength", strength, number("AttributeStrengthGain")],
+    ["Agility", "agility", agility, number("AttributeAgilityGain")],
+    ["Intelligence", "intelligence", intelligence, number("AttributeIntelligenceGain")],
+  ];
+  const pools = [
+    ["Health", number("StatusHealth", 120) + strength * HEALTH_PER_STRENGTH, round(number("StatusHealthRegen") + strength * HEALTH_REGEN_PER_STRENGTH), "from-[#2f8a3c] to-[#57c043]"],
+    ["Mana", number("StatusMana", 75) + intelligence * MANA_PER_INTELLIGENCE, round(number("StatusManaRegen") + intelligence * MANA_REGEN_PER_INTELLIGENCE), "from-[#1a5ca8] to-[#3a8fe0]"],
+  ];
+  const line = "linear-gradient(90deg, #ffffff10, #ffffff00)";
+  return (
+    <div className="relative my-[8px] flex w-[500px]">
+      <span aria-hidden className="absolute inset-x-0 top-0 h-px" style={{ background: line }} />
+      <span aria-hidden className="absolute inset-x-0 bottom-0 h-px" style={{ background: line }} />
+      <div className="w-[128px] border-r border-white/[0.02] py-[16px]">
+        {attributes.map(([label, icon, value, gain]) => (
+          <div key={label} className="mb-[8px]">
+            <p className="mb-[2px] text-[13px] tracking-[1.5px] text-[#e6ebef]/40 uppercase">{label}</p>
+            <p className="flex items-center text-[20px] tracking-[0.8px] text-[#e6ebef]">
+              <img src={image(base, `primary_attribute_icons/primary_attribute_icon_${icon}_psd`)} alt="" className="mr-[8px] size-[20px]" />
+              {value} + {round(gain)}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="flex-1">
+        <div className="mt-[16px] ml-[16px] flex pr-[24px]">
+          {derived.map(([icon, label, value]) => (
+            <div key={label} title={label} className="flex flex-1 flex-col items-center">
+              <span className="size-[20px] bg-[#e6ebef]" style={mask(image(base, `hud/reborn/${icon}`))} />
+              <span className="mt-[2px] h-[18px] text-[16px] text-[#e6ebef]/80 tabular-nums">{value}</span>
+            </div>
           ))}
-          <ChatWheel modelsBase={catalog.modelsBase} heroId={hero.id} />
         </div>
-      )}
+        <div className="mt-[8px] mr-[24px] ml-[16px]">
+          {pools.map(([label, value, regen, colors]) => (
+            <div key={label}>
+              <p className="text-[13px] tracking-[1.5px] text-[#aab4c0] uppercase">{label}</p>
+              <div className={`relative mt-[2px] mb-[4px] flex h-[24px] items-center rounded-[3px] bg-gradient-to-r ${colors}`}>
+                <span className="absolute inset-x-0 text-center text-[20px] font-semibold text-white [text-shadow:0_2px_5px_#000]">{value}</span>
+                <span className="mr-[8px] ml-auto text-[15px] font-semibold text-white/80 [text-shadow:0_1px_5px_#000]">+{regen}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -127,7 +270,7 @@ function Stats({ info }) {
     ["Mana regen", number("StatusManaRegen")],
   ];
   return (
-    <dl className="grid grid-cols-2 gap-x-10 gap-y-0 text-base">
+    <dl className="grid grid-cols-2 gap-x-10 gap-y-0 text-[16px]">
       {rows.map(([label, value, color]) => (
         <div key={label} className="flex justify-between gap-4 border-b border-black/50 py-2.5">
           <dt className="text-ash" style={color ? { color } : undefined}>
@@ -140,8 +283,51 @@ function Stats({ info }) {
   );
 }
 
-export default function HeroPage({ catalog, hero, language, viewer, loadout, previous, next, onOpen }) {
+// The row under the top bar: the previous hero, the page's tabs, the next hero
+function HeroNav({ hero, base, tab, onTab, previous, next, onOpen }) {
+  const side = (other, forward) =>
+    other && (
+      <button
+        onClick={() => onOpen({ type: "hero", id: other.id })}
+        data-sound="toptab"
+        className={`flex items-center gap-[10px] text-[16px] tracking-[2px] text-[#808fa6] uppercase hover:text-[#e6ebef] ${forward ? "flex-row-reverse" : ""}`}
+      >
+        {forward ? <ArrowRight className="size-[22px]" /> : <ArrowLeft className="size-[22px]" />}
+        {other.name}
+      </button>
+    );
+  return (
+    <div className="flex h-[52px] items-center bg-gradient-to-b from-black/45 to-black/20 px-[60px]">
+      <div className="w-[300px]">{side(previous, false)}</div>
+      <div className="flex flex-1 items-center justify-center gap-[22px]">
+        <img src={image(base, `heroes/icons/npc_dota_hero_${hero.id}_png`)} alt="" className="size-[28px]" onError={(event) => (event.currentTarget.style.display = "none")} />
+        {TABS.map(([id, label], index) => (
+          <Fragment key={id}>
+            {index > 0 && (
+              <span className="text-[20px] text-[#808fa6]/50" aria-hidden>
+                /
+              </span>
+            )}
+            <button
+              role="tab"
+              aria-selected={tab === id}
+              data-sound="toptab"
+              onClick={() => onTab(id)}
+              className={`text-[20px] tracking-[4px] uppercase transition-colors ${tab === id ? "text-white [text-shadow:0_0_12px_rgb(255_255_255/0.35)]" : "text-[#808fa6] hover:text-[#e6ebef]"}`}
+            >
+              {label}
+            </button>
+          </Fragment>
+        ))}
+      </div>
+      <div className="flex w-[300px] justify-end">{side(next, true)}</div>
+    </div>
+  );
+}
+
+export default function HeroPage({ catalog, hero, language, viewer, summary, wardrobe, wardrobeOpen, onCloseWardrobe, previous, next, onOpen }) {
   const [tab, setTab] = useState("loadout");
+  const scale = useUiScale();
   const { data } = useGameData(catalog.modelsBase, ["heroes.json", "abilities.json"], language);
   const info = data?.heroes[`npc_dota_hero_${hero.id}`];
 
@@ -160,11 +346,8 @@ export default function HeroPage({ catalog, hero, language, viewer, loadout, pre
     if (!info || !data?.abilities) {
       return;
     }
-    const known = data.abilities;
-    const abilities = Array.from({ length: 9 }, (_, index) => info[`Ability${index + 1}`]).filter(
-      (name) => name && name !== "generic_hidden" && !name.startsWith("special_bonus") && known[name] && !/HIDDEN/.test(known[name].AbilityBehavior ?? "")
-    );
-    const keys = castKeys(abilities, known);
+    const abilities = castable(info, data.abilities);
+    const keys = castKeys(abilities, data.abilities);
     const onKey = (event) => {
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.("input, textarea")) {
         return;
@@ -180,62 +363,40 @@ export default function HeroPage({ catalog, hero, language, viewer, loadout, pre
   });
 
   return (
-    <div className="relative min-h-0 flex-1">
-      {/* The stage fills the page; the text lies over it on the right, as in the game */}
+    <div className="relative min-h-0 flex-1 overflow-hidden">
+      <Backdrop base={catalog.modelsBase} heroId={hero.id} />
+      {/* The model fills the page under the columns */}
       <div className="absolute inset-0">{viewer}</div>
-      {[
-        [previous, "left-0", ChevronLeft],
-        [next, "right-0", ChevronRight],
-      ].map(
-        ([other, side, Icon]) =>
-          other && (
-            <button
-              key={side}
-              onClick={() => onOpen({ type: "hero", id: other.id })}
-              data-hover
-              data-sound="toptab"
-              className={`group absolute top-6 ${side} z-20 flex items-center gap-2 px-1 ${side === "right-0" ? "flex-row-reverse" : ""}`}
-            >
-              <span className="grid h-12 w-8 place-items-center border border-black/70 bg-black/40 text-ash transition-colors group-hover:text-bone">
-                <Icon className="size-6" />
-              </span>
-              <span className={`max-w-28 font-display text-xs tracking-[0.14em] text-ash/70 transition-colors group-hover:text-bone ${side === "right-0" ? "text-right" : ""}`}>
-                {other.name}
-              </span>
-            </button>
-          )
-      )}
-      <div className="pointer-events-none absolute inset-y-0 right-0 flex w-[45%] flex-col bg-gradient-to-l from-black/40 via-black/15 to-transparent">
-        <div className="pointer-events-auto shrink-0 pt-8 pr-28 pl-2">
-          <HeroHeader catalog={catalog} hero={hero} info={info} data={data} onAbout={() => setTab("about")} onCast={cast} />
-          <div className="mt-6 flex items-center gap-4 pb-3" role="tablist">
-            {TABS.map(([id, label], index) => (
-              <Fragment key={id}>
-                {index > 0 && (
-                  <span className="text-ash/35" aria-hidden>
-                    /
-                  </span>
-                )}
-                <button
-                  role="tab"
-                  aria-selected={tab === id}
-                  data-sound="toptab"
-                  onClick={() => setTab(id)}
-                  className={`font-sans text-[19px] uppercase tracking-[0.12em] transition-colors ${
-                    tab === id ? "text-bone [text-shadow:0_0_14px_rgb(255_255_255/0.3)]" : "text-ash/70 hover:text-bone"
-                  }`}
-                >
-                  {label}
-                </button>
-              </Fragment>
-            ))}
-          </div>
+      <div className="pointer-events-none absolute inset-0 flex flex-col" style={{ zoom: scale }}>
+        <div className="pointer-events-auto">
+          <HeroNav hero={hero} base={catalog.modelsBase} tab={tab} onTab={setTab} previous={previous} next={next} onOpen={onOpen} />
         </div>
-        <div className={`pointer-events-auto min-h-0 flex-1 overflow-y-auto pr-6 scrollbar-thin ${tab === "loadout" ? "[&>div]:pl-4" : "py-5 pl-4"}`}>
-          {tab === "loadout" && loadout}
-          {tab === "voice" && <Voice modelsBase={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} />}
-          {tab === "stats" && <Stats info={info} />}
-          {tab === "about" && <HeroInfo base={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} language={language} />}
+        <div className="relative min-h-0 flex-1">
+          <div className="pointer-events-auto absolute top-[90px] left-[90px] w-[540px]">
+            <HeroSummary catalog={catalog} hero={hero} info={info} data={data} onAbout={() => setTab("about")} onCast={cast} />
+          </div>
+          {tab !== "loadout" ? (
+            <div className="pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] overflow-y-auto bg-black/55 p-[24px] shadow-[0_8px_32px_rgb(0_0_0/0.5)] scrollbar-thin">
+              {tab === "voice" && <Voice modelsBase={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} />}
+              {tab === "stats" && <Stats info={info} />}
+              {tab === "about" && <HeroInfo base={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} language={language} />}
+            </div>
+          ) : wardrobeOpen ? (
+            // Until the game's own outfit picker is made: the wardrobe over the right side
+            <div className="pointer-events-auto absolute top-[40px] right-[60px] bottom-[40px] w-[900px] shadow-[0_8px_32px_rgb(0_0_0/0.6)]">
+              {wardrobe}
+              <button
+                onClick={onCloseWardrobe}
+                data-sound="back"
+                aria-label="Close"
+                className="absolute -top-[14px] -right-[14px] grid size-[36px] place-items-center bg-[#2b3139] text-[#e6ebef] shadow-lg hover:brightness-150"
+              >
+                <X className="size-[20px]" />
+              </button>
+            </div>
+          ) : (
+            <div className="pointer-events-auto absolute top-[90px] right-[90px] w-[422px]">{summary}</div>
+          )}
         </div>
       </div>
     </div>

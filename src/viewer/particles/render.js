@@ -7,6 +7,10 @@ import { UNIT } from "./math.js";
 
 const toCamera = new THREE.Vector3();
 
+// A number of a renderer's parameters, whatever the file gives: a number, an input's literal
+// value, or the default for anything that varies
+const num = (value, fallback) => (typeof value === "number" && Number.isFinite(value) ? value : typeof value?.m_flLiteralValue === "number" ? value.m_flLiteralValue : fallback);
+
 // The texture a renderer draws, and its sheet of frames
 function textureOf(def) {
   return def.m_vecTexturesInput?.[0]?.m_hTexture ?? def.m_hTexture ?? null;
@@ -43,10 +47,10 @@ function frameOf(sheet, sequenceIndex, age, normalizedAge, def, out, offset) {
   }
   const sequence = sequences[Math.abs(Math.floor(sequenceIndex)) % sequences.length];
   const frames = sequence.frames;
-  const rate = def.m_flAnimationRate ?? 0.1;
+  const rate = num(def.m_flAnimationRate, 0.1);
   let cycle;
   if (def.m_nAnimationType === "ANIMATION_TYPE_FIT_LIFETIME" || def.m_bFitCycleToLifetime) {
-    cycle = normalizedAge * (def.m_flAnimationRate2 || 1);
+    cycle = normalizedAge * (num(def.m_flAnimationRate2, 1) || 1);
   } else if (def.m_bAnimateInFPS) {
     cycle = (age * rate) / frames.length;
   } else {
@@ -156,13 +160,13 @@ function material(def, vertexShader, orientation) {
     uniforms: {
       uMap: { value: null },
       uHasMap: { value: 0 },
-      uOverbright: { value: def.m_flOverbrightFactor ?? 1 },
+      uOverbright: { value: num(def.m_flOverbrightFactor, 1) },
       uHalf: { value: 1 },
       uMod: { value: 0 },
       uOrientation: { value: orientation },
-      uCameraBias: { value: (def.VisibilityInputs?.m_flCameraBias ?? 0) * UNIT },
+      uCameraBias: { value: num(def.VisibilityInputs?.m_flCameraBias, 0) * UNIT },
       uScreenSize: {
-        value: new THREE.Vector4(def.m_flMinSize ?? 0, def.m_flMaxSize ?? 5000, def.m_flStartFadeSize ?? 1e8, def.m_flEndFadeSize ?? 2e8),
+        value: new THREE.Vector4(num(def.m_flMinSize, 0), num(def.m_flMaxSize, 5000), num(def.m_flStartFadeSize, 1e8), num(def.m_flEndFadeSize, 2e8)),
       },
     },
     transparent: true,
@@ -220,12 +224,12 @@ function quads(def, system, trail) {
       mat.uniforms.uHasMap.value = 1;
     });
   }
-  const radiusScale = (def.m_flRadiusScale?.m_flLiteralValue ?? def.m_flRadiusScale ?? 1) * UNIT;
-  const alphaScale = def.m_flAlphaScale?.m_flLiteralValue ?? def.m_flAlphaScale ?? 1;
+  const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;
+  const alphaScale = num(def.m_flAlphaScale, 1);
   const sequenceOverride = def.m_nSequenceOverride ?? -1;
-  const maxLength = (def.m_flMaxLength ?? 2000) * UNIT;
-  const minLength = (def.m_flMinLength ?? 0) * UNIT;
-  const lengthScale = def.m_flLengthScale ?? 1;
+  const maxLength = num(def.m_flMaxLength, 2000) * UNIT;
+  const minLength = num(def.m_flMinLength, 0) * UNIT;
+  const lengthScale = num(def.m_flLengthScale, 1);
 
   return {
     object: mesh,
@@ -331,10 +335,10 @@ function rope(def, system) {
       mat.uniforms.uHasMap.value = 1;
     });
   }
-  const radiusScale = (def.m_flRadiusScale?.m_flLiteralValue ?? def.m_flRadiusScale ?? 1) * UNIT;
-  const alphaScale = def.m_flAlphaScale?.m_flLiteralValue ?? def.m_flAlphaScale ?? 1;
-  const worldSize = def.m_flTextureVWorldSize ?? 10;
-  const scroll = def.m_flTextureVScrollRate ?? 0;
+  const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;
+  const alphaScale = num(def.m_flAlphaScale, 1);
+  const worldSize = num(def.m_flTextureVWorldSize, 10) || 10;
+  const scroll = num(def.m_flTextureVScrollRate, 0);
   const a = new THREE.Vector3();
   const b = new THREE.Vector3();
   const tangent = new THREE.Vector3();

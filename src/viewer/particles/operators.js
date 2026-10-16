@@ -1661,7 +1661,28 @@ function strengthFilter(def, instance) {
   return instance;
 }
 
+// Parameters the newer files give as literal inputs, made plain numbers and vectors, so code
+// reading a number gets one
+function flatten(def) {
+  const result = {};
+  for (const [key, value] of Object.entries(def)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      if (value.m_nType === "PF_TYPE_LITERAL" && (value.m_nMapType ?? "PF_MAP_TYPE_DIRECT") === "PF_MAP_TYPE_DIRECT") {
+        result[key] = value.m_flLiteralValue ?? 0;
+        continue;
+      }
+      if (value.m_nType === "PVEC_TYPE_LITERAL" && Array.isArray(value.m_vLiteralValue)) {
+        result[key] = value.m_vLiteralValue;
+        continue;
+      }
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
 export function createOperator(def, kind, system) {
+  def = flatten(def);
   const name = def._class;
   const make = kind === "renderer" ? RENDERERS[name] : DEFS[name];
   if (!make) {

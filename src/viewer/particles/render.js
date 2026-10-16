@@ -364,6 +364,8 @@ function quads(def, system, trail) {
   const maxLength = num(def.m_flMaxLength, 2000) * UNIT;
   const minLength = num(def.m_flMinLength, 0) * UNIT;
   const lengthScale = num(def.m_flLengthScale, 1);
+  const ignoreDT = Boolean(def.m_bIgnoreDT);
+  const lengthFadeIn = num(def.m_flLengthFadeInTime, 0);
 
   return {
     object: mesh,
@@ -403,7 +405,10 @@ function quads(def, system, trail) {
           // The trail reaches back as far as the particle went in its trail time
           // (its direction from the movement alone: a trail held at its minimum length still points
           // the way the particle goes)
-          const speedScale = (trailLength[i] / (1 / 60)) * lengthScale;
+          // A speed (per second) times the trail time, or with m_bIgnoreDT the step of one frame
+          // times it; growing to its length over m_flLengthFadeInTime
+          const fadeIn = lengthFadeIn > 0 ? Math.min((system.age - creation[i]) / lengthFadeIn, 1) : 1;
+          const speedScale = (ignoreDT ? trailLength[i] : trailLength[i] / (1 / 60)) * lengthScale * fadeIn;
           const vx = (p[j + 1] - q[j + 1]) * UNIT;
           const vy = (p[j + 2] - q[j + 2]) * UNIT;
           const vz = (p[j] - q[j]) * UNIT;
@@ -430,10 +435,11 @@ function quads(def, system, trail) {
 
 const ROPE_VERTEX = /* glsl */ `
   attribute vec4 color;
+  uniform vec4 uTexTransform;
   varying vec2 vUv;
   varying vec4 vColor;
   void main() {
-    vUv = uv;
+    vUv = uv * uTexTransform.xy + uTexTransform.zw;
     vColor = color;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
@@ -547,8 +553,13 @@ const kept = (kind, def) => {
 // would be a bare square
 const drawn = (def) => !def.m_bRefract && !def.m_bOnlyRenderInEffectsBloomPass && textureOf(def) !== null;
 
+// A rope runs through its particles in order; particles put at a model snapshot's points (a file
+// of points in order along a blade, which the export does not have) land anywhere on the model
+// here, and a rope through them would cut across the whole hero
+const fromSnapshot = (system) => (system.def.m_Initializers ?? []).some((op) => /FromCPSnapshot|FromSnapshot/.test(op._class));
+
 export const RENDERERS = {
   C_OP_RenderSprites: (def, system) => (drawn(def) && kept("sprites", def) ? quads(def, system, false) : {}),
   C_OP_RenderTrails: (def, system) => (drawn(def) && kept("trails", def) ? quads(def, system, true) : {}),
-  C_OP_RenderRopes: (def, system) => (drawn(def) && kept("ropes", def) ? rope(def, system) : {}),
+  C_OP_RenderRopes: (def, system) => (drawn(def) && !fromSnapshot(system) && kept("ropes", def) ? rope(def, system) : {}),
 };

@@ -331,8 +331,13 @@ DEFS.C_INIT_RandomSecondSequence = sequence(13);
 DEFS.C_INIT_InitialVelocityNoise = (def) => {
   const min = compileVector(def.m_vecOutputMin, [0, 0, 0]);
   const max = compileVector(def.m_vecOutputMax, [1, 1, 1]);
-  const scale = compileFloat(def.m_flNoiseScale, 1);
-  const point = def.m_TransformInput?.m_nControlPoint ?? 0;
+  // Noise through time and through space: particles made one after another, or near one
+  // another, get much the same speed (a rope through them stays smooth)
+  const timeScale = compileFloat(def.m_flNoiseScale, 1);
+  const placeScale = compileFloat(def.m_flNoiseScaleLoc, 0.01);
+  const offset = arr(def.m_vecOffsetLoc, [0, 0, 0]);
+  const timeOffset = def.m_flOffset ?? 0;
+  const point = def.m_TransformInput?.m_nControlPoint ?? def.m_nControlPointNumber ?? 0;
   const local = Boolean(def.m_bLocalSpace);
   const lo = [0, 0, 0];
   const hi = [0, 0, 0];
@@ -343,11 +348,15 @@ DEFS.C_INIT_InitialVelocityNoise = (def) => {
       for (let i = start; i < end; i++) {
         min(system, i, lo);
         max(system, i, hi);
-        const s = scale(system, i) * 0.01;
+        const t = (system.age + timeOffset) * timeScale(system, i);
+        const s = placeScale(system, i);
+        const x = (p[i * 3] + offset[0]) * s;
+        const y = (p[i * 3 + 1] + offset[1]) * s;
+        const z = (p[i * 3 + 2] + offset[2]) * s;
         v1.set(
-          lerp(lo[0], hi[0], noise(p[i * 3] * s + system.age, 0.1, 0.2) * 0.5 + 0.5 + (Math.random() - 0.5) * 0.6),
-          lerp(lo[1], hi[1], noise(0.3, p[i * 3 + 1] * s + system.age, 0.4) * 0.5 + 0.5 + (Math.random() - 0.5) * 0.6),
-          lerp(lo[2], hi[2], noise(0.5, 0.6, p[i * 3 + 2] * s + system.age) * 0.5 + 0.5 + (Math.random() - 0.5) * 0.6)
+          lerp(lo[0], hi[0], noise(x + t, y, z) * 0.5 + 0.5),
+          lerp(lo[1], hi[1], noise(x + 31.7, y + t, z + 7.3) * 0.5 + 0.5),
+          lerp(lo[2], hi[2], noise(x + 11.1, y + 53.9, z + t) * 0.5 + 0.5)
         );
         if (local) v1.applyQuaternion(cp.quaternion);
         setVelocity(system, i, v1.x, v1.y, v1.z, true);

@@ -131,17 +131,16 @@ function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetc
         aria-label={name}
         className="group absolute inset-0"
       >
-        <img
-          src={portrait}
-          alt=""
-          loading="lazy"
-          className={`absolute top-[4px] left-[4px] h-[75px] w-[43px] object-cover shadow-[0_2px_12px_-1px_rgb(0_0_0/0.3)] transition-[filter,opacity] duration-200 ${
+        <span
+          aria-hidden
+          style={portrait(43, 75)}
+          className={`absolute top-[4px] left-[4px] h-[75px] w-[43px] bg-no-repeat shadow-[0_2px_12px_-1px_rgb(0_0_0/0.3)] transition-[filter,opacity] duration-200 ${
             state === "dim" ? "opacity-50 brightness-[0.25] saturate-0" : state === "found" ? "hero-card-found" : "saturate-[0.7]"
           }`}
         />
         {/* The card the game shows under the pointer: the hero's animated portrait and name, over its neighbours */}
         <span className="pointer-events-none absolute top-1/2 left-1/2 h-[204px] w-[155px] -translate-x-1/2 -translate-y-1/2 scale-[0.4] border-2 border-black bg-black opacity-0 shadow-[0_8px_32px_rgb(0_0_0/0.85)] transition-[transform,opacity] duration-150 ease-out group-hover:scale-100 group-hover:opacity-100">
-          <img src={portrait} alt="" className="absolute inset-0 size-full object-cover" />
+          <span aria-hidden style={portrait(151, 200)} className="absolute inset-0 bg-no-repeat" />
           {hovered && <HeroMovie src={video} />}
           <span className="absolute inset-x-0 bottom-0 bg-black/80 px-[4px] pt-[5px] pb-[2px] text-center text-[16px] leading-[20px] tracking-[2px] text-white uppercase">{name}</span>
           {/* Where the game puts its event tokens, what does not change: attribute, attack, complexity */}
@@ -156,6 +155,42 @@ function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetc
       </button>
     </li>
   );
+}
+
+// Every hero's portrait in one image from the dataset (images/heroes/selection_atlas), so the
+// grid loads in one request; a hero not in it, or before it is in, has its own image
+let atlasRequest = null;
+function useAtlas(base) {
+  // undefined while it loads, null when the dataset has none
+  const [atlas, setAtlas] = useState(undefined);
+  useEffect(() => {
+    atlasRequest ??= fetch(`${base}images/heroes/selection_atlas.json`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((sheet) => sheet && { ...sheet, url: `${base}images/heroes/selection_atlas.webp` })
+      .catch(() => null);
+    atlasRequest.then(setAtlas);
+  }, [base]);
+  return atlas;
+}
+
+// A portrait filling a box as object-fit: cover would, from the atlas or the hero's own image
+function portraitStyle(atlas, hero, fallback) {
+  return (width, height) => {
+    if (atlas === undefined) {
+      return {};
+    }
+    const cell = atlas?.[hero];
+    if (!cell) {
+      return { backgroundImage: `url(${fallback})`, backgroundSize: "cover", backgroundPosition: "center" };
+    }
+    const [x, y, w, h] = cell;
+    const scale = Math.max(width / w, height / h);
+    return {
+      backgroundImage: `url(${atlas.url})`,
+      backgroundSize: `${atlas.width * scale}px ${atlas.height * scale}px`,
+      backgroundPosition: `${-(x * scale + (w * scale - width) / 2)}px ${-(y * scale + (h * scale - height) / 2)}px`,
+    };
+  };
 }
 
 // The animated portraits, each downloaded once and kept while recent (about a megabyte each):
@@ -243,6 +278,7 @@ function HeroMovie({ src: url }) {
 export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
   const { data } = useGameData(catalog.modelsBase, ["heroes.json"]);
   const scale = useUiScale();
+  const atlas = useAtlas(catalog.modelsBase);
   const [sort, setSort] = useState("attributes");
   const [roles, setRoles] = useState([]);
   const [complexity, setComplexity] = useState([]);
@@ -323,7 +359,7 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
       key={entry.hero.id}
       hero={entry.hero}
       name={entry.name}
-      portrait={imageUrl(catalog.modelsBase, `heroes/selection/npc_dota_hero_${entry.hero.id}`)}
+      portrait={portraitStyle(atlas, entry.hero.id, imageUrl(catalog.modelsBase, `heroes/selection/npc_dota_hero_${entry.hero.id}`))}
       facts={factsOf(entry)}
       video={videoOf(entry)}
       onHover={() => preloadAround(list, index, perRow)}

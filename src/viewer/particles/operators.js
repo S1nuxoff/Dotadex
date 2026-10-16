@@ -1681,8 +1681,22 @@ function flatten(def) {
   return result;
 }
 
+// The game gives rotations, their speed, yaw and pitch in degrees wherever an operator writes
+// a range to them, and keeps them in radians: the range turned to radians
+const ANGLE_FIELDS = new Set([4, 5, 12, 20]);
+const ANGLE_KEYS = ["m_flOutputMin", "m_flOutputMax", "m_flOutput", "m_flOutputMin2", "m_flOutputMax2"];
+function anglesToRadians(def) {
+  if (!ANGLE_FIELDS.has(Number(def.m_nFieldOutput))) return def;
+  // The noises' range when the file leaves it out: 0 to 1, of degrees here
+  if (/Noise$/.test(def._class) && def.m_flOutputMax === undefined) def.m_flOutputMax = 1;
+  for (const key of ANGLE_KEYS) {
+    if (typeof def[key] === "number") def[key] *= deg;
+  }
+  return def;
+}
+
 export function createOperator(def, kind, system) {
-  def = flatten(def);
+  def = anglesToRadians(flatten(def));
   const name = def._class;
   const make = kind === "renderer" ? RENDERERS[name] : DEFS[name];
   if (!make) {

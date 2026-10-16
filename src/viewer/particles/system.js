@@ -52,8 +52,9 @@ export class ParticleSystem {
     this.constants = {
       radius: def.m_flConstantRadius ?? 5,
       lifetime: def.m_flConstantLifespan ?? 1,
-      roll: def.m_flConstantRotation ?? 0,
-      rollSpeed: def.m_flConstantRotationSpeed ?? 0,
+      // In degrees in the file
+      roll: ((def.m_flConstantRotation ?? 0) * Math.PI) / 180,
+      rollSpeed: ((def.m_flConstantRotationSpeed ?? 0) * Math.PI) / 180,
       sequence: def.m_nConstantSequenceNumber ?? 0,
       sequence2: def.m_nConstantSequenceNumber1 ?? 0,
       color: [constant[0] / 255, constant[1] / 255, constant[2] / 255],

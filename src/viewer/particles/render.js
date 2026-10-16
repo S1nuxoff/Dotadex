@@ -76,9 +76,14 @@ const SPRITE_VERTEX = /* glsl */ `
   uniform float uCameraBias;
   varying vec2 vUv;
   varying vec4 vColor;
+  // Normalized, or a fallback where the vector is nothing (normalize gives NaN there on graphics cards)
+  vec3 safeNormalize(vec3 v) {
+    float l = length(v);
+    return l > 1e-6 ? v / l : vec3(0.0, 1.0, 0.0);
+  }
   void main() {
     // Drawn a little towards the camera, so particles inside the model show, as the game does
-    vec3 center = iPosition + normalize(cameraPosition - iPosition) * uCameraBias;
+    vec3 center = iPosition + safeNormalize(cameraPosition - iPosition) * uCameraBias;
     vUv = iFrame.xy + uv * iFrame.zw;
     vColor = iColor;
     // The game keeps sprites within a share of the screen and fades them as they grow on it:
@@ -108,19 +113,19 @@ const SPRITE_VERTEX = /* glsl */ `
       up = vec3(0.0, 0.0, 1.0);
     } else if (uOrientation == 2) {
       // Turned round the up axis to the camera
-      vec3 toCamera = normalize(cameraPosition - center);
+      vec3 toCamera = safeNormalize(cameraPosition - center);
       up = vec3(0.0, 1.0, 0.0);
-      right = normalize(cross(up, toCamera));
+      right = safeNormalize(cross(up, toCamera));
     } else if (uOrientation == 3) {
       // Along the particle's normal
-      vec3 n = normalize(iNormal + vec3(0.0, 1e-5, 0.0));
-      right = normalize(cross(abs(n.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0), n));
+      vec3 n = safeNormalize(iNormal + vec3(0.0, 1e-5, 0.0));
+      right = safeNormalize(cross(abs(n.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0), n));
       up = cross(n, right);
     } else {
       // Stretched along the movement, as a trail
-      vec3 toCamera = normalize(cameraPosition - center);
-      vec3 along = length(iVelocity) > 1e-6 ? normalize(iVelocity) : vec3(0.0, 1.0, 0.0);
-      right = normalize(cross(along, toCamera));
+      vec3 toCamera = safeNormalize(cameraPosition - center);
+      vec3 along = length(iVelocity) > 1e-6 ? safeNormalize(iVelocity) : vec3(0.0, 1.0, 0.0);
+      right = safeNormalize(cross(along, toCamera));
       float length = max(length(iVelocity), iSizeRoll.x);
       vec3 world = center + right * (uv.x - 0.5) * 2.0 * size - along * (1.0 - uv.y) * length;
       gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
@@ -143,12 +148,16 @@ const FRAGMENT = /* glsl */ `
     float alpha = texel.a * vColor.a;
     if (uMod > 0.5) {
       // Mid grey where the particle is see-through, so it leaves what is behind as it is
-      gl_FragColor = vec4(mix(vec3(0.5), texel.rgb * vColor.rgb, clamp(alpha, 0.0, 1.0)), 1.0);
+      vec3 mod2x = mix(vec3(0.5), texel.rgb * vColor.rgb, clamp(alpha, 0.0, 1.0));
+      if (any(isnan(mod2x))) discard;
+      gl_FragColor = vec4(clamp(mod2x, 0.0, 1.0), 1.0);
       return;
     }
     vec4 color = vec4(texel.rgb * vColor.rgb * uOverbright * uHalf, alpha);
-    if (color.a < 0.002) discard;
-    gl_FragColor = color;
+    // Kept finite and within what the bloom can take: an infinite or broken value spreads into
+    // black squares through the bloom's blur on graphics cards
+    if (any(isnan(color)) || color.a < 0.002) discard;
+    gl_FragColor = vec4(clamp(color.rgb, 0.0, 8.0), clamp(color.a, 0.0, 1.0));
     #include <colorspace_fragment>
   }
 `;
@@ -259,9 +268,9 @@ function quads(def, system, trail) {
         normal.array[j + 1] = normals[j + 2];
         normal.array[j + 2] = normals[j];
         // The game draws a particle's values within range: no color below black, alpha 0 to 1
-        color.array[i * 4] = Math.max(0, tint[j]);
-        color.array[i * 4 + 1] = Math.max(0, tint[j + 1]);
-        color.array[i * 4 + 2] = Math.max(0, tint[j + 2]);
+        color.array[i * 4] = Math.min(Math.max(tint[j] || 0, 0), 4);
+        color.array[i * 4 + 1] = Math.min(Math.max(tint[j + 1] || 0, 0), 4);
+        color.array[i * 4 + 2] = Math.min(Math.max(tint[j + 2] || 0, 0), 4);
         color.array[i * 4 + 3] = Math.min(Math.max(alpha[i], 0), 1) * Math.min(Math.max(alpha2[i], 0), 1) * alphaScale;
         sizeRoll.array[i * 2] = Math.max(0, radius[i]) * radiusScale;
         sizeRoll.array[i * 2 + 1] = roll[i];
@@ -376,9 +385,9 @@ function rope(def, system) {
           uvs.array[(i * 2 + s) * 2] = s;
           uvs.array[(i * 2 + s) * 2 + 1] = v;
           const c = (i * 2 + s) * 4;
-          colors.array[c] = Math.max(0, tint[j]);
-          colors.array[c + 1] = Math.max(0, tint[j + 1]);
-          colors.array[c + 2] = Math.max(0, tint[j + 2]);
+          colors.array[c] = Math.min(Math.max(tint[j] || 0, 0), 4);
+          colors.array[c + 1] = Math.min(Math.max(tint[j + 1] || 0, 0), 4);
+          colors.array[c + 2] = Math.min(Math.max(tint[j + 2] || 0, 0), 4);
           colors.array[c + 3] = Math.min(Math.max(alpha[i], 0), 1) * Math.min(Math.max(alpha2[i], 0), 1) * alphaScale;
         }
       }
@@ -395,8 +404,17 @@ function rope(def, system) {
   };
 }
 
+// While developing, ?pfilter=sprites,ropes,trails,add,alpha,mod2x keeps only those renderers
+const filter = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("pfilter") : null;
+const kept = (kind, def) => {
+  if (!filter) return true;
+  const words = filter.toLowerCase().split(",");
+  const blend = (def.m_nOutputBlendMode ?? "PARTICLE_OUTPUT_BLEND_MODE_ALPHA").replace("PARTICLE_OUTPUT_BLEND_MODE_", "").toLowerCase();
+  return words.includes(kind) || words.includes(blend) || words.includes(`${kind}-${blend}`);
+};
+
 export const RENDERERS = {
-  C_OP_RenderSprites: (def, system) => quads(def, system, false),
-  C_OP_RenderTrails: (def, system) => quads(def, system, true),
-  C_OP_RenderRopes: (def, system) => rope(def, system),
+  C_OP_RenderSprites: (def, system) => (kept("sprites", def) ? quads(def, system, false) : {}),
+  C_OP_RenderTrails: (def, system) => (kept("trails", def) ? quads(def, system, true) : {}),
+  C_OP_RenderRopes: (def, system) => (kept("ropes", def) ? rope(def, system) : {}),
 };

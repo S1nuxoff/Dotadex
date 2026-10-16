@@ -187,7 +187,8 @@ export default function App() {
   useEffect(() => setWardrobe(false), [routeHero]);
   const [panelView, setPanelView] = useState("hero");
   // The hero grid, as the game opens on it, always, until a hero is picked
-  const [heroGrid, setHeroGrid] = useState(true);
+  // (while developing, a link to a hero or item opens it, for checking a look directly)
+  const [heroGrid, setHeroGrid] = useState(() => !(import.meta.env.DEV && window.location.hash));
   const wide = useWide();
   const [language, setLanguage] = useLanguage();
 
@@ -205,7 +206,11 @@ export default function App() {
         setRoute(first);
         // The site opens on the hero grid whatever the link; the hero or item of the link waits
         // behind it
-        window.history.replaceState(null, "", window.location.pathname);
+        if (!import.meta.env.DEV) {
+          window.history.replaceState(null, "", window.location.pathname);
+        } else if (window.location.hash) {
+          setTab(tabFor(ready, first));
+        }
       })
       .catch((reason) => setError(reason.message));
   }, []);

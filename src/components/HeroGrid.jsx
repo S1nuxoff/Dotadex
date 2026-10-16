@@ -158,31 +158,33 @@ function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetc
   );
 }
 
-// The animated portraits, downloaded ahead around the card under the pointer so the next one
-// starts at once; the most recent ones are kept, each about a megabyte
+// The animated portraits, each downloaded once and kept while recent (about a megabyte each):
+// the one under the pointer first, then those around it, so the next one starts at once
 const videoCache = new Map();
 const VIDEOS_KEPT = 48;
 
-function preloadVideo(url) {
-  const known = videoCache.get(url);
-  if (known) {
+// -> a promise of the video as a blob URL
+function loadVideo(url, priority) {
+  let entry = videoCache.get(url);
+  if (entry) {
     videoCache.delete(url);
-    videoCache.set(url, known);
-    return;
+  } else {
+    entry = { blob: null };
+    entry.promise = fetch(url, { priority })
+      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error(res.status))))
+      .then((blob) => (entry.blob = URL.createObjectURL(blob)))
+      .catch((error) => {
+        videoCache.delete(url);
+        throw error;
+      });
   }
-  const entry = { blob: null };
   videoCache.set(url, entry);
-  fetch(url)
-    .then((res) => (res.ok ? res.blob() : Promise.reject()))
-    .then((blob) => {
-      entry.blob = URL.createObjectURL(blob);
-    })
-    .catch(() => videoCache.delete(url));
   while (videoCache.size > VIDEOS_KEPT) {
     const [oldest, { blob }] = videoCache.entries().next().value;
     blob && URL.revokeObjectURL(blob);
     videoCache.delete(oldest);
   }
+  return entry.promise;
 }
 
 // The three tiles under the hover card
@@ -210,19 +212,31 @@ function factsOf({ attribute, info }) {
 // The game keeps these 256x256, squeezed; drawn stretched to the card, as the game does, they
 // come out in the portrait's proportions
 function HeroMovie({ src: url }) {
+  const [src, setSrc] = useState(() => videoCache.get(url)?.blob ?? null);
   const [ready, setReady] = useState(false);
-  // Already downloaded, it starts at once; otherwise from the dataset while it downloads
-  const [src] = useState(() => videoCache.get(url)?.blob ?? url);
+  useEffect(() => {
+    let current = true;
+    if (!src) {
+      loadVideo(url, "high")
+        .then((blob) => current && setSrc(blob))
+        .catch(() => {});
+    }
+    return () => {
+      current = false;
+    };
+  }, [url, src]);
   return (
-    <video
-      src={src}
-      autoPlay
-      loop
-      muted
-      playsInline
-      onCanPlay={() => setReady(true)}
-      className={`absolute inset-0 size-full object-fill transition-opacity duration-150 ${ready ? "opacity-100" : "opacity-0"}`}
-    />
+    src && (
+      <video
+        src={src}
+        autoPlay
+        loop
+        muted
+        playsInline
+        onCanPlay={() => setReady(true)}
+        className={`absolute inset-0 size-full object-fill transition-opacity duration-150 ${ready ? "opacity-100" : "opacity-0"}`}
+      />
+    )
   );
 }
 
@@ -295,9 +309,13 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
   const videoOf = (entry) => `${catalog.modelsBase}videos/heroes/npc_dota_hero_${entry.hero.id}.webm`;
   // The card itself and those around it in its column, a row being 6 heroes, 4 for Universal
   const preloadAround = (list, index, perRow) => {
-    for (const step of [0, -1, 1, -perRow, perRow, -perRow - 1, -perRow + 1, perRow - 1, perRow + 1]) {
-      list[index + step] && preloadVideo(videoOf(list[index + step]));
-    }
+    const own = loadVideo(videoOf(list[index]), "high");
+    const next = () => {
+      for (const step of [-1, 1, -perRow, perRow, -perRow - 1, -perRow + 1, perRow - 1, perRow + 1]) {
+        list[index + step] && loadVideo(videoOf(list[index + step]), "low").catch(() => {});
+      }
+    };
+    own.then(next, next);
   };
 
   const card = (entry, index, list, perRow) => (

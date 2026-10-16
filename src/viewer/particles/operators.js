@@ -147,9 +147,16 @@ DEFS.C_OP_MaintainEmitter = (def) => {
 
 // ------------------------------------------------------------- initializers
 
+// A value set to a rotation, its speed, yaw or pitch is in degrees in the file (0 to 360 for any
+// turn), kept in radians; a scale of what is there stays as it is
+function degreesIn(def, field, value) {
+  if (!ANGLE_FIELDS.has(Number(field)) || /SCALE/.test(def.m_nSetMethod ?? "")) return value;
+  return (system, index) => value(system, index) * deg;
+}
+
 DEFS.C_INIT_InitFloat = (def) => {
-  const value = compileFloat(def.m_InputValue, 0);
   const field = def.m_nOutputField ?? 3;
+  const value = degreesIn(def, field, compileFloat(def.m_InputValue, 0));
   const set = setter(def);
   return {
     init(system, start, end) {
@@ -1002,8 +1009,8 @@ DEFS.C_OP_Spin = spin(4);
 DEFS.C_OP_SpinYaw = spin(12);
 
 DEFS.C_OP_SetFloat = (def) => {
-  const value = compileFloat(def.m_InputValue, 0);
   const field = def.m_nOutputField ?? 3;
+  const value = degreesIn(def, field, compileFloat(def.m_InputValue, 0));
   const strength = compileFloat(def.m_Lerp, 1);
   const set = setter(def);
   return {

@@ -129,7 +129,7 @@ const fragmentShader = /* glsl */ `
     vec3 ambient = mix(uGroundColor, uSkyColor, n.y * 0.5 + 0.5) * uAmbientScale;
     float metal = masks1.b;
     // Metal gets its color from reflections, not from diffuse light
-    vec3 diffuse = albedo * (keyDiffuse * uKeyColor + fill * uFillColor + ambient) * (1.0 - metal * 0.4);
+    vec3 diffuse = albedo * (keyDiffuse * uKeyColor + fill * uFillColor + ambient) * (1.0 - metal * 0.6);
 
     // Fresnel ramp drives rim and specular falloff
     float facing = clamp(1.0 - dot(n, v), 0.0, 1.0);
@@ -137,29 +137,30 @@ const fragmentShader = /* glsl */ `
 
     // Specular, exponent and intensity from Masks2
     float exponent = uHasMasks2 > 0.5 ? max(masks2.a * 100.0, 1.0) : uSpecularExponent;
-    float intensity = (uHasMasks2 > 0.5 ? masks2.r : 0.2) * uSpecularScale * 0.15;
+    // Materials push the scale up to 10; past a point that only turns cloth into silver
+    float intensity = (uHasMasks2 > 0.5 ? masks2.r : 0.2) * min(uSpecularScale, 4.0) * 0.08;
     vec3 h = normalize(uKeyDir + v);
     float spec = pow(max(dot(n, h), 0.0), exponent) * max(nl, 0.0);
-    vec3 specColor = mix(uSpecularColor, albedo, masks2.b);
+    vec3 specColor = mix(uSpecularColor * mix(vec3(1.0), albedo * 2.0, 0.5), albedo, masks2.b);
     vec3 specular = specColor * uKeyColor * spec * intensity * (0.4 + fresnel.b);
 
     // Rim from above, in the item's rarity tint
     float rimMask = uHasMasks2 > 0.5 ? masks2.g : 0.3;
     float rimUp = clamp(n.y * 0.6 + 0.4, 0.0, 1.0);
     // The material's own rim color (Terrorblade's is cyan), with a touch of the stage's
-    vec3 rim = min(fresnel.g * rimMask * uRimLightScale * 0.45, 1.2) * rimUp * mix(uRimLightColor, uStageRim, 0.2);
+    vec3 rim = min(fresnel.g * rimMask * uRimLightScale * 0.2, 0.5) * rimUp * mix(uRimLightColor, uStageRim, 0.2);
 
     // Reflections of a studio instead of the material's cube map: a softbox above,
     // strip lights at the sides, a dark floor and a back light in the rarity color.
     // Masked by metalness, tinted by the base color as much as Masks2 B says.
     vec3 r = reflect(-v, n);
     vec3 studio = mix(vec3(0.015, 0.018, 0.025), vec3(0.06, 0.07, 0.09), smoothstep(-0.6, 0.2, r.y));
-    studio += vec3(1.0, 0.97, 0.92) * softbox(r, vec3(-0.5, 0.55, 0.65), 0.55) * 1.8;
-    studio += vec3(0.8, 0.88, 1.0) * softbox(r, vec3(0.95, 0.15, 0.25), 0.3) * 1.1;
-    studio += vec3(0.9, 0.92, 1.0) * smoothstep(0.65, 0.95, r.y) * 0.9;
+    studio += vec3(1.0, 0.97, 0.92) * softbox(r, vec3(-0.5, 0.55, 0.65), 0.55) * 0.9;
+    studio += vec3(0.8, 0.88, 1.0) * softbox(r, vec3(0.95, 0.15, 0.25), 0.3) * 0.5;
+    studio += vec3(0.9, 0.92, 1.0) * smoothstep(0.65, 0.95, r.y) * 0.4;
     studio += uStageRim * softbox(r, vec3(0.0, 0.25, -1.0), 0.8) * 0.7;
     // Dota tints reflections by the base color unless the material blends that away
-    vec3 tint = mix(albedo * 2.2, vec3(1.0), uReflectionsUntinted);
+    vec3 tint = mix(albedo * 2.0, vec3(1.0), uReflectionsUntinted);
     // The cube map comes as a single face; read it like a matcap, by the view-space
     // reflection, which gives the uneven streaks Dota's reflections have
     if (uHasCubeMap > 0.5) {
@@ -170,21 +171,71 @@ const fragmentShader = /* glsl */ `
     vec3 env = studio * tint * metal * uCubeMapScale * mix(0.6, 1.2, fresnel.b);
 
     // Masks1 alpha is the hero shader's self-illumination mask (eyes, glowing parts)
-    vec3 selfIllum = albedo * masks1.a * uSelfIllum * 1.5;
-    vec3 outColor = diffuse + specular + rim + env + selfIllum + glow;
+    // it shows the base color as it is instead of the light on it, not on top of it
+    vec3 lit = diffuse + specular + rim + env + glow;
+    vec3 outColor = mix(lit, albedo, masks1.a * uSelfIllum);
     gl_FragColor = vec4(outColor, color.a);
     #include <colorspace_fragment>
   }
 `;
 
+// Key, fill and ambient add up to about 1 on a lit side, so the base color shows as painted
+const studioKeyDir = new THREE.Vector3(-0.45, 0.75, 0.5).normalize();
 const stage = {
-  keyDir: new THREE.Vector3(-0.45, 0.75, 0.5).normalize(),
-  keyColor: new THREE.Color(1.4, 1.34, 1.22),
+  keyDir: studioKeyDir.clone(),
+  keyColor: new THREE.Color(0.95, 0.92, 0.86),
   fillDir: new THREE.Vector3(0.7, -0.1, 0.4).normalize(),
-  fillColor: new THREE.Color(0.18, 0.22, 0.3),
-  skyColor: new THREE.Color(0.28, 0.3, 0.37),
-  groundColor: new THREE.Color(0.1, 0.09, 0.1),
+  fillColor: new THREE.Color(0.1, 0.12, 0.16),
+  skyColor: new THREE.Color(0.2, 0.21, 0.25),
+  groundColor: new THREE.Color(0.06, 0.055, 0.06),
 };
+
+const studio = {
+  keyColor: stage.keyColor.clone(),
+  fillColor: stage.fillColor.clone(),
+  skyColor: stage.skyColor.clone(),
+  groundColor: stage.groundColor.clone(),
+};
+
+// The light of a scene of the game instead of the studio, or null for the studio again.
+// keyDir is in view space, so a scene's light is turned with the camera every frame.
+export function setDotaLighting(light) {
+  stage.keyColor.copy(light?.key ?? studio.keyColor);
+  stage.fillColor.copy(light?.fill ?? studio.fillColor);
+  stage.skyColor.copy(light?.sky ?? studio.skyColor);
+  stage.groundColor.copy(light?.ground ?? studio.groundColor);
+  if (!light) {
+    stage.keyDir.copy(studioKeyDir);
+  }
+}
+
+export function setDotaKeyDir(viewDir) {
+  stage.keyDir.copy(viewDir);
+}
+
+// How much of a mask's alpha is not white: masks without self-illumination come
+// with the alpha left white, which would make the whole material glow
+const glowCache = new WeakMap();
+function hasGlow(texture) {
+  const image = texture?.image;
+  if (!image?.width) {
+    return false;
+  }
+  if (!glowCache.has(image)) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 32;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.drawImage(image, 0, 0, 32, 32);
+    const pixels = context.getImageData(0, 0, 32, 32).data;
+    let white = 0;
+    for (let i = 3; i < pixels.length; i += 4) {
+      white += pixels[i] > 250 ? 1 : 0;
+    }
+    // Glowing parts are a small share of a texture; a mostly white alpha is no mask
+    glowCache.set(image, white / (pixels.length / 4) < 0.6);
+  }
+  return glowCache.get(image);
+}
 
 // Shared so a rarity change recolors every material at once
 export const stageRim = { value: new THREE.Color("#c9a45c") };
@@ -231,7 +282,7 @@ export function createDotaMaterial(original, vmat, textures) {
       },
       uAlphaTest: { value: int.F_ALPHA_TEST ? 0.5 : 0 },
       // The flag is often not set on materials whose mask still glows in the game
-      uSelfIllum: { value: int.F_MASKS_1 ? 1 : 0 },
+      uSelfIllum: { value: int.F_SELF_ILLUM || (int.F_MASKS_1 && hasGlow(pick("g_tMasks1"))) ? 1 : 0 },
       uSpecularExponent: { value: float.g_flSpecularExponent ?? 20 },
       uSpecularScale: { value: float.g_flSpecularScale ?? 1 },
       uRimLightScale: { value: float.g_flRimLightScale ?? 1 },

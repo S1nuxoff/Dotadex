@@ -99,7 +99,7 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
   const [openSlot, setOpenSlot] = useState(null);
   const reduce = useReducedMotion();
   const hero = catalog.heroesById[outfit.hero];
-  const slots = useMemo(() => heroSlots(catalog, hero.id), [catalog, hero]);
+  const slots = useMemo(() => heroSlots(catalog, hero.id, outfit.persona ?? 0), [catalog, hero, outfit.persona]);
   const sets = useMemo(() => catalog.sets.filter((set) => set.hero === hero.id), [catalog, hero]);
   const changed = Object.keys(outfit.slots).length > 0;
   const picking = slots.find((slot) => slot.slot === openSlot);

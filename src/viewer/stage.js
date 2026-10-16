@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { createDotaMaterial, stageRim } from "./dotaMaterial.js";
+import { createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
 import { StageEffects } from "./effects.js";
 import { playLoaded, preloadSound } from "./soundPlayer.js";
 
@@ -110,10 +110,19 @@ function dotaMaterialFor(material, textures) {
   return createDotaMaterial(material, vmat, byParam);
 }
 
-// Helpers only the map editor shows: camera markers and the like, in red dev materials
+// Helpers only the map editor shows: camera markers, the stand-in heroes scenes are laid
+// out with, and the like in red dev materials
 function editorOnly(node) {
   const name = node.material?.userData?.vmat?.Name ?? "";
-  return /^materials\/(dev|tools)\//.test(name) || /camera/i.test(node.name) || /camera/i.test(node.parent?.name ?? "");
+  if (/^materials\/(dev|tools)\//.test(name)) {
+    return true;
+  }
+  for (let parent = node; parent; parent = parent.parent) {
+    if (/camera|_layout|debut_creep/i.test(parent.name)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // Environment materials of the game's scenes, from the flags in their vmat: unlit parts,
@@ -210,8 +219,15 @@ export class Stage {
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.6;
     pmrem.dispose();
-    this.scene.add(new THREE.HemisphereLight(0xb8c4d6, 0x1a1714, 1.2));
+    this.hemi = new THREE.HemisphereLight(0xb8c4d6, 0x1a1714, 1.2);
+    this.scene.add(this.hemi);
+    // The sun of a scene of the game, when one is shown
+    this.sun = new THREE.DirectionalLight(0xffffff, 0);
+    this.scene.add(this.sun, this.sun.target);
+    this.sceneLights = new THREE.Group();
+    this.scene.add(this.sceneLights);
     const key = new THREE.DirectionalLight(0xfff6ea, 2.2);
+    this.key = key;
     key.position.set(-0.45, 0.75, 0.5);
     key.target.position.set(0, 0, -1);
     this.camera.add(key, key.target);
@@ -512,6 +528,52 @@ export class Stage {
     this.updateShowcase();
   }
 
+  // The light and camera of a scene of the game: { light, camera, points } from the scene
+  // list, or null for the studio. The camera is taken when the scene says where it was.
+  setSceneLook(info) {
+    const light = info?.light;
+    this.sceneLook = light ? info : null;
+    this.sceneLights.clear();
+    if (!light) {
+      setDotaLighting(null);
+      this.sun.intensity = 0;
+      this.key.intensity = 2.2;
+      this.hemi.color.set(0xb8c4d6);
+      this.hemi.groundColor.set(0x1a1714);
+      this.hemi.intensity = 1.2;
+      this.scene.environmentIntensity = 0.6;
+      this.camera.fov = 28;
+      this.camera.updateProjectionMatrix();
+      this.frameModel();
+      return;
+    }
+    const color = (values, scale = 1) => new THREE.Color(...(values ?? [0, 0, 0]).map((value) => value * scale));
+    const [sky, fill, ground] = light.ambient ?? [];
+    const look = {
+      key: color(light.color, 1.6),
+      fill: color(fill, 0.8),
+      sky: color(sky, 0.35),
+      ground: color(ground, 0.6),
+    };
+    setDotaLighting(look);
+    // The direction the light comes from, the opposite of where it shines
+    this.sunDir = new THREE.Vector3(...light.direction).negate().normalize();
+    this.sun.color.copy(look.key);
+    this.sun.intensity = 2;
+    this.sun.position.copy(this.sunDir).multiplyScalar(1000);
+    this.key.intensity = 0;
+    this.hemi.color.copy(look.sky);
+    this.hemi.groundColor.copy(look.ground);
+    this.hemi.intensity = 2;
+    this.scene.environmentIntensity = 0.15;
+    for (const point of info.points ?? []) {
+      const lamp = new THREE.PointLight(color(point.color, 0.5), 1, 600, 1);
+      lamp.position.set(...point.position);
+      this.sceneLights.add(lamp);
+    }
+    this.frameModel(true);
+  }
+
   // The pedestal and its particles, unless a scene of the game is shown
   setShowcase(on) {
     this.showcase = on;
@@ -544,6 +606,25 @@ export class Stage {
 
   // Fits the camera to the model, gliding there unless reduced motion is on
   frameModel(immediate = false) {
+    const shot = this.sceneLook?.camera;
+    if (shot) {
+      // Source gives the horizontal field of view of a 4:3 screen
+      this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(shot.fov / 2)) * 0.75));
+      this.camera.near = 5;
+      this.camera.far = 60000;
+      this.camera.updateProjectionMatrix();
+      const position = new THREE.Vector3(...shot.position);
+      const target = position.clone().add(new THREE.Vector3(...shot.direction).multiplyScalar(position.length()));
+      this.controls.minDistance = 20;
+      this.controls.maxDistance = 20000;
+      this.controls.target.copy(target);
+      this.camera.position.copy(position);
+      this.tween = null;
+      if (this.group) {
+        this.group.position.y = 0;
+      }
+      return;
+    }
     if (!this.group) {
       return;
     }
@@ -618,6 +699,9 @@ export class Stage {
     }
 
     this.effects.update(delta);
+    if (this.sceneLook) {
+      setDotaKeyDir(this.sunDir.clone().transformDirection(this.camera.matrixWorldInverse));
+    }
     stageRim.value.lerp(this.rimTarget, reducedMotion.matches ? 1 : Math.min(delta * 3, 1));
 
     if (this.tween) {

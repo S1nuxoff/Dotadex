@@ -14,6 +14,7 @@ import {
   outfitFor,
   outfitUrls,
   parseRoute,
+  personaOf,
   routeHash,
   withExported,
 } from "./catalog.js";
@@ -226,14 +227,21 @@ export default function App() {
     } else {
       delete slots[slot];
     }
-    open({ type: "hero", id: outfit.hero, slots });
+    open({ type: "hero", id: outfit.hero, slots, persona: outfit.persona });
   };
+  // A persona's set switches to the persona, a plain set back from it
   const equipSet = (set) => {
-    const slots = { ...outfit.slots };
+    const persona = personaOf(catalog.itemsById[set.items[0]].slot);
+    const slots = persona === outfit.persona ? { ...outfit.slots } : {};
     for (const id of set.items) {
       slots[catalog.itemsById[id].slot] = { id, style: 0 };
     }
-    open({ type: "hero", id: outfit.hero, slots });
+    open({ type: "hero", id: outfit.hero, slots, persona });
+  };
+  // The hero's own body or one of its personas, keeping what is worn in that body's slots
+  const choosePersona = (persona) => {
+    const slots = Object.fromEntries(Object.entries(outfit.slots).filter(([slot]) => personaOf(slot) === persona));
+    open({ type: "hero", id: outfit.hero, slots, persona, bare: outfit.bare });
   };
 
   if (error) {
@@ -275,7 +283,7 @@ export default function App() {
       outfit={outfit}
       onEquip={equip}
       onEquipSet={equipSet}
-      onReset={() => open({ type: "hero", id: outfit.hero, slots: {} })}
+      onReset={() => open({ type: "hero", id: outfit.hero, slots: {}, persona: outfit.persona })}
       onClose={wide ? null : () => setWardrobe(false)}
     />
   );
@@ -299,6 +307,7 @@ export default function App() {
           onAlone={(alone) => open({ ...route, alone })}
           onVariant={(variant) => open({ ...route, variant })}
           onBare={(bare) => open({ ...route, bare })}
+          onPersona={choosePersona}
           onWardrobe={wide ? null : () => setWardrobe(true)}
         />}
         <button

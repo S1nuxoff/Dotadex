@@ -135,9 +135,14 @@ function itemUrls(catalog, item, style) {
   return itemModels(item, style).map((model) => catalog.modelsBase + model + (skin ? `#skin=${skin}` : ""));
 }
 
+// The persona a slot belongs to: "weapon_persona_1" -> 1, plain slots 0
+export function personaOf(slot) {
+  return Number(slot?.match(/_persona_(\d+)$/)?.[1] ?? 0);
+}
+
 // The slots of a hero, from its default items and its cosmetics:
-// [{ slot, defaultItem, count }] in the game's order
-export function heroSlots(catalog, heroId) {
+// [{ slot, defaultItem, count }] in the game's order, those of the persona shown
+export function heroSlots(catalog, heroId, persona = 0) {
   const slots = new Map();
   const hero = catalog.heroesById[heroId];
   for (const entry of hero?.defaults ?? []) {
@@ -151,7 +156,9 @@ export function heroSlots(catalog, heroId) {
       slots.get(item.slot).count += 1;
     }
   }
-  return [...slots.values()].sort((a, b) => slotRank(a.slot) - slotRank(b.slot) || a.slot.localeCompare(b.slot));
+  return [...slots.values()]
+    .filter((entry) => personaOf(entry.slot) === persona)
+    .sort((a, b) => slotRank(a.slot) - slotRank(b.slot) || a.slot.localeCompare(b.slot));
 }
 
 export function itemsForSlot(catalog, heroId, slot) {
@@ -165,12 +172,15 @@ export function outfitFor(catalog, route) {
     return { scene: route.id, hero: null, slots: {}, focus: null };
   }
   if (route.type === "hero") {
-    return { hero: route.id, slots: route.slots ?? {}, focus: null, bare: Boolean(route.bare) };
+    const slots = route.slots ?? {};
+    // A persona is shown when the link says so or when its items are worn
+    const persona = route.persona || Math.max(0, ...Object.keys(slots).map(personaOf));
+    return { hero: route.id, slots, focus: null, bare: Boolean(route.bare), persona };
   }
   const item = catalog.itemsById[route.id];
   const style = route.style ?? 0;
   if (item.hero && catalog.heroesById[item.hero] && !route.alone) {
-    return { hero: item.hero, slots: { [item.slot]: { id: item.id, style } }, focus: item.id, style };
+    return { hero: item.hero, slots: { [item.slot]: { id: item.id, style } }, focus: item.id, style, persona: personaOf(item.slot) };
   }
   return { hero: null, slots: {}, focus: item.id, style, variant: route.variant ?? 0 };
 }
@@ -191,12 +201,15 @@ export function outfitUrls(catalog, outfit) {
   }
 
   const hero = catalog.heroesById[outfit.hero];
-  const urls = [catalog.modelsBase + hero.model];
+  const persona = (outfit.persona && hero.personas?.[outfit.persona - 1]) ? outfit.persona : 0;
+  const urls = [catalog.modelsBase + (persona ? hero.personas[persona - 1] : hero.model)];
   // The hero's own model alone, without anything worn on it
   if (outfit.bare) {
     return urls;
   }
-  const slots = new Set([...hero.defaults.map((entry) => entry.slot), ...Object.keys(outfit.slots)]);
+  const slots = new Set(
+    [...hero.defaults.map((entry) => entry.slot), ...Object.keys(outfit.slots)].filter((slot) => personaOf(slot) === persona)
+  );
   for (const slot of slots) {
     const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
     if (chosen) {
@@ -242,7 +255,11 @@ export function withExported(catalog, exported) {
   const ready = (models) => all || models.every((model) => exported.has(model));
   const heroes = catalog.heroes
     .filter((hero) => ready([hero.model]))
-    .map((hero) => ({ ...hero, defaults: hero.defaults.filter((entry) => ready(entry.models)) }));
+    .map((hero) => ({
+      ...hero,
+      defaults: hero.defaults.filter((entry) => ready(entry.models)),
+      personas: hero.personas?.filter((model) => ready([model])),
+    }));
   const items = catalog.items
     .filter((item) => ready(item.models))
     // Styles whose models are not exported yet are left out
@@ -297,12 +314,14 @@ export function parseRoute(hash) {
   if (type === "hero") {
     const slots = {};
     const bare = params.get("bare") === "1";
+    const persona = Number(params.get("persona")) || 0;
     params.delete("bare");
+    params.delete("persona");
     for (const [slot, value] of params) {
       const [itemId, style] = value.split(".");
       slots[slot] = { id: itemId, style: Number(style) || 0 };
     }
-    return { type, id: decodeURIComponent(id), slots, bare };
+    return { type, id: decodeURIComponent(id), slots, bare, persona };
   }
   return {
     type,
@@ -320,6 +339,7 @@ export function routeHash(route) {
       params.set(slot, style ? `${id}.${style}` : id);
     }
     route.bare && params.set("bare", "1");
+    route.persona && params.set("persona", route.persona);
   } else {
     route.style && params.set("style", route.style);
     route.alone && params.set("alone", "1");

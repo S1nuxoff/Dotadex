@@ -71,6 +71,10 @@ const heroes = {};
 for (const [key, model] of Object.entries(index.heroes)) {
   const id = heroIdOf(key);
   heroes[id] = { id, name: heroName(id), model, defaults: [] };
+  // Personas: the hero's other bodies, worn with the items of their own slots (*_persona_1)
+  if (index.personas?.[key]?.length) {
+    heroes[id].personas = index.personas[key];
+  }
 }
 
 const items = [];
@@ -118,9 +122,9 @@ for (const [id, entry] of Object.entries(index.items)) {
   idByName.set(entry.name, id);
 }
 
-// What a hero wears by default, skipping personas, so a hero shows up complete
+// What a hero wears by default, so a hero shows up complete; a persona's are in its own slots
 for (const [id, item] of Object.entries(gameItems)) {
-  if (item.prefab !== "default_item" || /persona/.test(item.item_slot ?? "") || !index.items[id]) {
+  if (item.prefab !== "default_item" || item.item_slot === "persona_selector" || !index.items[id]) {
     continue;
   }
   for (const key of Object.keys(item.used_by_heroes ?? {})) {
@@ -181,6 +185,9 @@ const scenes = (await getJson(MODELS_BASE.replace("dota2-models", "dota2-scenes"
   id: scene.id,
   name: scene.name,
   size: scene.size,
+  light: scene.light,
+  camera: scene.camera,
+  points: scene.points,
 }));
 
 const audio = Object.entries(library ?? {}).flatMap(([kind, packs]) =>

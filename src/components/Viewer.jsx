@@ -109,7 +109,7 @@ function AnimationPicker({ names, current, onPick }) {
 }
 
 // outfit: what is on screen (see outfitFor), urls: the models to load
-export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare }) {
+export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -176,6 +176,12 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
     } catch {}
   }, [shading]);
   useEffect(() => stageRef.current.setPaused(paused), [paused]);
+  // The game's light and camera for the scene on screen
+  useEffect(() => {
+    const info = scene ?? (backdrop ? catalog.scenesById[backdrop] : null);
+    stageRef.current.setSceneLook(info ?? null);
+  }, [scene, backdrop, catalog]);
+
   // A scene shown on its own has no pedestal, except treasure scenes: their backgrounds
   // are particles only, so the chest stands on the pedestal instead
   useEffect(() => stageRef.current.setShowcase(!scene || scene.id.startsWith("scenes/treasure/")), [scene]);
@@ -330,6 +336,15 @@ export default function Viewer({ catalog, outfit, urls, onStyle, onAlone, onVari
                 { value: "dressed", label: "Dressed" },
                 { value: "bare", label: "Bare model" },
               ]}
+            />
+          )}
+
+          {hero?.personas?.length > 0 && (
+            <Toggle
+              label="Persona"
+              value={outfit.persona ?? 0}
+              onChange={onPersona}
+              options={[{ value: 0, label: "Default" }, ...hero.personas.map((_, index) => ({ value: index + 1, label: hero.personas.length > 1 ? `Persona ${index + 1}` : "Persona" }))]}
             />
           )}
 

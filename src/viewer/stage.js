@@ -31,7 +31,14 @@ const CAMERA_RAISE = 0.15;
 
 // The pedestal's far side sinks into the dark behind the hero, as the game's depth fog hides it:
 // fading with how far a point lies beyond the hero along the camera's view on the ground
-const pedestalFog = { direction: { value: new THREE.Vector2(0, -1) }, near: { value: 0.5 }, far: { value: 4 } };
+// and, being round, all round its rim too
+const pedestalFog = {
+  direction: { value: new THREE.Vector2(0, -1) },
+  near: { value: 0.5 },
+  far: { value: 4 },
+  inner: { value: 2 },
+  outer: { value: 5 },
+};
 const fogged = new WeakSet();
 function fogBehind(material) {
   if (!material || fogged.has(material)) {
@@ -45,17 +52,20 @@ function fogBehind(material) {
     shader.uniforms.uFogDirection = pedestalFog.direction;
     shader.uniforms.uFogNear = pedestalFog.near;
     shader.uniforms.uFogFar = pedestalFog.far;
+    shader.uniforms.uFogInner = pedestalFog.inner;
+    shader.uniforms.uFogOuter = pedestalFog.outer;
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", "varying vec3 vFogPosition;\nvoid main() {")
       .replace("#include <project_vertex>", "#include <project_vertex>\n  vFogPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;");
     shader.fragmentShader = shader.fragmentShader.replace(
       "void main() {",
-      "varying vec3 vFogPosition;\nuniform vec2 uFogDirection;\nuniform float uFogNear;\nuniform float uFogFar;\nvoid main() {"
+      "varying vec3 vFogPosition;\nuniform vec2 uFogDirection;\nuniform float uFogNear;\nuniform float uFogFar;\nuniform float uFogInner;\nuniform float uFogOuter;\nvoid main() {"
     );
     const end = shader.fragmentShader.lastIndexOf("}");
     shader.fragmentShader =
       shader.fragmentShader.slice(0, end) +
       "  gl_FragColor.a *= 1.0 - smoothstep(uFogNear, uFogFar, dot(vFogPosition.xz, uFogDirection));\n" +
+      "  gl_FragColor.a *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vFogPosition.xz));\n" +
       shader.fragmentShader.slice(end);
   };
   material.needsUpdate = true;
@@ -1042,6 +1052,8 @@ export class Stage {
             const radius = Math.max(size.x, size.z) / 2;
             pedestalFog.near.value = radius * 0.05;
             pedestalFog.far.value = radius * 0.6;
+            pedestalFog.inner.value = radius * 0.4;
+            pedestalFog.outer.value = radius * 0.85;
             this.pedestal.traverse((node) => {
               if (node.isMesh) {
                 node.receiveShadow = true;

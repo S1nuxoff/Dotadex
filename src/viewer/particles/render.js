@@ -69,14 +69,17 @@ const SPRITE_VERTEX = /* glsl */ `
   attribute vec3 iVelocity;
   uniform int uOrientation;
   uniform vec4 uScreenSize;
+  uniform float uCameraBias;
   varying vec2 vUv;
   varying vec4 vColor;
   void main() {
+    // Drawn a little towards the camera, so particles inside the model show, as the game does
+    vec3 center = iPosition + normalize(cameraPosition - iPosition) * uCameraBias;
     vUv = iFrame.xy + uv * iFrame.zw;
     vColor = iColor;
     // The game keeps sprites within a share of the screen and fades them as they grow on it:
     // x min, y max, z fade start, w fade end, as shares of the screen's height
-    float distance = max(-(modelViewMatrix * vec4(iPosition, 1.0)).z, 1e-3);
+    float distance = max(-(modelViewMatrix * vec4(center, 1.0)).z, 1e-3);
     float onScreen = iSizeRoll.x * projectionMatrix[1][1] / distance;
     float size = iSizeRoll.x;
     if (onScreen > uScreenSize.y) size *= uScreenSize.y / onScreen;
@@ -88,7 +91,7 @@ const SPRITE_VERTEX = /* glsl */ `
     corner = vec2(c * corner.x - s * corner.y, s * corner.x + c * corner.y) * size;
     if (uOrientation == 0) {
       // Facing the camera
-      vec4 view = modelViewMatrix * vec4(iPosition, 1.0);
+      vec4 view = modelViewMatrix * vec4(center, 1.0);
       view.xy += corner;
       gl_Position = projectionMatrix * view;
       return;
@@ -101,7 +104,7 @@ const SPRITE_VERTEX = /* glsl */ `
       up = vec3(0.0, 0.0, 1.0);
     } else if (uOrientation == 2) {
       // Turned round the up axis to the camera
-      vec3 toCamera = normalize(cameraPosition - iPosition);
+      vec3 toCamera = normalize(cameraPosition - center);
       up = vec3(0.0, 1.0, 0.0);
       right = normalize(cross(up, toCamera));
     } else if (uOrientation == 3) {
@@ -111,15 +114,15 @@ const SPRITE_VERTEX = /* glsl */ `
       up = cross(n, right);
     } else {
       // Stretched along the movement, as a trail
-      vec3 toCamera = normalize(cameraPosition - iPosition);
+      vec3 toCamera = normalize(cameraPosition - center);
       vec3 along = length(iVelocity) > 1e-6 ? normalize(iVelocity) : vec3(0.0, 1.0, 0.0);
       right = normalize(cross(along, toCamera));
       float length = max(length(iVelocity), iSizeRoll.x);
-      vec3 world = iPosition + right * (uv.x - 0.5) * 2.0 * size - along * (1.0 - uv.y) * length;
+      vec3 world = center + right * (uv.x - 0.5) * 2.0 * size - along * (1.0 - uv.y) * length;
       gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
       return;
     }
-    gl_Position = projectionMatrix * viewMatrix * vec4(iPosition + right * corner.x + up * corner.y, 1.0);
+    gl_Position = projectionMatrix * viewMatrix * vec4(center + right * corner.x + up * corner.y, 1.0);
   }
 `;
 
@@ -157,6 +160,7 @@ function material(def, vertexShader, orientation) {
       uHalf: { value: 1 },
       uMod: { value: 0 },
       uOrientation: { value: orientation },
+      uCameraBias: { value: (def.VisibilityInputs?.m_flCameraBias ?? 0) * UNIT },
       uScreenSize: {
         value: new THREE.Vector4(def.m_flMinSize ?? 0, def.m_flMaxSize ?? 5000, def.m_flStartFadeSize ?? 1e8, def.m_flEndFadeSize ?? 2e8),
       },
@@ -250,11 +254,12 @@ function quads(def, system, trail) {
         normal.array[j] = normals[j + 1];
         normal.array[j + 1] = normals[j + 2];
         normal.array[j + 2] = normals[j];
-        color.array[i * 4] = tint[j];
-        color.array[i * 4 + 1] = tint[j + 1];
-        color.array[i * 4 + 2] = tint[j + 2];
-        color.array[i * 4 + 3] = Math.max(0, alpha[i] * alpha2[i] * alphaScale);
-        sizeRoll.array[i * 2] = radius[i] * radiusScale;
+        // The game draws a particle's values within range: no color below black, alpha 0 to 1
+        color.array[i * 4] = Math.max(0, tint[j]);
+        color.array[i * 4 + 1] = Math.max(0, tint[j + 1]);
+        color.array[i * 4 + 2] = Math.max(0, tint[j + 2]);
+        color.array[i * 4 + 3] = Math.min(Math.max(alpha[i], 0), 1) * Math.min(Math.max(alpha2[i], 0), 1) * alphaScale;
+        sizeRoll.array[i * 2] = Math.max(0, radius[i]) * radiusScale;
         sizeRoll.array[i * 2 + 1] = roll[i];
         if (trail) {
           // The trail reaches back as far as the particle went in its trail time
@@ -354,7 +359,7 @@ function rope(def, system) {
         const h = Math.max(i - 1, 0);
         tangent.set(p[k * 3 + 1] - p[h * 3 + 1], p[k * 3 + 2] - p[h * 3 + 2], p[k * 3] - p[h * 3]).normalize();
         toCamera.subVectors(camera.position, a).normalize();
-        side.crossVectors(tangent, toCamera).normalize().multiplyScalar(radius[i] * radiusScale);
+        side.crossVectors(tangent, toCamera).normalize().multiplyScalar(Math.max(0, radius[i]) * radiusScale);
         if (i > 0) distance += a.distanceTo(b);
         b.copy(a);
         const v = distance / (worldSize * UNIT) + system.age * scroll * 0.01;
@@ -367,10 +372,10 @@ function rope(def, system) {
           uvs.array[(i * 2 + s) * 2] = s;
           uvs.array[(i * 2 + s) * 2 + 1] = v;
           const c = (i * 2 + s) * 4;
-          colors.array[c] = tint[j];
-          colors.array[c + 1] = tint[j + 1];
-          colors.array[c + 2] = tint[j + 2];
-          colors.array[c + 3] = Math.max(0, alpha[i] * alpha2[i] * alphaScale);
+          colors.array[c] = Math.max(0, tint[j]);
+          colors.array[c + 1] = Math.max(0, tint[j + 1]);
+          colors.array[c + 2] = Math.max(0, tint[j + 2]);
+          colors.array[c + 3] = Math.min(Math.max(alpha[i], 0), 1) * Math.min(Math.max(alpha2[i], 0), 1) * alphaScale;
         }
       }
       geometry.setDrawRange(0, (n - 1) * 6);

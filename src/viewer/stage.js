@@ -1383,7 +1383,8 @@ export class Stage {
     const swapped = [];
     const hidden = [];
     this.scene.traverse((node) => {
-      if (node.isPoints || node.isSprite || node.userData.skipGlow) {
+      // Particles are left out of the glow pass, they glow with the bloom of the frame
+      if (node.isPoints || node.isSprite || node.userData.skipGlow || node.parent?.name === "particles") {
         if (node.visible) {
           node.visible = false;
           hidden.push(node);

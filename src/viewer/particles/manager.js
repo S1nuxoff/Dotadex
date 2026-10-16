@@ -274,11 +274,45 @@ export class ParticleManager {
       effect.system.update(Math.min(delta, 0.1));
       effect.system.render(camera);
     }
+    this.report(delta);
     // Systems spawned along the way bring their own objects
     const objects = new Set();
     for (const effect of this.effects) effect.system.objects().forEach((object) => objects.add(object));
     for (const child of [...this.group.children]) if (!objects.has(child)) this.group.remove(child);
     for (const object of objects) if (object.parent !== this.group) this.group.add(object);
+  }
+
+  // A short account of the running systems in the console, every few seconds, while developing
+  report(delta) {
+    if (!import.meta.env.DEV) return;
+    this.reportClock = (this.reportClock ?? 0) + delta;
+    if (this.reportClock < 4) return;
+    this.reportClock = 0;
+    const lines = [];
+    const describe = (system, depth) => {
+      const cp = system.controlPoint(0).position;
+      const mesh = system.renderers
+        .map((renderer, index) => {
+          const def = (system.def.m_Renderers ?? []).filter((op) => !op.m_bDisableOperator)[index] ?? {};
+          const blend = (def.m_nOutputBlendMode ?? "ALPHA").replace("PARTICLE_OUTPUT_BLEND_MODE_", "");
+          return renderer.object ? `${def._class?.replace("C_OP_Render", "")}/${blend}:${renderer.object.visible ? "shown" : "hidden"}` : "?";
+        })
+        .join(",");
+      // Particles whose numbers went wrong draw black
+      let broken = 0;
+      for (let i = 0; i < system.count; i++) {
+        const values = [system.float(3)[i], system.float(7)[i], system.float(16)[i], ...system.float(6).slice(i * 3, i * 3 + 3), ...system.float(0).slice(i * 3, i * 3 + 3)];
+        if (values.some((value) => !Number.isFinite(value))) broken++;
+      }
+      const sample = system.count ? `r=${system.float(3)[0].toFixed(1)} a=${system.float(7)[0].toFixed(2)} c=${[...system.float(6).slice(0, 3)].map((v) => v.toFixed(2))} p=${[...system.float(0).slice(0, 3)].map((v) => v.toFixed(0))}` : "";
+      lines.push(`${"  ".repeat(depth)}n=${system.count}/${system.maxParticles}${broken ? ` NaN=${broken}` : ""} [${mesh}] cp0=${cp.x.toFixed(0)},${cp.y.toFixed(0)},${cp.z.toFixed(0)} ${sample}`);
+      for (const child of system.children) if (child.system) describe(child.system, depth + 1);
+    };
+    for (const [index, effect] of this.effects.entries()) {
+      lines.push(`effect ${this.paths[index]}`);
+      describe(effect.system, 1);
+    }
+    console.warn(`[particles] ${lines.join("\n")}`);
   }
 
   dispose() {

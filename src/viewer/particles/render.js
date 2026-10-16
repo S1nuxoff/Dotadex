@@ -62,15 +62,24 @@ const SPRITE_VERTEX = /* glsl */ `
   attribute vec3 iNormal;
   attribute vec3 iVelocity;
   uniform int uOrientation;
+  uniform vec4 uScreenSize;
   varying vec2 vUv;
   varying vec4 vColor;
   void main() {
     vUv = iFrame.xy + uv * iFrame.zw;
     vColor = iColor;
+    // The game keeps sprites within a share of the screen and fades them as they grow on it:
+    // x min, y max, z fade start, w fade end, as shares of the screen's height
+    float distance = max(-(modelViewMatrix * vec4(iPosition, 1.0)).z, 1e-3);
+    float onScreen = iSizeRoll.x * projectionMatrix[1][1] / distance;
+    float size = iSizeRoll.x;
+    if (onScreen > uScreenSize.y) size *= uScreenSize.y / onScreen;
+    if (onScreen < uScreenSize.x && onScreen > 0.0) size *= uScreenSize.x / onScreen;
+    vColor.a *= 1.0 - smoothstep(uScreenSize.z, uScreenSize.w, onScreen);
     vec2 corner = (uv - 0.5) * 2.0;
     float c = cos(iSizeRoll.y);
     float s = sin(iSizeRoll.y);
-    corner = vec2(c * corner.x - s * corner.y, s * corner.x + c * corner.y) * iSizeRoll.x;
+    corner = vec2(c * corner.x - s * corner.y, s * corner.x + c * corner.y) * size;
     if (uOrientation == 0) {
       // Facing the camera
       vec4 view = modelViewMatrix * vec4(iPosition, 1.0);
@@ -100,7 +109,7 @@ const SPRITE_VERTEX = /* glsl */ `
       vec3 along = length(iVelocity) > 1e-6 ? normalize(iVelocity) : vec3(0.0, 1.0, 0.0);
       right = normalize(cross(along, toCamera));
       float length = max(length(iVelocity), iSizeRoll.x);
-      vec3 world = iPosition + right * (uv.x - 0.5) * 2.0 * iSizeRoll.x - along * (1.0 - uv.y) * length;
+      vec3 world = iPosition + right * (uv.x - 0.5) * 2.0 * size - along * (1.0 - uv.y) * length;
       gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
       return;
     }
@@ -134,6 +143,9 @@ function material(def, vertexShader, orientation) {
       uOverbright: { value: def.m_flOverbrightFactor ?? 1 },
       uHalf: { value: 1 },
       uOrientation: { value: orientation },
+      uScreenSize: {
+        value: new THREE.Vector4(def.m_flMinSize ?? 0, def.m_flMaxSize ?? 5000, def.m_flStartFadeSize ?? 1e8, def.m_flEndFadeSize ?? 2e8),
+      },
     },
     transparent: true,
     depthWrite: false,

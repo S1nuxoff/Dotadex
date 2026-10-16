@@ -3,7 +3,7 @@ import { imageUrl, useGameData } from "../gamedata.js";
 import { useDismiss, useUiScale } from "./ui.jsx";
 
 // The game's hero grid as the dashboard has it now: four columns of tall portraits by primary
-// attribute, a portrait growing with the hero's name on hover, typing to find a hero, and the
+// attribute, the animated portrait and name of the hero under the pointer, typing to find a hero, and the
 // sort and filters along the bottom. Sizes are the game's own, from hero_grid_new.css, in its
 // units: the grid is 1204 wide and drawn at 115% of a 1920 wide screen.
 const GROUPS = [
@@ -41,13 +41,10 @@ const TAGS = [
   ["Pusher", "pusher"],
 ];
 const SORTS = [
-  ["attributes", "DOTA_HeroGrid_OptionCategory_Attributes", "Attributes"],
-  ["name", "DOTA_HeroGrid_Sort_Name", "Name"],
+  ["attributes", "Attributes"],
+  ["name", "Name"],
 ];
-
-function text(texts, key, fallback) {
-  return (texts?.[key] ?? fallback).replace(/:$/, "");
-}
+const COMPLEXITY = ["Low Complexity", "Moderate Complexity", "High Complexity"];
 
 function FilterButton({ icon, label, selected, onClick }) {
   return (
@@ -118,12 +115,17 @@ function SortPicker({ value, options, onChange, label }) {
   );
 }
 
-function HeroCard({ hero, name, portrait, attribute, state, onOpen, onPrefetch }) {
+function HeroCard({ hero, name, portrait, video, state, onOpen, onPrefetch }) {
+  const [hovered, setHovered] = useState(false);
   return (
     <li className="relative h-[83px] w-[51px] hover:z-20">
       <button
         onClick={() => onOpen({ type: "hero", id: hero.id })}
-        onPointerEnter={() => onPrefetch?.({ type: "hero", id: hero.id })}
+        onPointerEnter={() => {
+          setHovered(true);
+          onPrefetch?.({ type: "hero", id: hero.id });
+        }}
+        onPointerLeave={() => setHovered(false)}
         data-hover
         aria-label={name}
         className="group absolute inset-0"
@@ -136,22 +138,35 @@ function HeroCard({ hero, name, portrait, attribute, state, onOpen, onPrefetch }
             state === "dim" ? "opacity-50 brightness-[0.25] saturate-0" : state === "found" ? "hero-card-found" : "saturate-[0.7]"
           }`}
         />
-        {/* The portrait grown over its neighbours, with the name, as the game shows the card under the pointer */}
-        <span className="pointer-events-none absolute top-1/2 left-1/2 h-[175px] w-[129px] -translate-x-1/2 -translate-y-1/2 scale-[0.4] opacity-0 shadow-[0_8px_32px_rgb(0_0_0/0.85)] transition-[transform,opacity] duration-150 ease-out group-hover:scale-100 group-hover:opacity-100">
-          <img src={portrait} alt="" className="absolute inset-0 size-full border border-white/20 object-cover" />
-          <span className="absolute inset-x-0 bottom-0 flex flex-col items-center bg-gradient-to-t from-black/90 via-black/60 to-transparent px-[6px] pt-[28px] pb-[8px]">
-            <span className="text-center text-[12px] leading-[14px] font-semibold tracking-[2px] text-white uppercase [text-shadow:0_1px_3px_#000]">{name}</span>
-            <img src={`${ICONS}${attribute}.png`} alt="" className="mt-[5px] size-[16px]" />
-          </span>
+        {/* The card the game shows under the pointer: the hero's animated portrait and name, over its neighbours */}
+        <span className="pointer-events-none absolute top-1/2 left-1/2 h-[204px] w-[155px] -translate-x-1/2 -translate-y-1/2 scale-[0.4] border-2 border-black bg-black opacity-0 shadow-[0_8px_32px_rgb(0_0_0/0.85)] transition-[transform,opacity] duration-150 ease-out group-hover:scale-100 group-hover:opacity-100">
+          <img src={portrait} alt="" className="absolute inset-0 size-full object-cover" />
+          {hovered && <HeroMovie src={video} />}
+          <span className="absolute inset-x-0 bottom-0 bg-black/80 px-[4px] pt-[5px] pb-[2px] text-center text-[16px] leading-[20px] tracking-[2px] text-white uppercase">{name}</span>
         </span>
       </button>
     </li>
   );
 }
 
-export default function HeroGrid({ catalog, language, onOpen, onPrefetch }) {
-  const { data } = useGameData(catalog.modelsBase, ["heroes.json"], language);
-  const texts = data?.texts;
+// Plays once it can, over the still portrait, so a slow or missing video leaves the portrait
+function HeroMovie({ src }) {
+  const [ready, setReady] = useState(false);
+  return (
+    <video
+      src={src}
+      autoPlay
+      loop
+      muted
+      playsInline
+      onCanPlay={() => setReady(true)}
+      className={`absolute inset-0 size-full object-cover transition-opacity duration-150 ${ready ? "opacity-100" : "opacity-0"}`}
+    />
+  );
+}
+
+export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
+  const { data } = useGameData(catalog.modelsBase, ["heroes.json"]);
   const scale = useUiScale();
   const [sort, setSort] = useState("attributes");
   const [roles, setRoles] = useState([]);
@@ -175,12 +190,12 @@ export default function HeroGrid({ catalog, language, onOpen, onPrefetch }) {
             info,
             group: group[0],
             attribute: group[3],
-            name: texts?.[`npc_dota_hero_${hero.id}`] ?? hero.name,
+            name: hero.name,
             roles: (info?.Role ?? "").split(","),
           };
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [catalog, data, texts]
+    [catalog, data]
   );
 
   const passes = ({ info, roles: own }) =>
@@ -209,19 +224,19 @@ export default function HeroGrid({ catalog, language, onOpen, onPrefetch }) {
       ? GROUPS.map(([key, name, , icon]) => ({
           key,
           icon,
-          name: text(texts, `DOTA_HeroSelectorCategory_PrimaryAttribute_${name}`, GROUP_NAMES[name]),
+          name: GROUP_NAMES[name],
           heroes: heroes.filter((entry) => entry.group === key),
           width: key === "DOTA_ATTRIBUTE_ALL" ? "20%" : undefined,
         }))
-      : [{ key: "all", name: text(texts, "DOTA_TabName_Heroes", "Heroes"), heroes }];
+      : [{ key: "all", name: "Heroes", heroes }];
 
   const card = (entry) => (
     <HeroCard
       key={entry.hero.id}
       hero={entry.hero}
       name={entry.name}
-      attribute={entry.attribute}
       portrait={imageUrl(catalog.modelsBase, `heroes/selection/npc_dota_hero_${entry.hero.id}`)}
+      video={`${catalog.modelsBase}videos/heroes/npc_dota_hero_${entry.hero.id}.webm`}
       state={stateOf(entry)}
       onOpen={onOpen}
       onPrefetch={onPrefetch}
@@ -254,41 +269,41 @@ export default function HeroGrid({ catalog, language, onOpen, onPrefetch }) {
 
           <footer className="hero-grid-footer flex h-[66px] shrink-0 items-center">
             <SortPicker
-              label={text(texts, "DOTA_HeroGrid_Sort_By", "Sort")}
+              label="Sort"
               value={sort}
               onChange={setSort}
-              options={SORTS.map(([value, key, fallback]) => ({ value, label: text(texts, key, fallback) }))}
+              options={SORTS.map(([value, label]) => ({ value, label }))}
             />
             <div className="flex-1" />
             <div className="-mb-[4px] flex pb-[4px]">
-              <FilterCategory title={text(texts, "DOTA_HeroGrid_FarmPriority", "Type")}>
+              <FilterCategory title={"Type"}>
                 {FARM.map(([role, icon]) => (
-                  <FilterButton key={role} icon={icon} label={text(texts, `DOTA_HeroRole_${role}`, role)} selected={roles.includes(role)} onClick={() => toggle(roles, setRoles, role)} />
+                  <FilterButton key={role} icon={icon} label={role} selected={roles.includes(role)} onClick={() => toggle(roles, setRoles, role)} />
                 ))}
               </FilterCategory>
-              <FilterCategory title={text(texts, "DOTA_HeroComplexity", "Complexity")}>
+              <FilterCategory title={"Complexity"}>
                 {[1, 2, 3].map((level) => (
                   <FilterButton
                     key={level}
                     icon="complexity"
-                    label={text(texts, `DOTA_HeroComplexity_Title_${level}`, ["Low", "Moderate", "High"][level - 1] + " Complexity")}
+                    label={COMPLEXITY[level - 1]}
                     selected={complexity.includes(level)}
                     onClick={() => toggle(complexity, setComplexity, level)}
                   />
                 ))}
               </FilterCategory>
-              <FilterCategory title={text(texts, "DOTA_HeroTags", "Tags")}>
+              <FilterCategory title={"Tags"}>
                 {TAGS.map(([tag, icon, kind]) =>
                   kind === "attack" ? (
                     <FilterButton
                       key={tag}
                       icon={icon}
-                      label={text(texts, `DOTA_HeroSelectorCategory_AttackRange_${tag}`, tag)}
+                      label={tag}
                       selected={attack.includes(tag)}
                       onClick={() => toggle(attack, setAttack, tag)}
                     />
                   ) : (
-                    <FilterButton key={tag} icon={icon} label={text(texts, `DOTA_HeroRole_${tag}`, tag)} selected={roles.includes(tag)} onClick={() => toggle(roles, setRoles, tag)} />
+                    <FilterButton key={tag} icon={icon} label={tag} selected={roles.includes(tag)} onClick={() => toggle(roles, setRoles, tag)} />
                   )
                 )}
               </FilterCategory>

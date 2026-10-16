@@ -414,7 +414,7 @@ export default function App() {
       />
 
       {section.id === "heroes" && heroGrid ? (
-        <HeroGrid catalog={catalog} language={language} onOpen={open} onPrefetch={prefetch} />
+        <HeroGrid catalog={catalog} onOpen={open} onPrefetch={prefetch} />
       ) : section.id === "heroes" && route.type === "hero" && heroIndex >= 0 ? (
         <HeroPage
           catalog={catalog}

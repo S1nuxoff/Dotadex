@@ -15,8 +15,14 @@ function textureOf(def) {
 function blendingOf(def, material) {
   const mode = def.m_nOutputBlendMode ?? (def.m_bAdditive ? "PARTICLE_OUTPUT_BLEND_MODE_ADD" : "PARTICLE_OUTPUT_BLEND_MODE_ALPHA");
   if (/MOD/.test(mode) || def.m_bMod2X) {
-    material.blending = THREE.MultiplyBlending;
-    material.premultipliedAlpha = true;
+    // dst × src × 2: the particle darkens and brightens what is behind it, mid grey leaves it
+    material.blending = THREE.CustomBlending;
+    material.blendEquation = THREE.AddEquation;
+    material.blendSrc = THREE.DstColorFactor;
+    material.blendDst = THREE.SrcColorFactor;
+    material.blendSrcAlpha = THREE.ZeroFactor;
+    material.blendDstAlpha = THREE.OneFactor;
+    material.uniforms.uMod.value = 1;
   } else if (/ADD/.test(mode)) {
     material.blending = THREE.AdditiveBlending;
   } else {
@@ -122,11 +128,18 @@ const FRAGMENT = /* glsl */ `
   uniform float uHasMap;
   uniform float uOverbright;
   uniform float uHalf;
+  uniform float uMod;
   varying vec2 vUv;
   varying vec4 vColor;
   void main() {
     vec4 texel = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0);
-    vec4 color = vec4(texel.rgb * vColor.rgb * uOverbright * uHalf, texel.a * vColor.a);
+    float alpha = texel.a * vColor.a;
+    if (uMod > 0.5) {
+      // Mid grey where the particle is see-through, so it leaves what is behind as it is
+      gl_FragColor = vec4(mix(vec3(0.5), texel.rgb * vColor.rgb, clamp(alpha, 0.0, 1.0)), 1.0);
+      return;
+    }
+    vec4 color = vec4(texel.rgb * vColor.rgb * uOverbright * uHalf, alpha);
     if (color.a < 0.002) discard;
     gl_FragColor = color;
     #include <colorspace_fragment>
@@ -142,6 +155,7 @@ function material(def, vertexShader, orientation) {
       uHasMap: { value: 0 },
       uOverbright: { value: def.m_flOverbrightFactor ?? 1 },
       uHalf: { value: 1 },
+      uMod: { value: 0 },
       uOrientation: { value: orientation },
       uScreenSize: {
         value: new THREE.Vector4(def.m_flMinSize ?? 0, def.m_flMaxSize ?? 5000, def.m_flStartFadeSize ?? 1e8, def.m_flEndFadeSize ?? 2e8),

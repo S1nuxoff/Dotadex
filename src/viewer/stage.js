@@ -603,6 +603,9 @@ export class Stage {
     const group = new THREE.Group();
     const root = cloneSkinned(gltfs[rootIndex].scene);
     this.applyMaterials(root, gltfs[rootIndex].userData.textures, skins[rootIndex]);
+    // Each mesh knows the model it came from, for effects that rise from one model's surface
+    const tag = (object, url) => object.traverse((node) => node.isMesh && (node.userData.model = url.split("#")[0]));
+    tag(root, entries[rootIndex].url);
     group.add(root);
 
     gltfs.forEach((gltf, index) => {
@@ -612,6 +615,7 @@ export class Stage {
       }
       const part = cloneSkinned(gltf.scene);
       this.applyMaterials(part, gltf.userData.textures, skins[index]);
+      tag(part, entries[index].url);
       attach(root, part);
     });
 

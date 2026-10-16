@@ -225,14 +225,17 @@ export function outfitUrls(catalog, outfit) {
 }
 
 // The particle systems on screen, as the game puts them: the hero's own effects, those of what it
-// wears (or wears by default) added, and those an item puts in place of others swapped
+// wears (or wears by default) added, and those an item puts in place of others swapped.
+// [{ system, models }]: the models whose surface an effect's particles rise from, its item's
+// (the hero's for the hero's own effects)
 export function outfitParticles(catalog, outfit) {
   if (outfit.scene) {
     return [];
   }
   if (!outfit.hero) {
     const item = catalog.itemsById[outfit.focus];
-    return item?.particles?.add ?? [];
+    const models = itemUrls(catalog, item, outfit.style).map((url) => url.split("#")[0]);
+    return (item?.particles?.add ?? []).map((system) => ({ system, models }));
   }
   const hero = catalog.heroesById[outfit.hero];
   const persona = outfit.persona && hero.personas?.[outfit.persona - 1] ? outfit.persona : 0;
@@ -242,22 +245,29 @@ export function outfitParticles(catalog, outfit) {
     for (const slot of slots) {
       const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
       if (chosen) {
-        worn.push(chosen);
+        worn.push({ item: chosen, models: itemUrls(catalog, chosen, outfit.slots[slot].style) });
       } else {
-        worn.push(...hero.defaults.filter((entry) => entry.slot === slot).map((entry) => catalog.itemsById[entry.id]).filter(Boolean));
+        for (const entry of hero.defaults.filter((entry) => entry.slot === slot)) {
+          const item = catalog.itemsById[entry.id];
+          if (item) worn.push({ item, models: entry.models.map((model) => catalog.modelsBase + model) });
+        }
       }
     }
   }
-  let systems = persona ? [] : [...(hero.particles ?? [])];
-  for (const item of worn) {
+  const heroModel = catalog.modelsBase + (persona ? hero.personas[persona - 1] : hero.model);
+  let effects = persona ? [] : (hero.particles ?? []).map((system) => ({ system, models: [heroModel] }));
+  for (const { item, models } of worn) {
     for (const [from, to] of item.particles?.swap ?? []) {
-      systems = systems.map((system) => (system === from ? to : system));
+      effects = effects.map((effect) => (effect.system === from ? { system: to, models: models.map((url) => url.split("#")[0]) } : effect));
     }
   }
-  for (const item of worn) {
-    systems.push(...(item.particles?.add ?? []));
+  for (const { item, models } of worn) {
+    for (const system of item.particles?.add ?? []) {
+      effects.push({ system, models: models.map((url) => url.split("#")[0]) });
+    }
   }
-  return [...new Set(systems)];
+  const seen = new Set();
+  return effects.filter((effect) => !seen.has(effect.system) && seen.add(effect.system));
 }
 
 export async function loadCatalog() {

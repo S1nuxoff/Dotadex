@@ -114,10 +114,14 @@ export class ParticleManager {
     this.restart();
   }
 
-  setEffects(paths) {
-    const key = [...paths].sort().join("|");
-    if (key === this.paths.join("|")) return;
-    this.paths = [...paths].sort();
+  // [{ system, models }]: systems by their path in the game, and the models they rise from
+  setEffects(list) {
+    const sorted = [...list].sort((a, b) => a.system.localeCompare(b.system));
+    const key = sorted.map((effect) => `${effect.system}@${(effect.models ?? []).join(",")}`).join("|");
+    if (key === this.key) return;
+    this.key = key;
+    this.list = sorted;
+    this.paths = sorted.map((effect) => effect.system);
     this.restart();
   }
 
@@ -125,11 +129,12 @@ export class ParticleManager {
     const request = ++this.request;
     this.clear();
     if (!this.model) return;
-    const defs = await Promise.all(this.paths.map((path) => this.loadEffect(path)));
+    const list = this.list ?? [];
+    const defs = await Promise.all(list.map((effect) => this.loadEffect(effect.system)));
     if (request !== this.request) return;
-    for (const def of defs) {
+    for (const [index, def] of defs.entries()) {
       if (!def) continue;
-      const host = this.hostFor(def);
+      const host = this.hostFor(def, list[index].models);
       this.effects.push({ system: new ParticleSystem(def, host), host });
     }
     if (unsupported.size) {
@@ -145,7 +150,7 @@ export class ParticleManager {
 
   // What a root system asks of the world: control points driven as its first configuration
   // says (attachments of the parent model, its origin), textures, children, the model surface
-  hostFor(def) {
+  hostFor(def, models = []) {
     const drivers = def.m_controlPointConfigurations?.[0]?.m_drivers ?? [];
     const points = new Map();
     const driven = new Map();
@@ -154,8 +159,16 @@ export class ParticleManager {
     }
     if (!driven.has(0)) driven.set(0, { m_iControlPoint: 0, m_iAttachType: "PATTACH_ABSORIGIN_FOLLOW" });
     const manager = this;
+    // The surface of the effect's own models, or the whole model when none of its meshes is there
+    const wanted = new Set(models);
+    const own = this.meshes.filter((mesh) => wanted.has(mesh.userData.model));
+    const meshes = own.length ? own : this.meshes;
+    const total = meshes.reduce((sum, mesh) => sum + mesh.geometry.attributes.position.count, 0);
     return {
-      surface: this.surface,
+      surface: {
+        sample: (position, normal) => this.sampleSurface(position, normal, meshes, total),
+        position: (binding, target) => this.surfacePosition(binding, target),
+      },
       loadSystem: (path) => this.loadSystem(path),
       loadTexture: (path) => this.loadTexture(path),
       controlPoint(index) {
@@ -234,11 +247,11 @@ export class ParticleManager {
   }
 
   // A random point of the model's surface, in the game's space, and how to find it again
-  sampleSurface(position, normal) {
-    if (!this.meshes.length) return null;
-    let pick = Math.random() * this.totalVertices;
-    let mesh = this.meshes[0];
-    for (const candidate of this.meshes) {
+  sampleSurface(position, normal, meshes = this.meshes, total = this.totalVertices) {
+    if (!meshes.length) return null;
+    let pick = Math.random() * total;
+    let mesh = meshes[0];
+    for (const candidate of meshes) {
       const count = candidate.geometry.attributes.position.count;
       if (pick < count) {
         mesh = candidate;

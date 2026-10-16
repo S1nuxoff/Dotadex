@@ -17,6 +17,7 @@ import {
   loadCatalog,
   loadExported,
   outfitFor,
+  outfitParticles,
   outfitUrls,
   parseRoute,
   personaOf,
@@ -285,6 +286,7 @@ export default function App() {
     setHeroGrid(target.heroGrid);
   };
   const urls = useMemo(() => catalog && outfit && outfitUrls(catalog, outfit), [catalog, outfit]);
+  const particles = useMemo(() => (catalog && outfit ? outfitParticles(catalog, outfit) : []), [catalog, outfit]);
 
   // A hero or item the pointer rests on starts downloading, after a moment so a sweep down
   // the list does not start them all
@@ -397,6 +399,7 @@ export default function App() {
       portraitShot={wardrobe ? "econ_set_preview" : "default"}
       outfit={outfit}
       urls={urls}
+      particles={particles}
       onStyle={(style) => open({ ...route, style })}
       onAlone={(alone) => open({ ...route, alone })}
       onVariant={(variant) => open({ ...route, variant })}

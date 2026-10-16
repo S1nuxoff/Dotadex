@@ -11,6 +11,7 @@ import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
+import { ParticleManager } from "./particles/manager.js";
 import { playLoaded, playWhenReady, preloadSound } from "./soundPlayer.js";
 import { playUiSound } from "../uiSounds.js";
 
@@ -623,6 +624,8 @@ export class Stage {
       }
     }
     this.replace(group, gltfs[rootIndex].animations);
+    this.modelUrls = entries.map((entry) => entry.url);
+    this.particles?.setModel(group, this.modelUrls);
     if (this.veilTarget === 1) {
       playUiSound("veil-out", 0.7);
     }
@@ -1489,8 +1492,20 @@ export class Stage {
     }
 
     this.controls.update();
+    this.particles?.update(delta, this.camera);
     this.renderGlow();
     this.composer.render();
+  }
+
+  // The game's particle effects on the model, systems by their path in the game
+  setParticles(base, paths) {
+    if (!this.particles) {
+      this.particles = new ParticleManager(this.scene, base);
+      if (this.group) {
+        this.particles.setModel(this.group, this.modelUrls);
+      }
+    }
+    this.particles.setEffects(paths);
   }
 
   // sound: { base, events, byModel, attack: { [model]: { event, point } } } or null to mute

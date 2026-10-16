@@ -80,6 +80,40 @@ for (const [key, model] of Object.entries(index.heroes)) {
 const items = [];
 const idByName = new Map();
 
+// The particle systems an item shows: those it creates, and those it puts in place of others
+// (the dataset has each as particles/<path>.json). Modifiers of a style other than the first
+// are left out.
+function particlesOf(item) {
+  const add = [];
+  const swap = [];
+  for (const visual of Object.values(item?.visuals ?? {})) {
+    if (!visual || typeof visual !== "object" || (visual.style !== undefined && String(visual.style) !== "0")) {
+      continue;
+    }
+    const system = (value) => (typeof value === "string" && value.toLowerCase().endsWith(".vpcf") ? value.toLowerCase() : null);
+    if (visual.type === "particle_create" && system(visual.modifier)) {
+      add.push(system(visual.modifier));
+    } else if (visual.type === "particle" && system(visual.asset) && system(visual.modifier)) {
+      swap.push([system(visual.asset), system(visual.modifier)]);
+    }
+  }
+  return add.length || swap.length ? { ...(add.length && { add }), ...(swap.length && { swap }) } : null;
+}
+
+// A hero's own effects: those of its default items that have no model (its ambient effects)
+for (const [id, item] of Object.entries(gameItems)) {
+  if (item.prefab !== "default_item" || index.items[id]) {
+    continue;
+  }
+  const particles = particlesOf(item);
+  for (const key of particles ? Object.keys(item.used_by_heroes ?? {}) : []) {
+    const hero = heroes[heroIdOf(key)];
+    if (hero) {
+      hero.particles = [...new Set([...(hero.particles ?? []), ...(particles.add ?? [])])];
+    }
+  }
+}
+
 for (const [id, entry] of Object.entries(index.items)) {
   const item = gameItems[id];
   const heroKeys = Object.keys(item.used_by_heroes ?? {});
@@ -112,6 +146,10 @@ for (const [id, entry] of Object.entries(index.items)) {
   }
   if (entry.skin) {
     record.skin = entry.skin;
+  }
+  const particles = particlesOf(item);
+  if (particles) {
+    record.particles = particles;
   }
   const price = priceOf(entry.name);
   if (price) {

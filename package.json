@@ -6,7 +6,8 @@
     "catalog": "node scripts/build-catalog.mjs",
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "particles:coverage": "node scripts/particle-coverage.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "3.14.13",

@@ -224,6 +224,42 @@ export function outfitUrls(catalog, outfit) {
   return [...new Set(urls)];
 }
 
+// The particle systems on screen, as the game puts them: the hero's own effects, those of what it
+// wears (or wears by default) added, and those an item puts in place of others swapped
+export function outfitParticles(catalog, outfit) {
+  if (outfit.scene) {
+    return [];
+  }
+  if (!outfit.hero) {
+    const item = catalog.itemsById[outfit.focus];
+    return item?.particles?.add ?? [];
+  }
+  const hero = catalog.heroesById[outfit.hero];
+  const persona = outfit.persona && hero.personas?.[outfit.persona - 1] ? outfit.persona : 0;
+  const worn = [];
+  if (!outfit.bare) {
+    const slots = new Set([...hero.defaults.map((entry) => entry.slot), ...Object.keys(outfit.slots)].filter((slot) => personaOf(slot) === persona));
+    for (const slot of slots) {
+      const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
+      if (chosen) {
+        worn.push(chosen);
+      } else {
+        worn.push(...hero.defaults.filter((entry) => entry.slot === slot).map((entry) => catalog.itemsById[entry.id]).filter(Boolean));
+      }
+    }
+  }
+  let systems = persona ? [] : [...(hero.particles ?? [])];
+  for (const item of worn) {
+    for (const [from, to] of item.particles?.swap ?? []) {
+      systems = systems.map((system) => (system === from ? to : system));
+    }
+  }
+  for (const item of worn) {
+    systems.push(...(item.particles?.add ?? []));
+  }
+  return [...new Set(systems)];
+}
+
 export async function loadCatalog() {
   const res = await fetch(`${import.meta.env.BASE_URL}catalog.json`);
   if (!res.ok) {

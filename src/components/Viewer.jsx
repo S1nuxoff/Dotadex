@@ -219,7 +219,7 @@ function useSceneMask(base) {
   return { maskImage: url, WebkitMaskImage: url, maskMode: "luminance", maskSize: size, WebkitMaskSize: size, maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat" };
 }
 
-export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, portrait = null, portraitShot = "default", outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
+export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, portrait = null, portraitShot = "default", particles = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -323,6 +323,9 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   useEffect(() => stageRef.current.setFrameShift(frameShift), [frameShift]);
   const mask = useSceneMask(catalog.modelsBase);
   useEffect(() => stageRef.current.setLoadout(loadout), [loadout]);
+  // The game's particle effects of what is on screen
+  const particlesKey = particles.join("|");
+  useEffect(() => stageRef.current.setParticles(catalog.modelsBase, particles), [particlesKey, catalog.modelsBase]);
   // The free camera of the settings, or the game's fixed one on a hero's page
   useEffect(() => {
     stageRef.current.setFreeCamera(getViewSettings().freeCamera);

@@ -165,14 +165,15 @@ const fragmentShader = /* glsl */ `
     float intensity = mix(uHasMasks2 > 0.5 ? masks2.r : 0.2, 1.0, uSpecularToFull) * min(uSpecularScale, 6.0) * 0.12;
     vec3 h = normalize(uKeyDir + v);
     float spec = pow(max(dot(n, h), 0.0), exponent) * max(nl, 0.0);
-    vec3 specColor = mix(uSpecularColor * mix(vec3(1.0), albedo * 2.0, 0.5), albedo, masks2.b);
+    vec3 specColor = mix(uSpecularColor * mix(vec3(1.0), albedo * 2.0, 0.7), albedo * 2.0, masks2.b);
     vec3 specular = specColor * uKeyColor * spec * intensity * (0.4 + fresnel.b);
 
     // Rim from above, in the item's rarity tint
     float rimMask = uHasMasks2 > 0.5 ? masks2.g : 0.3;
     float rimUp = clamp(n.y * 0.6 + 0.4, 0.0, 1.0);
     // The material's own rim color (Terrorblade's is cyan), with a touch of the stage's
-    vec3 rim = min(fresnel.g * rimMask * uRimLightScale * 0.35, 0.9) * rimUp * mix(uRimLightColor, uStageRim, 0.25);
+    // The rim takes the surface's color, as in the game, so it brightens it instead of greying it
+    vec3 rim = min(fresnel.g * rimMask * uRimLightScale * 0.35, 0.9) * rimUp * albedo * 2.0 * mix(uRimLightColor, uStageRim, 0.25);
 
     // Reflections of a studio instead of the material's cube map: a softbox above,
     // strip lights at the sides, a dark floor and a back light in the rarity color.

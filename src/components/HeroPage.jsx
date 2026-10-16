@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import { abilityIcon, useGameData } from "../gamedata.js";
 import { useUiScale } from "./ui.jsx";
 import HeroInfo from "./HeroInfo.jsx";
@@ -397,14 +397,19 @@ export default function HeroPage({ catalog, hero, language, viewer, summary, war
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // Escape closes the outfit picker, or a tab's panel back to the loadout
   useEffect(() => {
-    if (!wardrobeOpen) {
+    if (!wardrobeOpen && tab === "loadout") {
       return;
     }
-    const onKey = (event) => event.key === "Escape" && onCloseWardrobe();
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        wardrobeOpen ? onCloseWardrobe() : setTab("loadout");
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [wardrobeOpen, onCloseWardrobe]);
+  }, [wardrobeOpen, onCloseWardrobe, tab]);
 
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -422,13 +427,24 @@ export default function HeroPage({ catalog, hero, language, viewer, summary, war
             </div>
             <div className="relative min-h-0 flex-1">
               <div className="pointer-events-auto absolute top-[90px] left-[90px] w-[540px]">
-                <HeroSummary catalog={catalog} hero={hero} info={info} data={data} onAbout={() => setTab("about")} onCast={cast} />
+                <HeroSummary catalog={catalog} hero={hero} info={info} data={data} onAbout={() => setTab(tab === "about" ? "loadout" : "about")} onCast={cast} />
               </div>
               {tab !== "loadout" ? (
-                <div className="pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] overflow-y-auto bg-black/55 p-[24px] shadow-[0_8px_32px_rgb(0_0_0/0.5)] scrollbar-thin">
-                  {tab === "voice" && <Voice modelsBase={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} />}
-                  {tab === "stats" && <Stats info={info} />}
-                  {tab === "about" && <HeroInfo base={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} language={language} />}
+                <div className="pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
+                  <div className="h-full overflow-y-auto bg-black/55 p-[24px] pr-[48px] scrollbar-thin">
+                    {tab === "voice" && <Voice modelsBase={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} />}
+                    {tab === "stats" && <Stats info={info} />}
+                    {tab === "about" && <HeroInfo base={catalog.modelsBase} heroKey={`npc_dota_hero_${hero.id}`} language={language} />}
+                  </div>
+                  <button
+                    onClick={() => setTab("loadout")}
+                    data-sound="back"
+                    aria-label="Back to the loadout"
+                    title="Back to the loadout"
+                    className="absolute top-[10px] right-[10px] grid size-[32px] place-items-center rounded-[2px] bg-gradient-to-b from-[#3b434e] to-[#262c34] text-[#e6ebef] shadow-[0_2px_8px_rgb(0_0_0/0.5)] hover:brightness-150"
+                  >
+                    <X className="size-[20px]" strokeWidth={2.5} />
+                  </button>
                 </div>
               ) : (
                 <div className="pointer-events-auto absolute top-[90px] right-[90px] w-[422px]">{summary}</div>

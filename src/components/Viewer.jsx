@@ -22,6 +22,7 @@ import { IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
 import { playSound, soundsBase } from "./Voice.jsx";
 import { ATTRIBUTES, abilityIcon, useGameData } from "../gamedata.js";
 import { unlockSound } from "../viewer/soundPlayer.js";
+import { getViewSettings, onViewSettings } from "../viewSettings.js";
 
 // What the stage needs to play animation sounds, loaded once when sound is turned on
 let soundData = null;
@@ -319,6 +320,11 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   useEffect(() => stageRef.current.setSpeed(speed), [speed]);
   useEffect(() => stageRef.current.setFrameShift(frameShift), [frameShift]);
   useEffect(() => stageRef.current.setLoadout(loadout), [loadout]);
+  // The free camera of the settings, or the game's fixed one on a hero's page
+  useEffect(() => {
+    stageRef.current.setFreeCamera(getViewSettings().freeCamera);
+    return onViewSettings((settings) => stageRef.current?.setFreeCamera(settings.freeCamera));
+  }, []);
   // The game's pedestal and camera for the hero on its page
   useEffect(
     () => stageRef.current.setPortrait(loadout ? portrait : null, loadout && portrait ? `${catalog.modelsBase}${portrait.pedestal}` : null, portraitShot),

@@ -4,6 +4,7 @@ import { LANGUAGES } from "../gamedata.js";
 import { Popover, Select, UI_WIDTH as WIDTH, useDismiss, useUiScale, VALVE_NOTICE } from "./ui.jsx";
 import { useMenuMusic, VolumeSliders } from "./Music.jsx";
 import { getVolume, onVolume, setVolume } from "../volume.js";
+import { getViewSettings, onViewSettings, setViewSettings } from "../viewSettings.js";
 
 // The sections across the top, as the game's dashboard has them, and the pages of each below
 export const SECTIONS = [
@@ -139,9 +140,25 @@ function SettingsMenu({ language, onLanguage }) {
           />
         </div>
         <VolumeSliders />
+        <FreeCameraToggle />
         <p className="border-t border-line pt-3 text-[11px] leading-snug text-ash/80">{VALVE_NOTICE}</p>
       </Popover>
     </div>
+  );
+}
+
+// On a hero's page the camera is fixed as in the game; this lets it turn, zoom and pan
+function FreeCameraToggle() {
+  const [on, setOn] = useState(() => getViewSettings().freeCamera);
+  useEffect(() => onViewSettings((settings) => setOn(settings.freeCamera)), []);
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 text-xs text-ash">
+      <span>
+        Free camera
+        <span className="block text-[11px] text-ash/60">Turn, zoom and pan on hero pages</span>
+      </span>
+      <input type="checkbox" checked={on} onChange={(event) => setViewSettings({ freeCamera: event.target.checked })} className="size-4 accent-[#c5dcff]" />
+    </label>
   );
 }
 

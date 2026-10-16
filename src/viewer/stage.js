@@ -24,6 +24,34 @@ const SOURCE_TO_METRES = 0.0254;
 // Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
 const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
 
+// Makes a material fade out with the distance from the scene's upright axis, between
+// fade.inner and fade.outer (uniforms), for the pedestal's edge to sink into the dark
+function fadeOut(material, fade) {
+  if (!material || material.userData.fades) {
+    return;
+  }
+  material.userData.fades = true;
+  material.transparent = true;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uFadeInner = fade.inner;
+    shader.uniforms.uFadeOuter = fade.outer;
+    shader.vertexShader = shader.vertexShader
+      .replace("void main() {", "varying vec3 vFadePosition;\nvoid main() {")
+      .replace("#include <project_vertex>", "#include <project_vertex>\n  vFadePosition = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "void main() {",
+      "varying vec3 vFadePosition;\nuniform float uFadeInner;\nuniform float uFadeOuter;\nvoid main() {"
+    );
+    // After the material's own output, wherever it ends
+    const end = shader.fragmentShader.lastIndexOf("}");
+    shader.fragmentShader =
+      shader.fragmentShader.slice(0, end) +
+      "  gl_FragColor.a *= 1.0 - smoothstep(uFadeInner, uFadeOuter, length(vFadePosition.xz));\n" +
+      shader.fragmentShader.slice(end);
+  };
+  material.needsUpdate = true;
+}
+
 // Starts downloading models ahead of time (the pointer resting on a hero in the list), so
 // they are ready, or nearly, when picked
 export function prefetchModels(urls) {
@@ -903,9 +931,51 @@ export class Stage {
     }
   }
 
+  // On a hero's page the camera stays where the game puts it and a drag turns the hero round, as
+  // in the game, unless the free camera is chosen in the settings
+  setFreeCamera(on) {
+    this.freeCamera = on;
+    this.applyControls();
+  }
+
+  applyControls() {
+    const locked = Boolean(this.loadout && this.portrait && !this.freeCamera);
+    this.controls.enableRotate = !locked;
+    this.controls.enableZoom = !locked;
+    this.controls.enablePan = !locked;
+    this.turnLocked = locked;
+    if (!locked && this.group) {
+      this.group.rotation.y = 0;
+    }
+    if (this.turnListeners) {
+      return;
+    }
+    let last = null;
+    this.turnListeners = true;
+    this.canvas.addEventListener("pointerdown", (event) => {
+      if (this.turnLocked && event.button === 0) {
+        last = event.clientX;
+        this.canvas.setPointerCapture(event.pointerId);
+      }
+    });
+    this.canvas.addEventListener("pointermove", (event) => {
+      if (last === null || !this.turnLocked || !this.group) {
+        return;
+      }
+      this.group.rotation.y += (event.clientX - last) * 0.01;
+      last = event.clientX;
+    });
+    const stop = () => {
+      last = null;
+    };
+    this.canvas.addEventListener("pointerup", stop);
+    this.canvas.addEventListener("pointercancel", stop);
+  }
+
   setLoadout(on) {
     const changed = on !== this.loadout;
     this.loadout = on;
+    this.applyControls();
     this.updatePortraitLight();
     this.updateShowcase();
     if (changed && this.group) {
@@ -921,6 +991,7 @@ export class Stage {
   // The hero's page scene as the game sets it (loadout_portraits.json): the pedestal it stands on
   // and the cameras of the page, the set picker and each slot. shot picks the camera.
   setPortrait(portrait, pedestalUrl, shot = "default") {
+    this.pedestalFade ??= { inner: { value: 1.5 }, outer: { value: 4 } };
     const changed = portrait !== this.portrait || shot !== this.portraitShot;
     this.portrait = portrait;
     this.portraitShot = shot;
@@ -936,12 +1007,15 @@ export class Stage {
             if (this.pedestalUrl !== pedestalUrl) {
               return;
             }
-            // Shaded like the heroes, and taking the hero's shadow
+            // Shaded like the heroes, taking the hero's shadow, and fading into the dark away from
+            // the hero as the game's fog hides its edge
             this.pedestal = gltf.scene;
             this.applyMaterials(this.pedestal, gltf.userData.textures);
             this.pedestal.traverse((node) => {
               if (node.isMesh) {
                 node.receiveShadow = true;
+                fadeOut(node.userData.dota, this.pedestalFade);
+                fadeOut(node.userData.pbr, this.pedestalFade);
               }
             });
             this.scene.add(this.pedestal);
@@ -951,6 +1025,7 @@ export class Stage {
         );
       }
     }
+    this.applyControls();
     this.updatePortraitLight();
     this.updateShowcase();
     if (changed && this.group) {
@@ -1110,6 +1185,11 @@ export class Stage {
       this.controls.minDistance = across * 0.3;
       this.controls.maxDistance = across * 3;
       this.group.position.y = 0;
+      // The pedestal shows round the hero's feet and sinks into the dark a little further out
+      const footprint = new THREE.Box3().setFromObject(this.group, true).getSize(new THREE.Vector3());
+      const reach = Math.max(footprint.x, footprint.z, 1) * 0.5;
+      this.pedestalFade.inner.value = reach * 1.1;
+      this.pedestalFade.outer.value = reach * 3;
       if (immediate || reducedMotion.matches || !this.framedOnce) {
         this.tween = null;
         this.controls.target.copy(target);

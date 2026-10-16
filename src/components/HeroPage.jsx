@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import { abilityIcon, useGameData } from "../gamedata.js";
 import { useUiScale } from "./ui.jsx";
@@ -106,33 +106,32 @@ function Backdrop({ base, heroId }) {
 
 // The name on one line, made smaller when it is too long for the column, as the game shrinks it
 const NAME_SIZE = 68;
+const NAME_WIDTH = 660;
+// The title font's width of a text at the name's full size, measured off the page so its zoom
+// and layout play no part; the font's letter spacing (0.06em) added
+function nameWidth(name) {
+  const context = (nameWidth.canvas ??= document.createElement("canvas")).getContext("2d");
+  context.font = `700 ${NAME_SIZE}px Reaver, Radiance, sans-serif`;
+  const text = name.toUpperCase();
+  return context.measureText(text).width + text.length * NAME_SIZE * 0.06;
+}
+
 function HeroName({ name }) {
-  const ref = useRef(null);
-  const [size, setSize] = useState(NAME_SIZE);
-  useLayoutEffect(() => {
+  const fit = () => Math.min(NAME_SIZE, Math.floor((NAME_SIZE * NAME_WIDTH) / nameWidth(name)));
+  const [size, setSize] = useState(fit);
+  useEffect(() => {
     let current = true;
-    const measure = () => {
-      const element = ref.current;
-      if (!current || !element) {
-        return;
-      }
-      // Both widths as drawn, so the page's zoom falls out of the ratio
-      element.style.fontSize = `${NAME_SIZE}px`;
-      const text = element.getBoundingClientRect().width;
-      const room = element.parentElement.getBoundingClientRect().width;
-      element.style.fontSize = "";
-      setSize(text > room ? Math.floor((NAME_SIZE * room) / text) : NAME_SIZE);
-    };
-    measure();
+    setSize(fit());
     // Measured again once the title font is in, as it is wider than the one standing in for it
-    document.fonts?.ready.then(measure);
+    document.fonts?.load(`700 ${NAME_SIZE}px Reaver`).then(() => current && setSize(fit()));
     return () => {
       current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
   return (
     <h1 className="flex h-[75px] w-[660px] items-center">
-      <span ref={ref} className="shrink-0 font-display leading-none font-bold tracking-normal whitespace-nowrap text-white" style={{ fontSize: size }}>
+      <span className="shrink-0 font-display leading-none font-bold whitespace-nowrap text-white" style={{ fontSize: size }}>
         {name}
       </span>
     </h1>

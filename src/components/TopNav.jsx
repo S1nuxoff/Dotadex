@@ -166,7 +166,7 @@ export default function TopNav({ catalog, tab, onTab, onSection, onHome, onBack,
     <header className="relative z-30 shrink-0 overflow-x-clip">
       {/* The bar, its shadow and the glow of the open tab hang below it, over the page */}
       <div className="relative" style={{ height: 61 * scale }}>
-        <div className="absolute top-0 left-0 h-[164px] origin-top-left" style={{ width, transform: `scale(${scale})` }}>
+        <div className="pointer-events-none absolute top-0 left-0 h-[164px] origin-top-left [&>:not([aria-hidden])]:pointer-events-auto" style={{ width, transform: `scale(${scale})` }}>
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"

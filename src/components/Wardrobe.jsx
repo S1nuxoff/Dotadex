@@ -607,7 +607,7 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
         ? [...list].sort((a, b) => rarity(first(b) ?? {}).rank - rarity(first(a) ?? {}).rank)
         : [...list].sort((a, b) => (first(b)?.date ?? "").localeCompare(first(a)?.date ?? ""));
     cards = [
-      { key: "default", name: hero.name, image: heroPortrait(hero), look: rarity({ rarity: "common" }), worn: !changed, onPick: onReset },
+      { key: "default", name: hero.name, image: `${catalog.modelsBase}images/heroes/selection/npc_dota_hero_${hero.id}_png.png`, look: rarity({ rarity: "common" }), worn: !changed, onPick: onReset },
       ...ordered.map((set) => ({
         key: set.id,
         name: set.name,
@@ -699,7 +699,7 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-[16px] scrollbar-thin">
             {cards.length > 0 ? (
-              <ul className="grid grid-cols-[repeat(auto-fill,minmax(234px,1fr))] gap-[12px]">
+              <ul className="grid grid-cols-3 gap-[12px]">
                 {cards.map(({ key, ...card }) => (
                   <OutfitCard key={key} {...card} tall={selected === "sets"} />
                 ))}

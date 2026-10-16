@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { imageUrl, useGameData } from "../gamedata.js";
-import { useDismiss, useUiScale } from "./ui.jsx";
+import { useDismiss, useUiScale, VALVE_NOTICE } from "./ui.jsx";
 
 // The game's hero grid as the dashboard has it now: four columns of tall portraits by primary
 // attribute, the animated portrait and name of the hero under the pointer, typing to find a hero, and the
@@ -400,6 +400,7 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
             </div>
           </footer>
         </div>
+        <p className="mx-auto max-w-[900px] pt-[10px] pb-[16px] text-center text-[11px] leading-snug text-[#808fa6]/50">{VALVE_NOTICE}</p>
       </div>
     </section>
   );

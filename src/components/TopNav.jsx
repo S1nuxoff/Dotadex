@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { Code2, Database } from "lucide-react";
 import { LANGUAGES } from "../gamedata.js";
-import { Popover, Select, UI_WIDTH as WIDTH, useDismiss, useUiScale } from "./ui.jsx";
+import { Popover, Select, UI_WIDTH as WIDTH, useDismiss, useUiScale, VALVE_NOTICE } from "./ui.jsx";
 import { useMenuMusic, VolumeSliders } from "./Music.jsx";
 import { getVolume, onVolume, setVolume } from "../volume.js";
 
@@ -139,6 +139,7 @@ function SettingsMenu({ language, onLanguage }) {
           />
         </div>
         <VolumeSliders />
+        <p className="border-t border-line pt-3 text-[11px] leading-snug text-ash/80">{VALVE_NOTICE}</p>
       </Popover>
     </div>
   );

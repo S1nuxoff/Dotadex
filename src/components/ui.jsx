@@ -18,6 +18,10 @@ export function useUiScale() {
   return scale;
 }
 
+// Valve's terms for fan sites ask for this wherever the game's content is shown
+export const VALVE_NOTICE =
+  "Dota 2 and all of its content, models, art, sounds and names are trademarks and copyright of Valve Corporation. Dotadex is a fan project, not affiliated with or endorsed by Valve.";
+
 export function IconButton({ label, onClick, children, active, className = "" }) {
   return (
     <button

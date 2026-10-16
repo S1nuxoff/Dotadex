@@ -366,7 +366,7 @@ export class Stage {
     // The glow is added to the colors only, so the page still shows through around the model.
     this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.7, 0.45, 1.0);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.35, 1.5);
     Object.assign(this.bloom.blendMaterial, {
       blending: THREE.CustomBlending,
       blendEquation: THREE.AddEquation,

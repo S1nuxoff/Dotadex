@@ -1498,6 +1498,10 @@ export class Stage {
 
     this.controls.update();
     this.particles?.update(delta, this.camera);
+    // While developing, ?opaque draws the scene on black instead of see-through
+    if (import.meta.env.DEV && window.location.search.includes("opaque") && !this.scene.background) {
+      this.scene.background = new THREE.Color(0x000000);
+    }
     // While developing, ?nobloom draws the frame without the bloom and the halos
     if (import.meta.env.DEV && window.location.search.includes("nobloom")) {
       this.renderer.render(this.scene, this.camera);

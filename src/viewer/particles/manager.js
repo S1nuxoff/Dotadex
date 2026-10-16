@@ -308,7 +308,13 @@ export class ParticleManager {
         .map((renderer, index) => {
           const def = (system.def.m_Renderers ?? []).filter((op) => !op.m_bDisableOperator)[index] ?? {};
           const blend = (def.m_nOutputBlendMode ?? "ALPHA").replace("PARTICLE_OUTPUT_BLEND_MODE_", "");
-          return renderer.object ? `${def._class?.replace("C_OP_Render", "")}/${blend}:${renderer.object.visible ? "shown" : "hidden"}` : "?";
+          const object = renderer.object;
+          if (!object) return "?";
+          const map = object.material?.uniforms?.uMap?.value?.image;
+          const frame = object.geometry?.getAttribute?.("iFrame")?.array;
+          const size = object.geometry?.getAttribute?.("iSizeRoll")?.array;
+          const extra = `${map ? ` tex=${map.width}x${map.height}` : " notex"}${frame ? ` uv=${[...frame.slice(0, 4)].map((v) => v.toFixed(3))}` : ""}${size ? ` size=${size[0].toFixed(2)}m` : ""}`;
+          return `${def._class?.replace("C_OP_Render", "")}/${blend}:${object.visible ? "shown" : "hidden"}${extra}`;
         })
         .join(",");
       // Particles whose numbers went wrong draw black

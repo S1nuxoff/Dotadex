@@ -28,16 +28,24 @@ function blendingOf(def, material) {
     material.blendDstAlpha = THREE.OneFactor;
     material.uniforms.uMod.value = 1;
   } else if (/ADD/.test(mode)) {
-    // Light added to the colors only: the scene's canvas is see-through to the page's backdrop,
-    // and a black texel must not make it opaque (black squares over the backdrop and the hero)
+    // The shader gives its color already times its alpha; it is added to the colors only, and
+    // the see-through canvas's alpha is left as it is (a black texel must not cover anything)
     material.blending = THREE.CustomBlending;
     material.blendEquation = THREE.AddEquation;
-    material.blendSrc = THREE.SrcAlphaFactor;
+    material.blendSrc = THREE.OneFactor;
     material.blendDst = THREE.OneFactor;
     material.blendSrcAlpha = THREE.ZeroFactor;
     material.blendDstAlpha = THREE.OneFactor;
+    material.uniforms.uPremultiply.value = 1;
   } else {
-    material.blending = THREE.NormalBlending;
+    // Over what is behind as its alpha says, the color already times its alpha
+    material.blending = THREE.CustomBlending;
+    material.blendEquation = THREE.AddEquation;
+    material.blendSrc = THREE.OneFactor;
+    material.blendDst = THREE.OneMinusSrcAlphaFactor;
+    material.blendSrcAlpha = THREE.OneFactor;
+    material.blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
+    material.uniforms.uPremultiply.value = 1;
   }
   material.uniforms.uHalf.value = /HALF_BLEND/.test(mode) ? 0.5 : 1;
 }
@@ -148,6 +156,7 @@ const FRAGMENT = /* glsl */ `
   uniform float uOverbright;
   uniform float uHalf;
   uniform float uMod;
+  uniform float uPremultiply;
   varying vec2 vUv;
   varying vec4 vColor;
   void main() {
@@ -164,7 +173,9 @@ const FRAGMENT = /* glsl */ `
     // Kept finite and within what the bloom can take: an infinite or broken value spreads into
     // black squares through the bloom's blur on graphics cards
     if (any(isnan(color)) || color.a < 0.002) discard;
-    gl_FragColor = vec4(clamp(color.rgb, 0.0, 8.0), clamp(color.a, 0.0, 1.0));
+    vec3 rgb = clamp(color.rgb, 0.0, 8.0);
+    float a = clamp(color.a, 0.0, 1.0);
+    gl_FragColor = vec4(uPremultiply > 0.5 ? rgb * a : rgb, a);
     #include <colorspace_fragment>
   }
 `;
@@ -200,6 +211,7 @@ function material(def, vertexShader, orientation) {
       uOverbright: { value: num(def.m_flOverbrightFactor, 1) },
       uHalf: { value: 1 },
       uMod: { value: 0 },
+      uPremultiply: { value: 0 },
       uOrientation: { value: orientation },
       uCameraBias: { value: num(def.VisibilityInputs?.m_flCameraBias, 0) * UNIT },
       uScreenSize: {
@@ -441,7 +453,8 @@ const kept = (kind, def) => {
   if (!filter) return true;
   const words = filter.toLowerCase().split(",");
   const blend = (def.m_nOutputBlendMode ?? "PARTICLE_OUTPUT_BLEND_MODE_ALPHA").replace("PARTICLE_OUTPUT_BLEND_MODE_", "").toLowerCase();
-  return words.includes(kind) || words.includes(blend) || words.includes(`${kind}-${blend}`);
+  const texture = (textureOf(def) ?? "").toLowerCase();
+  return words.includes(kind) || words.includes(blend) || words.includes(`${kind}-${blend}`) || words.some((word) => word.length > 3 && texture.includes(word));
 };
 
 export const RENDERERS = {

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { abilityIcon, useGameData } from "../gamedata.js";
 import { useUiScale } from "./ui.jsx";
@@ -104,6 +104,40 @@ function Backdrop({ base, heroId }) {
   );
 }
 
+// The name on one line, made smaller when it is too long for the column, as the game shrinks it
+const NAME_SIZE = 68;
+const NAME_WIDTH = 660;
+function HeroName({ name }) {
+  const ref = useRef(null);
+  const [size, setSize] = useState(NAME_SIZE);
+  useLayoutEffect(() => {
+    let current = true;
+    const measure = () => {
+      const element = ref.current;
+      if (!current || !element) {
+        return;
+      }
+      element.style.fontSize = `${NAME_SIZE}px`;
+      const fit = Math.min(NAME_SIZE, Math.floor((NAME_SIZE * NAME_WIDTH) / element.scrollWidth));
+      element.style.fontSize = "";
+      setSize(fit);
+    };
+    measure();
+    // Measured again once the title font is in, as it is wider than the one standing in for it
+    document.fonts?.ready.then(measure);
+    return () => {
+      current = false;
+    };
+  }, [name]);
+  return (
+    <h1 className="flex h-[75px] w-[660px] items-center">
+      <span ref={ref} className="font-display leading-none font-bold tracking-normal whitespace-nowrap text-white" style={{ fontSize: size }}>
+        {name}
+      </span>
+    </h1>
+  );
+}
+
 function Label({ children }) {
   return <span className="text-[16px] tracking-[2px] text-[#e6ebef]/50 uppercase">{children}</span>;
 }
@@ -138,7 +172,7 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast }) {
 
   return (
     <div>
-      <h1 className="h-[75px] font-display text-[68px] leading-[75px] font-bold tracking-normal text-white">{hero.name}</h1>
+      <HeroName name={hero.name} />
       {/* Attribute, complexity, attack type and tags in one row */}
       <div className="mt-[4px] mb-[2px] flex items-center">
         <img src={image(base, `primary_attribute_icons/primary_attribute_icon_${attribute}_psd`)} alt="" title={attribute} className="mr-[12px] size-[32px]" />

@@ -78,6 +78,12 @@ body,
   height: 100%;
 }
 
+/* The page itself never scrolls, as the game's screens do not: each panel scrolls on its own */
+html,
+body {
+  overflow: hidden;
+}
+
 /* Larger type on large screens, as the game's interface scales with the resolution */
 @media (min-width: 1600px) {
   html {

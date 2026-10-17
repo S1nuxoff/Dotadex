@@ -75,9 +75,15 @@ function source(def) {
       const scale = def.m_flNoiseScale ?? 0.1;
       const out0 = def.m_flNoiseOutputMin ?? 0;
       const out1 = def.m_flNoiseOutputMax ?? 1;
+      const rate = Array.isArray(def.m_vecNoiseOffsetRate) ? def.m_vecNoiseOffsetRate : [0, 0, 0];
       return (system, index) => {
+        // The system's own value (an emission rate): the noise where control point 0 is, drifting
+        // with time as the offset rate says
         if (index < 0) {
-          return out0;
+          const cp = system.controlPoint(0).position;
+          const t = system.age;
+          const n = noise((cp.x + rate[0] * t) * scale, (cp.y + rate[1] * t) * scale, (cp.z + rate[2] * t) * scale + t * 0.5);
+          return lerp(out0, out1, n * 0.5 + 0.5);
         }
         const p = system.vector(0);
         const n = noise(p[index * 3] * scale, p[index * 3 + 1] * scale, p[index * 3 + 2] * scale + system.age * 0.5);

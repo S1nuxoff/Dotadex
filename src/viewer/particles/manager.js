@@ -2,15 +2,20 @@
 // points bound to the model's attachments (of the hero and of what it wears) as the game's
 // effects ask, and points on the model's surface for effects that rise from it.
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ControlPoint, ParticleSystem } from "./system.js";
 import { quaternionToSource, toSource, UNIT } from "./math.js";
 import { unsupported } from "./operators.js";
 
 const systemCache = new Map();
+const snapshotCache = new Map();
+const snapshots = new Map(); // the ones loaded, for the systems to read as they run
 const textureCache = new Map();
 const attachmentCache = new Map();
 let attachedModels = null; // loaded once: a Set of the models that have attachments, or null while the dataset has no list
 const textureLoader = new THREE.TextureLoader();
+const modelCache = new Map();
+const modelLoader = new GLTFLoader();
 
 // Whether an image has no see-through texel at all: a texture saved without its alpha
 const probe = document.createElement("canvas");
@@ -91,6 +96,76 @@ export class ParticleManager {
     return this.loadSystem(path);
   }
 
+  // A model particles are drawn as (.vmdl, exported as .glb next to the others): its scene, or
+  // null when the dataset has none
+  loadModel(path) {
+    const key = path.toLowerCase().replace(/\.vmdl$/, "");
+    if (!modelCache.has(key)) {
+      modelCache.set(key, modelLoader.loadAsync(`${this.base}${key}.glb`).then((gltf) => gltf.scene, () => null));
+    }
+    return modelCache.get(key);
+  }
+
+  // A snapshot (.vsnap): its streams by name, positions in the model's own space in the game's
+  // units ({ position: [[x, y, z]], radius: [r], ... }), or null when the dataset has none
+  loadSnapshot(path) {
+    const key = path.toLowerCase();
+    if (!snapshotCache.has(key)) {
+      snapshotCache.set(
+        key,
+        fetchJson(`${this.base}${key}.json`).then((data) => {
+          snapshots.set(key, data);
+          return data;
+        })
+      );
+    }
+    return snapshotCache.get(key);
+  }
+
+  // The snapshots an effect's systems use, all of them loaded before it starts
+  async loadSnapshots(def, seen = new Set()) {
+    if (!def || seen.has(def)) return;
+    seen.add(def);
+    const children = await Promise.all((def.m_Children ?? []).filter((child) => child?.m_ChildRef).map((child) => this.loadSystem(child.m_ChildRef)));
+    await Promise.all([def.m_hSnapshot && this.loadSnapshot(def.m_hSnapshot), ...children.map((child) => this.loadSnapshots(child, seen))]);
+  }
+
+  // A snapshot's points on the given meshes: each at the vertex nearest to it in the model's
+  // own pose, so it moves with the model as that vertex does
+  snapshotPoints(path, meshes) {
+    const data = snapshots.get(path.toLowerCase());
+    const positions = data?.position;
+    if (!positions?.length || !meshes.length || !this.model) return null;
+    this.model.updateWorldMatrix(true, true);
+    const toModel = new THREE.Matrix4().copy(this.model.matrixWorld).invert();
+    const vertices = meshes.map((mesh) => {
+      const matrix = new THREE.Matrix4().multiplyMatrices(toModel, mesh.matrixWorld);
+      return { mesh, matrix, position: mesh.geometry.attributes.position };
+    });
+    const target = new THREE.Vector3();
+    return positions.map((source, k) => {
+      // The snapshot in metres with the scene's axes, the way the model's vertices are kept
+      v1.set(source[1] * UNIT, source[2] * UNIT, source[0] * UNIT);
+      let best = Infinity;
+      let found = null;
+      for (const { mesh, matrix, position } of vertices) {
+        for (let i = 0; i < position.count; i++) {
+          target.fromBufferAttribute(position, i).applyMatrix4(matrix);
+          const distance = target.distanceToSquared(v1);
+          if (distance < best) {
+            best = distance;
+            found = { mesh, index: i };
+          }
+        }
+      }
+      if (data.radius?.[k] !== undefined) found.radius = data.radius[k];
+      if (data.normal?.[k]) found.normal = data.normal[k];
+      const color = data.color?.[k];
+      if (color) found.color = color.slice(0, 3).map((c) => (Math.max(...color.slice(0, 3)) > 1 ? c / 255 : c));
+      return found;
+    });
+  }
+
   loadTexture(path) {
     const key = path.toLowerCase().replace(/\.vtex$/, "");
     if (!textureCache.has(key)) {
@@ -152,6 +227,7 @@ export class ParticleManager {
     if (!this.model) return;
     const list = this.list ?? [];
     const defs = await Promise.all(list.map((effect) => this.loadEffect(effect.system)));
+    await Promise.all(defs.map((def) => this.loadSnapshots(def)));
     if (request !== this.request) return;
     for (const [index, def] of defs.entries()) {
       if (!def) continue;
@@ -185,13 +261,20 @@ export class ParticleManager {
     const own = this.meshes.filter((mesh) => wanted.has(mesh.userData.model));
     const meshes = own.length ? own : this.meshes;
     const total = meshes.reduce((sum, mesh) => sum + mesh.geometry.attributes.position.count, 0);
+    const placed = new Map();
     return {
+      // A snapshot's points found on this effect's models once
+      snapshotPoints(path) {
+        if (!placed.has(path)) placed.set(path, manager.snapshotPoints(path, meshes));
+        return placed.get(path);
+      },
       surface: {
         sample: (position, normal) => this.sampleSurface(position, normal, meshes, total),
         position: (binding, target) => this.surfacePosition(binding, target),
       },
       loadSystem: (path) => this.loadSystem(path),
       loadTexture: (path) => this.loadTexture(path),
+      loadModel: (path) => this.loadModel(path),
       controlPoint(index) {
         let point = points.get(index);
         if (!point) {

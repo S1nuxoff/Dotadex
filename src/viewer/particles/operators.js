@@ -78,9 +78,20 @@ DEFS.C_OP_ContinuousEmitter = (def) => {
   const duration = compileFloat(def.m_flEmissionDuration, 0);
   const start = compileFloat(def.m_flStartTime, 0);
   const scale = def.m_flEmissionScale || 1;
+  const fromKilled = Boolean(def.m_bInitFromKilledParentParticles);
   let carried = 0;
   return {
     emit(system, dt) {
+      // One particle for each the parent lost, made from it (C_INIT_InitFromParentKilled)
+      if (fromKilled) {
+        const parent = system.parent;
+        if (!parent) return;
+        parent.keepKilled = true;
+        system.fromKilled = parent.killed.splice(0, parent.killed.length);
+        if (system.fromKilled.length) system.spawn(system.fromKilled.length);
+        system.fromKilled = null;
+        return;
+      }
       const from = start(system, -1);
       const length = duration(system, -1);
       if (system.age < from || (length > 0 && system.age > from + length)) {
@@ -100,11 +111,15 @@ DEFS.C_OP_InstantaneousEmitter = (def) => {
   const count = compileFloat(def.m_nParticlesToEmit, 100);
   const start = compileFloat(def.m_flStartTime, 0);
   const perFrame = def.m_nMaxEmittedPerFrame ?? -1;
+  // With a snapshot control point: one particle for each of its points
+  const snapshotPoint = def.m_nSnapshotControlPoint ?? -1;
   let left = null;
   return {
     emit(system) {
       if (left === null && system.age >= start(system, -1)) {
-        left = Math.max(0, Math.round(count(system, -1)));
+        const snapshot = snapshotPoint >= 0 && system.snapshot(snapshotPoint);
+        const points = snapshot && system.host.snapshotPoints?.(snapshot);
+        left = points?.length ? points.length : Math.max(0, Math.round(count(system, -1)));
       }
       if (left > 0) {
         const n = perFrame > 0 ? Math.min(left, perFrame) : left;
@@ -157,13 +172,15 @@ function degreesIn(def, field, value) {
 DEFS.C_INIT_InitFloat = (def) => {
   const field = def.m_nOutputField ?? 3;
   const value = degreesIn(def, field, compileFloat(def.m_InputValue, 0));
+  // How far from what is there to the new value: 1 sets it, beyond 1 goes past it
+  const strength = compileFloat(def.m_InputStrength, 1);
   const set = setter(def);
   return {
     init(system, start, end) {
       const data = system.float(field);
       for (let i = start; i < end; i++) {
         const current = VECTOR_FIELDS.has(field) ? data[i * 3] : data[i];
-        writeFloat(system, field, i, set(current, current, value(system, i)));
+        writeFloat(system, field, i, lerp(current, set(current, current, value(system, i)), strength(system, i)));
       }
     },
   };
@@ -501,8 +518,45 @@ function onModel() {
   };
 }
 DEFS.C_INIT_CreateOnModel = onModel;
-DEFS.C_INIT_InitSkinnedPositionFromCPSnapshot = onModel;
 DEFS.C_INIT_InitFromCPSnapshot = onModel;
+
+// On the points of the snapshot at the control point (where the artist put them on the model),
+// in their order or at random; on the model's surface when there is no snapshot
+DEFS.C_INIT_InitSkinnedPositionFromCPSnapshot = (def) => {
+  const point = def.m_nSnapshotControlPointNumber ?? 0;
+  const randomly = Boolean(def.m_bRandom);
+  const increment = def.m_flIncrement ?? 1;
+  const setRadius = Boolean(def.m_bSetRadius);
+  const copyColor = Boolean(def.m_bCopyColor);
+  const fallback = onModel();
+  let next = def.m_nSnapShotStartPoint ?? 0;
+  return {
+    init(system, start, end) {
+      const snapshot = system.snapshot(point);
+      const points = snapshot && system.host.snapshotPoints?.(snapshot);
+      if (!points?.length) return fallback.init(system, start, end);
+      const surface = system.host.surface;
+      const p = system.float(0);
+      const q = system.float(2);
+      const normal = system.float(21);
+      const radius = system.float(3);
+      const color = system.float(6);
+      system.bindings ??= [];
+      for (let i = start; i < end; i++) {
+        const k = randomly ? Math.floor(Math.random() * points.length) : Math.floor(next) % points.length;
+        if (!randomly) next += increment;
+        const found = points[k];
+        const binding = { mesh: found.mesh, index: found.index };
+        system.bindings[i] = binding;
+        surface.position(binding, v1);
+        for (let c = 0; c < 3; c++) p[i * 3 + c] = q[i * 3 + c] = v1.getComponent(c);
+        if (found.normal) for (let c = 0; c < 3; c++) normal[i * 3 + c] = found.normal[c];
+        if (setRadius && found.radius !== undefined) radius[i] = found.radius;
+        if (copyColor && found.color) for (let c = 0; c < 3; c++) color[i * 3 + c] = found.color[c];
+      }
+    },
+  };
+};
 DEFS.C_INIT_CreateOnModelAtHeight = onModel;
 
 DEFS.C_INIT_CreateFromParentParticles = (def) => {
@@ -523,13 +577,20 @@ DEFS.C_INIT_CreateFromParentParticles = (def) => {
           p[i * 3 + k] = pp[j * 3 + k];
           q[i * 3 + k] = pp[j * 3 + k] - (pp[j * 3 + k] - pq[j * 3 + k]) * velocityScale;
         }
+        // Bound to the model where the parent is, for the operators that keep it there
+        const binding = parent.bindings?.[j];
+        if (binding) {
+          system.bindings ??= [];
+          system.bindings[i] = { mesh: binding.mesh, index: binding.index };
+        }
       }
     },
   };
 };
 
+// The radius unless the file names a field (files that inherit the tint write field 6 out)
 function inheritFromParent(def, every) {
-  const field = def.m_nFieldOutput ?? 6;
+  const field = def.m_nFieldOutput ?? 3;
   const scale = def.m_flScale ?? 1;
   const randomly = Boolean(def.m_bRandomDistribution);
   const width = VECTOR_FIELDS.has(field) ? 3 : 1;
@@ -617,6 +678,28 @@ DEFS.C_INIT_CreationNoise = (def) => {
       for (let i = start; i < end; i++) {
         const n = noise(system.age * scale * 10 + system.ids[i] * 0.37) * 0.5 + 0.5;
         writeFloat(system, field, i, lerp(min, max, def.m_bAbsVal ? Math.abs(n * 2 - 1) : n));
+      }
+    },
+  };
+};
+
+// A field taken from the parent's particle this one is made from as it was killed; with none to
+// come from (not made by such an emitter) the particle goes
+DEFS.C_INIT_InitFromParentKilled = (def) => {
+  const field = def.m_nAttributeToCopy ?? -1;
+  return {
+    init(system, start, end) {
+      for (let i = start; i < end; i++) {
+        const record = system.fromKilled?.[i - start];
+        if (!record) {
+          system.kill(i);
+          continue;
+        }
+        for (const [from, values] of record) {
+          if (field >= 0 && from !== field) continue;
+          system.float(from).set(values, i * values.length);
+          if (from === 0) system.float(2).set(values, i * 3);
+        }
       }
     },
   };
@@ -1254,26 +1337,32 @@ DEFS.C_OP_DistanceCull = (def) => {
   };
 };
 
-// Particles kept where they were made on the model as it moves (see onModel)
-const followModel = () => ({
-  update(system) {
-    const surface = system.host.surface;
-    if (!surface || !system.bindings) return;
-    for (let i = 0; i < system.count; i++) {
-      const binding = system.bindings[i];
-      if (!binding) continue;
-      if (binding.last === undefined) {
-        binding.last = new THREE.Vector3();
-        surface.position(binding, binding.last);
-        continue;
+// Particles kept where they were made on the model as it moves (see onModel), letting go over
+// the part of their life the operator gives (LockToBone's fade)
+const followModel = (def) => {
+  const fadeStart = def.m_flLifeTimeFadeStart ?? 0;
+  const fadeEnd = def.m_flLifeTimeFadeEnd ?? 0;
+  return {
+    update(system) {
+      const surface = system.host.surface;
+      if (!surface || !system.bindings) return;
+      for (let i = 0; i < system.count; i++) {
+        const binding = system.bindings[i];
+        if (!binding) continue;
+        if (binding.last === undefined) {
+          binding.last = new THREE.Vector3();
+          surface.position(binding, binding.last);
+          continue;
+        }
+        surface.position(binding, v1);
+        v2.subVectors(v1, binding.last);
+        binding.last.copy(v1);
+        const hold = fadeEnd > fadeStart ? 1 - clamp((system.normalizedAge(i) - fadeStart) / (fadeEnd - fadeStart), 0, 1) : 1;
+        if (hold > 0) move(system, i, v2.x * hold, v2.y * hold, v2.z * hold);
       }
-      surface.position(binding, v1);
-      v2.subVectors(v1, binding.last);
-      move(system, i, v2.x, v2.y, v2.z);
-      binding.last.copy(v1);
-    }
-  },
-});
+    },
+  };
+};
 DEFS.C_OP_SnapshotRigidSkinToBones = followModel;
 DEFS.C_OP_SnapshotSkinToBones = followModel;
 DEFS.C_OP_LockToBone = followModel;

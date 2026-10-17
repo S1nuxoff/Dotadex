@@ -585,13 +585,82 @@ const kept = (kind, def) => {
 // would be a bare square
 const drawn = (def) => !def.m_bRefract && !def.m_bOnlyRenderInEffectsBloomPass && textureOf(def) !== null;
 
-// A rope runs through its particles in order; particles put at a model snapshot's points (a file
-// of points in order along a blade, which the export does not have) land anywhere on the model
-// here, and a rope through them would cut across the whole hero
-const fromSnapshot = (system) => (system.def.m_Initializers ?? []).some((op) => /FromCPSnapshot|FromSnapshot/.test(op._class));
+// A rope runs through its particles in order; particles put at a model snapshot's points follow
+// them along a blade, but without the snapshot they land anywhere on the model and a rope
+// through them would cut across the whole hero
+const offSnapshot = (system) =>
+  (system.def.m_Initializers ?? []).some((op) => {
+    if (!/FromCPSnapshot|FromSnapshot/.test(op._class)) return false;
+    const snapshot = system.snapshot(op.m_nSnapshotControlPointNumber ?? op.m_nControlPointNumber ?? 0);
+    return !(snapshot && system.host.snapshotPoints?.(snapshot)?.length);
+  });
+
+// A model a particle: placed, turned by its roll, yaw and pitch and scaled by its radius, its
+// texture tinted by the particle's color, unlit like the other particles
+function models(def, system) {
+  const group = new THREE.Group();
+  group.visible = false;
+  const path = (def.m_ModelList ?? []).find((entry) => entry?.m_model)?.m_model;
+  let template = null;
+  const pool = [];
+  if (path) {
+    system.host.loadModel?.(path).then((scene) => {
+      template = scene;
+    });
+  }
+  const radiusScale = num(def.m_flRadiusScale, 1);
+  const alphaScale = num(def.m_flAlphaScale, 1);
+  const instance = () => {
+    const object = template.clone(true);
+    const materials = [];
+    object.traverse((node) => {
+      if (!node.isMesh) return;
+      const original = node.material;
+      node.material = new THREE.MeshBasicMaterial({ map: original.map ?? null, transparent: true, alphaTest: original.alphaTest || 0.5, side: THREE.DoubleSide, depthWrite: true });
+      node.frustumCulled = false;
+      materials.push(node.material);
+    });
+    object.userData.materials = materials;
+    group.add(object);
+    return object;
+  };
+  return {
+    object: group,
+    render(system) {
+      const n = system.count;
+      group.visible = n > 0 && template !== null;
+      if (!group.visible) return;
+      while (pool.length < n) pool.push(instance());
+      const p = system.float(0);
+      const tint = system.float(6);
+      const alpha = system.float(7);
+      const radius = system.float(3);
+      const roll = system.float(4);
+      const yaw = system.float(12);
+      const pitch = system.float(20);
+      for (const [i, object] of pool.entries()) {
+        object.visible = i < n;
+        if (i >= n) continue;
+        const j = i * 3;
+        object.position.set(p[j + 1] * UNIT, p[j + 2] * UNIT, p[j] * UNIT);
+        // The game's turns about its up, left and ahead axes, in the scene's
+        object.rotation.set(pitch[i], yaw[i], roll[i], "YXZ");
+        object.scale.setScalar(Math.max(0, radius[i]) * radiusScale);
+        for (const material of object.userData.materials) {
+          material.color.setRGB(Math.min(Math.max(tint[j], 0), 1), Math.min(Math.max(tint[j + 1], 0), 1), Math.min(Math.max(tint[j + 2], 0), 1), THREE.SRGBColorSpace);
+          material.opacity = Math.min(Math.max(alpha[i], 0), 1) * alphaScale;
+        }
+      }
+    },
+    dispose() {
+      for (const object of pool) for (const material of object.userData.materials) material.dispose();
+    },
+  };
+}
 
 export const RENDERERS = {
   C_OP_RenderSprites: (def, system) => (drawn(def) && kept("sprites", def) ? quads(def, system, false) : {}),
   C_OP_RenderTrails: (def, system) => (drawn(def) && kept("trails", def) ? quads(def, system, true) : {}),
-  C_OP_RenderRopes: (def, system) => (drawn(def) && !fromSnapshot(system) && kept("ropes", def) ? rope(def, system) : {}),
+  C_OP_RenderRopes: (def, system) => (drawn(def) && !offSnapshot(system) && kept("ropes", def) ? rope(def, system) : {}),
+  C_OP_RenderModels: (def, system) => (kept("models", def) ? models(def, system) : {}),
 };

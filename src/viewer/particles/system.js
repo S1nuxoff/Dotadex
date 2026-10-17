@@ -47,6 +47,8 @@ export class ParticleSystem {
     this.dead = new Uint8Array(this.maxParticles);
     this.accel = new Float32Array(this.maxParticles * 3);
     this.points = new Map();
+    this.keepKilled = false;
+    this.killed = [];
 
     const constant = def.m_ConstantColor ?? [255, 255, 255, 255];
     this.constants = {
@@ -136,6 +138,16 @@ export class ParticleSystem {
     return this.parent ? this.parent.controlPoint(index) : this.host.controlPoint(index);
   }
 
+  // The snapshot (points the artist placed on the model) at a control point: the system's own,
+  // or the one a parent put there, which its children read
+  snapshot(index) {
+    const own = this.def.m_hSnapshot;
+    if (own && (this.def.m_nSnapshotControlPoint ?? 0) === index) {
+      return own;
+    }
+    return this.parent ? this.parent.snapshot(index) : null;
+  }
+
   // A control point this system sets for itself (and its children)
   ownControlPoint(index) {
     let point = this.points.get(index);
@@ -206,11 +218,20 @@ export class ParticleSystem {
     }
   }
 
-  // Removes the particles marked dead, keeping the others in their order (ropes need it)
+  // Removes the particles marked dead, keeping the others in their order (ropes need it); what
+  // they were is kept for children made from killed particles (keepKilled), until they take it
   compact() {
     let write = 0;
     for (let read = 0; read < this.count; read++) {
       if (this.dead[read]) {
+        if (this.keepKilled && this.killed.length < this.maxParticles) {
+          const record = new Map();
+          for (const [field, data] of this.fields) {
+            const width = VECTOR_FIELDS.has(field) ? 3 : 1;
+            record.set(field, data.slice(read * width, (read + 1) * width));
+          }
+          this.killed.push(record);
+        }
         continue;
       }
       if (write !== read) {

@@ -648,11 +648,10 @@ function models(def, system) {
   };
 
   // The sequence a particle plays: by the renderer's activity, else its field's number
+  // Null when the activity is not found: another of the model's sequences may carry it far from
+  // where it stands (a debut moves the orb metres away), so it keeps its rest pose
   const sequenceOf = (system, i) => {
-    if (activity) {
-      const name = model.names.find((name) => model.sequences[name].activities?.includes(activity));
-      if (name) return name;
-    }
+    if (activity) return model.names.find((name) => model.sequences[name].activities?.includes(activity)) ?? null;
     return model.names[Math.round(system.float(field)[i])] ?? model.names[0];
   };
 
@@ -668,6 +667,7 @@ function models(def, system) {
     if (!mixer) return;
     const id = system.ids[i];
     const name = sequenceOf(system, i);
+    if (!name) return;
     let state = playing.get(id);
     if (!state || state.name !== name) {
       state = { name, start: system.age };

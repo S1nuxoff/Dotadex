@@ -82,8 +82,8 @@ const carvingShader = {
       float bright;
       float glow = 1.0;
       if (wall) {
-        // Lit from below: brightest at the foot of the wall
-        glow = pow(reached, 1.5) * 0.9;
+        // Lit from below: only the foot of the wall catches the light
+        glow = pow(reached, 5.0) * 0.8;
         // The wall faces into the letter
         vec2 s = uTexel * 2.0;
         vec2 slope = vec2(inside(uv + vec2(s.x, 0.0)) - inside(uv - vec2(s.x, 0.0)), inside(uv + vec2(0.0, s.y)) - inside(uv - vec2(0.0, s.y)));

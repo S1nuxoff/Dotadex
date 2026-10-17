@@ -683,18 +683,15 @@ DEFS.C_INIT_CreationNoise = (def) => {
   };
 };
 
-// A field taken from the parent's particle this one is made from as it was killed; with none to
-// come from (not made by such an emitter) the particle goes
+// A field taken from the parent's particle this one is made from as it was killed; one not made
+// by such an emitter keeps what it has
 DEFS.C_INIT_InitFromParentKilled = (def) => {
   const field = def.m_nAttributeToCopy ?? -1;
   return {
     init(system, start, end) {
       for (let i = start; i < end; i++) {
         const record = system.fromKilled?.[i - start];
-        if (!record) {
-          system.kill(i);
-          continue;
-        }
+        if (!record) continue;
         for (const [from, values] of record) {
           if (field >= 0 && from !== field) continue;
           system.float(from).set(values, i * values.length);

@@ -18,8 +18,7 @@ const carvingShader = {
     }
   `,
   fragmentShader: /* glsl */ `
-    uniform sampler2D uFloor;
-    uniform sampler2D uWalls;
+    uniform sampler2D uShape;
     uniform vec2 uTexel;
     uniform float uDepth;
     uniform float uRim;
@@ -32,26 +31,22 @@ const carvingShader = {
     varying vec2 vUv;
     varying vec3 vWorld;
     void main() {
-      vec2 toLight = normalize(vec2(-0.6, 0.8));
-      float inside = texture2D(uFloor, vUv).r;
-      // The slope into the carving, and how its walls face the light: in a pit, the wall
-      // whose slope points toward the light faces it
-      vec2 step = uTexel * 3.0;
-      vec2 slope = vec2(
-        texture2D(uWalls, vUv + vec2(step.x, 0.0)).r - texture2D(uWalls, vUv - vec2(step.x, 0.0)).r,
-        texture2D(uWalls, vUv + vec2(0.0, step.y)).r - texture2D(uWalls, vUv - vec2(0.0, step.y)).r
-      );
-      float lit = clamp(dot(slope, toLight) * 7.0, -1.0, 1.0);
-      float light = max(lit, 0.0);
-      float shade = max(-lit, 0.0);
-      // The wall on the light's side throws its shadow across the floor: shaded where the
-      // way toward the light leaves the carving
-      float shadow = inside * (1.0 - texture2D(uWalls, vUv + toLight * uTexel * 22.0).r);
-      // Black over the pedestal for the floor, the shaded walls and the shadow; a pale stone
-      // color for the lit walls
-      vec3 color = vec3(0.4, 0.36, 0.32) * light;
-      float alpha = clamp(inside * uDepth + shadow * uShadow + shade * 0.85, 0.0, 1.0);
-      alpha = max(alpha, light * uRim);
+      vec2 toLight = normalize(vec2(-0.6, 0.8)) * uTexel;
+      float inside = texture2D(uShape, vUv).r;
+      // Thin walls along the carving's edge: the one on the light's side faces away from it and
+      // is in shade, the one across faces the light
+      float shadedWall = inside * (1.0 - texture2D(uShape, vUv + toLight * 5.0).r);
+      float litWall = inside * (1.0 - texture2D(uShape, vUv - toLight * 5.0).r);
+      // The shaded wall throws its shadow across the floor
+      float shadow = inside * (1.0 - texture2D(uShape, vUv + toLight * 16.0).r);
+      // Darkened stone for the floor, shadow and shaded wall; a little lighter stone for the lit wall
+      float dark = clamp(inside * uDepth + shadow * uShadow + shadedWall * 0.5, 0.0, 0.92);
+      vec3 color = vec3(0.0);
+      float alpha = dark;
+      if (litWall > shadedWall) {
+        color = vec3(0.3, 0.28, 0.26);
+        alpha = litWall * uRim;
+      }
       // Fading into the dark behind the hero with the pedestal itself
       alpha *= 1.0 - smoothstep(uFogNear, uFogFar, dot(vWorld.xz, uFogDirection));
       alpha *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vWorld.xz));
@@ -81,21 +76,17 @@ async function shapeTexture() {
   shapeContext.globalCompositeOperation = "source-in";
   shapeContext.fillStyle = "#fff";
   shapeContext.fillRect(0, 0, width, height);
-  // White on black, softened: a little for the carving's floor, more for its sloping walls
-  const blurred = (blur) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    context.fillStyle = "#000";
-    context.fillRect(0, 0, width, height);
-    context.filter = `blur(${blur}px)`;
-    context.drawImage(shape, 0, 0);
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.anisotropy = 8;
-    return texture;
-  };
-  return { floor: blurred(1.5), walls: blurred(7), aspect: width / height, texel: new THREE.Vector2(1 / width, 1 / height) };
+  // White on black, with crisp edges
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(shape, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.anisotropy = 8;
+  return { texture, aspect: width / height, texel: new THREE.Vector2(1 / width, 1 / height) };
 }
 
 let shape = null;
@@ -117,12 +108,11 @@ export async function createWatermark(fog) {
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
       uniforms: {
-        uFloor: { value: loaded.floor },
-        uWalls: { value: loaded.walls },
+        uShape: { value: loaded.texture },
         uTexel: { value: loaded.texel },
-        uDepth: { value: 0.6 },
-        uRim: { value: 0.6 },
-        uShadow: { value: 0.35 },
+        uDepth: { value: 0.4 },
+        uRim: { value: 0.35 },
+        uShadow: { value: 0.3 },
         uFogDirection: fog.direction,
         uFogNear: fog.near,
         uFogFar: fog.far,

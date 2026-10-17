@@ -895,26 +895,62 @@ DEFS.C_INIT_Orient2DRelToCP = (def) => {
   };
 };
 
-// Particles laid along the path between two control points, in turn
-function sequentialPath(def) {
-  const params = def.m_PathParams ?? {};
+// A path between two control points (m_PathParams), as the game makes it: a curve through a
+// middle point at m_flMidPoint of the way, pushed out by m_flBulge times the length along the
+// start's (m_nBulgeControl 1) or end's (2) forward axis, less so the more that axis follows the
+// path, or by a random vector of up to m_flBulge (0)
+const pathStart = new THREE.Vector3();
+const pathMiddle = new THREE.Vector3();
+const pathEnd = new THREE.Vector3();
+function path(params = {}) {
   const from = params.m_nStartControlPointNumber ?? 0;
   const to = params.m_nEndControlPointNumber ?? 0;
+  const middle = params.m_flMidPoint ?? 0.5;
   const bulge = params.m_flBulge ?? 0;
+  const control = params.m_nBulgeControl ?? 0;
+  const startOffset = arr(params.m_vStartPointOffset, [0, 0, 0]);
+  const middleOffset = arr(params.m_vMidPointOffset, [0, 0, 0]);
+  const endOffset = arr(params.m_vEndOffset, [0, 0, 0]);
+  return {
+    // The three points for now; a random bulge is drawn again each time unless one is passed
+    update(system, randomBulge) {
+      pathStart.copy(system.controlPoint(from).position).add(v1.fromArray(startOffset));
+      pathEnd.copy(system.controlPoint(to).position).add(v1.fromArray(endOffset));
+      pathMiddle.lerpVectors(pathStart, pathEnd, middle).add(v1.fromArray(middleOffset));
+      if (control) {
+        const forward = system.controlPoint(control === 2 ? to : from).axis(0, v1);
+        const along = v2.subVectors(pathEnd, pathStart);
+        const length = along.length();
+        const scale = length > 1e-6 ? 1 - Math.abs(along.divideScalar(length).dot(forward)) : 0;
+        pathMiddle.addScaledVector(forward, bulge * length * scale);
+      } else if (bulge) {
+        pathMiddle.add(randomBulge ?? v1.set(random(-bulge, bulge), random(-bulge, bulge), random(-bulge, bulge)));
+      }
+    },
+    // The point t of the way along it
+    at(t, target) {
+      v2.lerpVectors(pathStart, pathMiddle, t);
+      v3.lerpVectors(pathMiddle, pathEnd, t);
+      return target.lerpVectors(v2, v3, t);
+    },
+  };
+}
+
+// Particles laid along the path between two control points, in turn
+function sequentialPath(def) {
+  const route = path(def.m_PathParams);
   const count = def.m_flNumToAssign ?? 100;
   const loop = def.m_bLoop ?? true;
   let n = 0;
   return {
     init(system, start, end) {
-      const a = system.controlPoint(from).position;
-      const b = system.controlPoint(to).position;
+      route.update(system);
       const p = system.float(0);
       const q = system.float(2);
       for (let i = start; i < end; i++) {
         let t = count > 1 ? n / (count - 1) : 0;
         n = loop ? (n + 1) % Math.max(count, 1) : Math.min(n + 1, count - 1);
-        v1.lerpVectors(a, b, t);
-        v1.z += Math.sin(t * Math.PI) * bulge * a.distanceTo(b);
+        route.at(t, v1);
         for (let k = 0; k < 3; k++) p[i * 3 + k] = q[i * 3 + k] = v1.getComponent(k);
       }
     },
@@ -1007,6 +1043,39 @@ DEFS.C_OP_NormalLock = (def) => {
 DEFS.C_INIT_SequenceLifeTime = nothing;
 
 // ---------------------------------------------------------------- operators
+
+// Particles kept on the path between two control points each step, the n-th of every
+// m_flNumToAssign (or of all of them, m_bUseParticleCount) at n of the way; m_flCohesionStrength
+// pulls them only part way, m_fMaxDistance keeps them at most that far from their place
+DEFS.C_OP_MaintainSequentialPath = (def) => {
+  const route = path(def.m_PathParams);
+  const assign = def.m_flNumToAssign ?? 100;
+  const byCount = Boolean(def.m_bUseParticleCount);
+  const cohesion = def.m_flCohesionStrength ?? 1;
+  const maxDistance = def.m_fMaxDistance ?? 0;
+  const bulge = def.m_PathParams?.m_flBulge ?? 0;
+  // A random bulge drawn once, so the path holds still
+  const randomBulge = new THREE.Vector3(random(-bulge, bulge), random(-bulge, bulge), random(-bulge, bulge));
+  return {
+    update(system) {
+      route.update(system, randomBulge);
+      const count = Math.max(byCount ? system.count : assign, 1);
+      const p = system.float(0);
+      const q = system.float(2);
+      for (let i = 0; i < system.count; i++) {
+        const t = count > 1 ? (i % count) / (count - 1) : 0;
+        route.at(t, v1);
+        v2.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]).lerp(v1, cohesion);
+        if (maxDistance > 0 && v2.distanceTo(v1) > maxDistance) v2.sub(v1).setLength(maxDistance).add(v1);
+        for (let k = 0; k < 3; k++) {
+          const move = v2.getComponent(k) - p[i * 3 + k];
+          p[i * 3 + k] += move;
+          q[i * 3 + k] += move;
+        }
+      }
+    },
+  };
+};
 
 DEFS.C_OP_Decay = () => ({
   update(system) {
@@ -1967,6 +2036,32 @@ DEFS.C_OP_SetControlPointsToModelParticles = (def) => {
           quaternionToSource(quaternion, point.quaternion);
         } else {
           point.position.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+        }
+      }
+    },
+  };
+};
+
+// Control points from m_nFirstControlPoint on put where particles from m_nFirstSourcePoint on
+// are, turned to face the way each moves (m_bSetOrientation)
+DEFS.C_OP_SetControlPointsToParticle = (def) => {
+  const firstPoint = def.m_nFirstControlPoint ?? 0;
+  const count = def.m_nNumControlPoints ?? 1;
+  const first = def.m_nFirstSourcePoint ?? 0;
+  const orient = Boolean(def.m_bSetOrientation);
+  const forward = new THREE.Vector3(1, 0, 0);
+  return {
+    update(system) {
+      const p = system.float(0);
+      const q = system.float(2);
+      for (let k = 0; k < count && first + k < system.count; k++) {
+        const i = first + k;
+        const point = system.ownControlPoint(firstPoint + k);
+        point.previous.copy(point.position);
+        point.position.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+        if (orient) {
+          v1.set(p[i * 3] - q[i * 3], p[i * 3 + 1] - q[i * 3 + 1], p[i * 3 + 2] - q[i * 3 + 2]);
+          if (v1.lengthSq() > 1e-12) point.quaternion.setFromUnitVectors(forward, v1.normalize());
         }
       }
     },

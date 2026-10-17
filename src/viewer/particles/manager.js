@@ -142,34 +142,57 @@ export class ParticleManager {
     await Promise.all([snapshot && this.loadSnapshot(snapshot), ...modelPaths.map((path) => this.loadModel(path)), ...children.map((child) => this.loadResources(child, swaps, seen))]);
   }
 
-  // A snapshot's points on the given meshes: each at the vertex nearest to it in the model's
-  // own pose, so it moves with the model as that vertex does
+  // A snapshot's points on a model: each at the vertex nearest to it in the model's own pose, so
+  // it moves with the model as that vertex does. A snapshot is made on one model, in that model's
+  // space, which need not be the effect's own (Void Spirit's blade points are on his weapon, kept
+  // in the weapon's space, while the effect is the hero's): the model whose vertices lie nearest
+  // to the points on average is taken, the effect's own ones (`meshes`) unless another fits far
+  // better
   snapshotPoints(path, meshes) {
     const data = snapshots.get(path.toLowerCase());
     const positions = data?.position;
-    if (!positions?.length || !meshes.length || !this.model) return null;
+    if (!positions?.length || !this.meshes.length || !this.model) return null;
     this.model.updateWorldMatrix(true, true);
     const toModel = new THREE.Matrix4().copy(this.model.matrixWorld).invert();
-    const vertices = meshes.map((mesh) => {
-      const matrix = new THREE.Matrix4().multiplyMatrices(toModel, mesh.matrixWorld);
-      return { mesh, matrix, position: mesh.geometry.attributes.position };
-    });
+    // The snapshot in metres with the scene's axes, the way the models' vertices are kept
+    const points = positions.map((source) => new THREE.Vector3(source[1] * UNIT, source[2] * UNIT, source[0] * UNIT));
     const target = new THREE.Vector3();
-    return positions.map((source, k) => {
-      // The snapshot in metres with the scene's axes, the way the model's vertices are kept
-      v1.set(source[1] * UNIT, source[2] * UNIT, source[0] * UNIT);
-      let best = Infinity;
-      let found = null;
-      for (const { mesh, matrix, position } of vertices) {
+    // Up to 32 of the points, spread over the snapshot, to tell which model it is on
+    const sample = points.length <= 32 ? points : Array.from({ length: 32 }, (_, k) => points[Math.floor((k * points.length) / 32)]);
+    const nearest = (group, points = sample) => {
+      const found = points.map(() => ({ distance: Infinity, mesh: null, index: 0 }));
+      for (const mesh of group) {
+        const matrix = new THREE.Matrix4().multiplyMatrices(toModel, mesh.matrixWorld);
+        const position = mesh.geometry.attributes.position;
         for (let i = 0; i < position.count; i++) {
           target.fromBufferAttribute(position, i).applyMatrix4(matrix);
-          const distance = target.distanceToSquared(v1);
-          if (distance < best) {
-            best = distance;
-            found = { mesh, index: i };
+          for (let k = 0; k < points.length; k++) {
+            const distance = target.distanceToSquared(points[k]);
+            if (distance < found[k].distance) found[k] = { distance, mesh, index: i };
           }
         }
       }
+      const mean = found.reduce((sum, entry) => sum + Math.sqrt(entry.distance), 0) / found.length;
+      return { found, mean };
+    };
+    const groups = new Map();
+    for (const mesh of this.meshes) {
+      const key = mesh.userData.model ?? mesh.uuid;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(mesh);
+    }
+    const own = meshes.length ? nearest(meshes) : null;
+    let best = own && { ...own, group: meshes };
+    for (const group of groups.values()) {
+      if (own && group.every((mesh) => meshes.includes(mesh))) continue;
+      const fit = nearest(group);
+      if (!best || fit.mean < best.mean) best = { ...fit, group };
+    }
+    // The effect's own models while they fit about as well (within an inch or half again)
+    const chosen = nearest(own && own.mean <= best.mean * 1.5 + UNIT ? meshes : best.group, points).found;
+    return positions.map((source, k) => {
+      const { mesh, index } = chosen[k];
+      const found = { mesh, index };
       if (data.radius?.[k] !== undefined) found.radius = data.radius[k];
       if (data.normal?.[k]) found.normal = data.normal[k];
       const color = data.color?.[k];

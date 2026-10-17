@@ -696,7 +696,18 @@ function models(def, system) {
       if (flags.F_ADDITIVE_BLEND || flags.F_TRANSLUCENT || flags.F_BLEND_MODE) {
         node.material.alphaTest = 0;
         node.material.depthWrite = false;
-        if (flags.F_ADDITIVE_BLEND || flags.F_BLEND_MODE === 2) node.material.blending = THREE.AdditiveBlending;
+        if (flags.F_ADDITIVE_BLEND || flags.F_BLEND_MODE === 2) {
+          // Added to the colors only, the see-through canvas's alpha left as it is, as additive
+          // sprites are (a black texel must not cover the page behind)
+          Object.assign(node.material, {
+            blending: THREE.CustomBlending,
+            blendEquation: THREE.AddEquation,
+            blendSrc: THREE.SrcAlphaFactor,
+            blendDst: THREE.OneFactor,
+            blendSrcAlpha: THREE.ZeroFactor,
+            blendDstAlpha: THREE.OneFactor,
+          });
+        }
       }
       node.frustumCulled = false;
       materials.push(node.material);

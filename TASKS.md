@@ -11,7 +11,6 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 
 ## Particles: data (export, `dota2-model-tracker/particles.js`)
 
-- [~] **P-01 Snapshots (`.vsnap`) in the dataset.** Export written (commit `a510272`): 3105 files at `particles/<path>.vsnap.json`. First upload done. Left: push the exporter with `particles-state.json` so the workflow carries on from there.
 - [ ] **P-02 Textures from the `core` VPK.** 28 textures live in `game/core/pak01_dir.vpk`; the exporter reads only `dota`. 641 of 3428 effects (19%) use one: common flares and glows (`particle_flare_004_mod`, `light_glow_01`, `beam_laser_soft_01`…). A renderer without its texture draws nothing. Biggest win for the effort.
 - [ ] **P-03 Snapshot swaps by cosmetics (`particle_snapshot` in `items_game`).** 231 items replace the default weapon's snapshot with their own (`asset` → `modifier`). Needs: export the items' snapshots (no `.vpcf` refers to them, so P-01 missed them), the swaps in the catalog (`scripts/build-catalog.mjs`), the swap applied on the site.
 - [ ] **P-04 Control point values from items (`particle_control_point`).** 34 items set a CP, often a color (Doom's Molten Fracture: CP26 = `1.0 0.9 0.7`). Into the catalog, set on the site.
@@ -46,6 +45,7 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 ## Archive
 
 ### 2026-10-17
+- [x] **P-01 Snapshots (`.vsnap`) in the dataset.** 3105 files at `particles/<path>.vsnap.json`, uploaded; exporter and `particles-state.json` pushed, the workflow keeps them current. Commits `a510272`, `cbb4c21` (dota2-model-tracker).
 - [x] **Sakura petals never spawned.** A noise input as a system's emission rate gave 0 (`inputs.js`). Commit `492e1dc`.
 - [x] **`InheritFromParentParticles` inherited the tint instead of the radius.** The default is field 3: across 65k `.vpcf` field 6 is written out 606 times, field 3 never. Commit `492e1dc`.
 - [x] **`InitFloat` honours `m_InputStrength`.** Commit `492e1dc`.

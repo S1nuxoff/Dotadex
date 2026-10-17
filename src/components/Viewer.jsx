@@ -333,6 +333,11 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
     stageRef.current.setFreeCamera(getViewSettings().freeCamera);
     return onViewSettings((settings) => stageRef.current?.setFreeCamera(settings.freeCamera));
   }, []);
+  // The logo carved into the pedestal, unless turned off in the settings
+  useEffect(() => {
+    stageRef.current.setWatermark(getViewSettings().watermark);
+    return onViewSettings((settings) => stageRef.current?.setWatermark(settings.watermark));
+  }, []);
   // The game's pedestal and camera for the hero on its page
   useEffect(
     () => stageRef.current.setPortrait(loadout ? portrait : null, loadout && portrait ? `${catalog.modelsBase}${portrait.pedestal}` : null, portraitShot),

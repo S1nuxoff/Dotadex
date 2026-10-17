@@ -993,6 +993,14 @@ export class Stage {
     this.applyControls();
   }
 
+  // The logo carved into the pedestal, shown or not
+  setWatermark(on) {
+    this.watermarkOn = on;
+    if (this.watermark) {
+      this.watermark.visible = on;
+    }
+  }
+
   applyControls() {
     const locked = Boolean(this.loadout && this.portrait && !this.freeCamera);
     this.controls.enableRotate = !locked;
@@ -1136,6 +1144,7 @@ export class Stage {
     mark.scale.setScalar((radius * 0.5) / mark.userData.aspect / pedestal.scale.x);
     this.watermark?.removeFromParent();
     this.watermark = mark;
+    mark.visible = this.watermarkOn !== false;
     pedestal.add(mark);
   }
 
@@ -1427,7 +1436,7 @@ export class Stage {
       }
     });
     // The light in the carved mark on the pedestal
-    if (this.watermark?.parent?.visible && this.watermark.parent.parent) {
+    if (this.watermark?.visible && this.watermark.parent?.visible && this.watermark.parent.parent) {
       glowing.push([this.watermark, this.watermark.userData.glowMaterial]);
     }
     this.glowMix.enabled = glowing.length > 0;

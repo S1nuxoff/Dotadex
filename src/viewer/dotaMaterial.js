@@ -44,6 +44,7 @@ const fragmentShader = /* glsl */ `
   #include <shadowmap_pars_fragment>
   uniform sampler2D tColor;
   uniform float uOpaque;
+  uniform float uFresnelAlpha;
   uniform sampler2D tNormal;
   uniform sampler2D tMasks1;
   uniform sampler2D tMasks2;
@@ -230,7 +231,10 @@ const fragmentShader = /* glsl */ `
     // Self-illuminated parts show their color as it is, a little brighter for the glow pass
     outColor = mix(outColor, albedo * 1.2, clamp(selfIllum, 0.0, 1.0)) * uOverbright;
     // An opaque material covers the page behind the scene fully; the color's alpha holds masks
-    gl_FragColor = vec4(outColor, uOpaque > 0.5 ? 1.0 : color.a);
+    // g_flFresnelModulatesAlpha: a see-through shell shows towards its outline only, where the
+    // surface turns away from the eye (a rim light laid over a model, as the prismatic sets')
+    float alpha = color.a * mix(1.0, 1.0 - clamp(abs(nv), 0.0, 1.0), uFresnelAlpha);
+    gl_FragColor = vec4(outColor, uOpaque > 0.5 ? 1.0 : alpha);
     #include <colorspace_fragment>
   }
 `;
@@ -358,6 +362,7 @@ export function createDotaMaterial(original, vmat, textures) {
       uGroundColor: { value: stage.groundColor },
       uStageRim: stageRim,
       uOpaque: { value: translucent ? 0 : 1 },
+      uFresnelAlpha: { value: Math.min(Math.max(float.g_flFresnelModulatesAlpha ?? 0, 0), 1) },
     },
     transparent: translucent,
     depthWrite: !translucent,

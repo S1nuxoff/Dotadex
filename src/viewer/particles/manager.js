@@ -277,6 +277,8 @@ export class ParticleManager {
         if (!placed.has(path)) placed.set(path, manager.snapshotPoints(path, meshes));
         return placed.get(path);
       },
+      // A snapshot's streams as the file gives them, or null
+      snapshotData: (path) => snapshots.get(path.toLowerCase()) ?? null,
       surface: {
         sample: (position, normal) => this.sampleSurface(position, normal, meshes, total),
         position: (binding, target) => this.surfacePosition(binding, target),
@@ -290,6 +292,15 @@ export class ParticleManager {
         if (!point) {
           point = new ControlPoint();
           points.set(index, point);
+          // In place at once: particles made this step must not start at the world's origin
+          if (driven.has(index)) {
+            manager.drive(point, driven.get(index));
+          } else {
+            const origin = this.controlPoint(0);
+            point.position.copy(origin.position);
+            point.quaternion.copy(origin.quaternion);
+          }
+          point.previous.copy(point.position);
         }
         return point;
       },

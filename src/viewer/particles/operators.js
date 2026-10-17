@@ -118,7 +118,7 @@ DEFS.C_OP_InstantaneousEmitter = (def) => {
     emit(system) {
       if (left === null && system.age >= start(system, -1)) {
         const snapshot = snapshotPoint >= 0 && system.snapshot(snapshotPoint);
-        const points = snapshot && system.host.snapshotPoints?.(snapshot);
+        const points = snapshot && (system.host.snapshotData?.(snapshot)?.position ?? system.host.snapshotPoints?.(snapshot));
         left = points?.length ? points.length : Math.max(0, Math.round(count(system, -1)));
       }
       if (left > 0) {
@@ -633,9 +633,42 @@ const fromSnapshot = (def, point) => {
   };
 };
 DEFS.C_INIT_InitSkinnedPositionFromCPSnapshot = (def) => fromSnapshot(def, def.m_nSnapshotControlPointNumber ?? 0);
+
+// A snapshot whose points are in a control point's own space (a blade's points along the bone
+// the weapon's attachment hangs on, a crown's round the head's): each point put where that
+// control point carries it
+const snapshotInSpace = (def, point, space) => {
+  const randomly = Boolean(def.m_bRandom);
+  const increment = def.m_flIncrement ?? 1;
+  let next = def.m_nSnapShotStartPoint ?? 0;
+  return {
+    init(system, start, end) {
+      const snapshot = system.snapshot(point);
+      const positions = snapshot && system.host.snapshotData?.(snapshot)?.position;
+      if (!positions?.length) return;
+      const cp = system.controlPoint(space);
+      const p = system.float(0);
+      const q = system.float(2);
+      for (let i = start; i < end; i++) {
+        const k = randomly ? Math.floor(Math.random() * positions.length) : Math.floor(next) % positions.length;
+        if (!randomly) next += increment;
+        const [x = 0, y = 0, z = 0] = positions[k];
+        v1.set(x, y, z).applyQuaternion(cp.quaternion).add(cp.position);
+        for (let c = 0; c < 3; c++) p[i * 3 + c] = q[i * 3 + c] = v1.getComponent(c);
+      }
+    },
+  };
+};
+
 // The same, when it reads the snapshot's positions (it may read another of its streams instead,
-// a color or a radius, which is not done here: on the model's surface then)
-DEFS.C_INIT_InitFromCPSnapshot = (def) => ((def.m_nAttributeToRead ?? 0) === 0 ? fromSnapshot(def, def.m_nControlPointNumber ?? 0) : onModel());
+// a color or a radius, which is not done here: on the model's surface then); in a control
+// point's space when it names one
+DEFS.C_INIT_InitFromCPSnapshot = (def) => {
+  if ((def.m_nAttributeToRead ?? 0) !== 0) return onModel();
+  const point = def.m_nControlPointNumber ?? 0;
+  const space = def.m_nLocalSpaceCP ?? -1;
+  return space >= 0 ? snapshotInSpace(def, point, space) : fromSnapshot(def, point);
+};
 DEFS.C_INIT_CreateOnModelAtHeight = onModel;
 
 DEFS.C_INIT_CreateFromParentParticles = (def) => {
@@ -1091,25 +1124,67 @@ DEFS.C_OP_BasicMovement = (def) => {
   };
 };
 
-// Particles carried along with their control point's movement
-DEFS.C_OP_PositionLock = (def) => {
+// Particles carried along with their control point's movement; turned with it too when locked
+// rigidly (a blade's glow stays on the blade as it swings)
+const lockToCP = (def, rigid) => {
   const point = cpOf(def);
   const jump = def.m_flJumpThreshold ?? 512;
   let last = null;
+  const lastTurn = new THREE.Quaternion();
+  const turn = new THREE.Quaternion();
   return {
     update(system) {
-      const cp = system.controlPoint(point).position;
-      if (last) {
-        v1.subVectors(cp, last);
-        if (v1.length() < jump) {
-          for (let i = 0; i < system.count; i++) move(system, i, v1.x, v1.y, v1.z);
+      const cp = system.controlPoint(point);
+      if (last && v1.subVectors(cp.position, last).length() < jump) {
+        // The turn since the last step, about where the control point was
+        turn.copy(lastTurn).invert().premultiply(cp.quaternion);
+        const p = system.float(0);
+        for (let i = 0; i < system.count; i++) {
+          if (rigid) {
+            v3.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]).sub(last).applyQuaternion(turn).add(cp.position);
+            move(system, i, v3.x - p[i * 3], v3.y - p[i * 3 + 1], v3.z - p[i * 3 + 2]);
+          } else {
+            move(system, i, v1.x, v1.y, v1.z);
+          }
         }
       }
-      last = (last ?? new THREE.Vector3()).copy(cp);
+      last = (last ?? new THREE.Vector3()).copy(cp.position);
+      lastTurn.copy(cp.quaternion);
     },
   };
 };
-DEFS.C_OP_MovementRigidAttachToCP = DEFS.C_OP_PositionLock;
+DEFS.C_OP_PositionLock = (def) => lockToCP(def, Boolean(def.m_bLockRot));
+
+// Particles held at a control point by an offset in its own space: the place they were made at
+// (or a field an initializer filled), turned with the control point unless m_bOffsetLocal is
+// off. Most follow InitFromCPSnapshot with its space left at the world's origin, so a weapon's
+// snapshot, drawn round the origin, is carried onto the weapon's attachment.
+DEFS.C_OP_MovementRigidAttachToCP = (def, system) => {
+  const point = cpOf(def);
+  const input = def.m_nFieldInput ?? 0;
+  const output = def.m_nFieldOutput ?? 0;
+  const local = def.m_bOffsetLocal ?? true;
+  // The place each particle was made at, kept from now on
+  const offsets = input === 0 ? system.initialVector(0) : null;
+  return {
+    update(system) {
+      const cp = system.controlPoint(point);
+      const from = offsets ?? system.float(input);
+      const to = system.float(output);
+      const previous = output === 0 ? system.float(2) : null;
+      for (let i = 0; i < system.count; i++) {
+        const j = i * 3;
+        v1.set(from[j], from[j + 1], from[j + 2]);
+        if (local) v1.applyQuaternion(cp.quaternion);
+        v1.add(cp.position);
+        if (previous) for (let c = 0; c < 3; c++) previous[j + c] += v1.getComponent(c) - to[j + c];
+        to[j] = v1.x;
+        to[j + 1] = v1.y;
+        to[j + 2] = v1.z;
+      }
+    },
+  };
+};
 
 DEFS.C_OP_RampScalarLinearSimple = (def) => {
   const rate = def.m_Rate ?? 0;

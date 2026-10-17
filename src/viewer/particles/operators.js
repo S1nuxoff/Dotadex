@@ -305,6 +305,47 @@ DEFS.C_INIT_CreateSpiralSphere = (def) => {
   };
 };
 
+// On an epitrochoid round a control point: at t = the particle's number (m_bUseCount) or the
+// time it is made, times m_flParticleDensity, (R1 + R2) cos t - offset cos((R1 + R2) / R2 t) on
+// axis m_nComponent1 and the same with sin on m_nComponent2 (-1: none); in the control point's
+// frame (m_bUseLocalCoords), and from where the particle already is (m_bOffsetExistingPos)
+DEFS.C_INIT_CreateInEpitrochoid = (def) => {
+  const point = cpOf(def);
+  const density = compileFloat(def.m_flParticleDensity, 10);
+  const offset = compileFloat(def.m_flOffset, 4);
+  const radius1 = compileFloat(def.m_flRadius1, 40);
+  const radius2 = compileFloat(def.m_flRadius2, 24);
+  const first = def.m_nComponent1 ?? 0;
+  const second = def.m_nComponent2 ?? 1;
+  const byCount = Boolean(def.m_bUseCount);
+  const local = Boolean(def.m_bUseLocalCoords);
+  const fromExisting = Boolean(def.m_bOffsetExistingPos);
+  return {
+    init(system, start, end) {
+      const cp = system.controlPoint(point);
+      const p = system.float(0);
+      const q = system.float(2);
+      const creation = system.float(8);
+      for (let i = start; i < end; i++) {
+        const t = (byCount ? system.ids[i] : creation[i]) * density(system, i);
+        const sum = radius1(system, i) + radius2(system, i);
+        const ratio = sum / (radius2(system, i) || 1e-6);
+        const d = offset(system, i);
+        v1.set(0, 0, 0);
+        if (first >= 0 && first < 3) v1.setComponent(first, sum * Math.cos(t) - d * Math.cos(ratio * t));
+        if (second >= 0 && second < 3) v1.setComponent(second, sum * Math.sin(t) - d * Math.sin(ratio * t));
+        if (local) v1.applyQuaternion(cp.quaternion);
+        if (fromExisting) {
+          move(system, i, v1.x, v1.y, v1.z);
+        } else {
+          v1.add(cp.position);
+          for (let k = 0; k < 3; k++) p[i * 3 + k] = q[i * 3 + k] = v1.getComponent(k);
+        }
+      }
+    },
+  };
+};
+
 DEFS.C_INIT_CreateWithinBox = (def) => {
   const min = compileVector(def.m_vecMin, [0, 0, 0]);
   const max = compileVector(def.m_vecMax, [0, 0, 0]);
@@ -2210,6 +2251,37 @@ DEFS.C_OP_RemapCPOrientationToRotations = (def) => {
       system.float(4).fill(euler.x, 0, system.count);
       system.float(20).fill(euler.y, 0, system.count);
       system.float(12).fill(euler.z, 0, system.count);
+    },
+  };
+};
+
+// A field (most often the normal) set to the way a control point faces, times m_flScale
+DEFS.C_OP_RemapControlPointDirectionToVector = (def) => {
+  const cp = def.m_nControlPointNumber ?? 0;
+  const field = def.m_nFieldOutput ?? 21;
+  const scale = def.m_flScale ?? 1;
+  return {
+    update(system) {
+      v1.set(scale, 0, 0).applyQuaternion(system.controlPoint(cp).quaternion);
+      if (!VECTOR_FIELDS.has(field)) return;
+      const data = system.float(field);
+      for (let i = 0; i < system.count; i++) {
+        data[i * 3] = v1.x;
+        data[i * 3 + 1] = v1.y;
+        data[i * 3 + 2] = v1.z;
+      }
+    },
+  };
+};
+
+// The hue shift a prismatic gem gives the effect, put in control point m_nOutputCP (62, where
+// renderers read it): the turn from m_DefaultHSVColor to the gem's color when the game marks
+// a gem; no gem is worn here, so it is none
+DEFS.C_OP_HSVShiftToCP = (def) => {
+  const target = def.m_nOutputCP ?? 62;
+  return {
+    update(system) {
+      system.ownControlPoint(target).position.set(0, 0, 0);
     },
   };
 };

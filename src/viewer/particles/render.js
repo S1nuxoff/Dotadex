@@ -347,6 +347,8 @@ function material(def, vertexShader, orientation) {
       uMod: { value: 0 },
       uPremultiply: { value: 0 },
       uGammaColor: { value: def.m_bGammaCorrectVertexColors === false ? 0 : 1 },
+      // Colors are not turned by the hue shift at m_nHSVShiftControlPoint: it is the one a
+      // prismatic gem gives (C_OP_HSVShiftToCP), none without a gem, and none are worn here
       uAddSelf: { value: 0 },
       uMask: { value: null },
       uHasMask: { value: 0 },

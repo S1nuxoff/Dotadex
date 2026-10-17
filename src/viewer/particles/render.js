@@ -22,10 +22,13 @@ const BASE_ROPE = "materials/particle/base_rope.vtex";
 // distortion bends the picture's lookup, a color lookup recolors it, a normal map lights it
 const NOT_PICTURE = /UVDISTORTION|COLOR_LOOKUP|NORMALMAP/;
 
+// A renderer's texture layers, those the file leaves on (m_bEnabled)
+const layersOf = (def) => (def.m_vecTexturesInput ?? []).filter((input) => input && input.m_bEnabled !== false);
+
 // The layer that gives the picture: the first that is one (a UV distortion map listed first,
 // drawn as the picture, was a tiling square of its pattern)
 function colorLayerOf(def) {
-  const layers = def.m_vecTexturesInput ?? [];
+  const layers = layersOf(def);
   return layers.find((input) => !NOT_PICTURE.test(input.m_nTextureType ?? "")) ?? layers[0];
 }
 
@@ -48,23 +51,62 @@ export function sheetTextureOf(system) {
   return null;
 }
 
-// A later layer that gives the alpha only (MIX_A), over the whole quad: its texture, or the
-// base one when it names none (a tiling texture made round by the soft dot's alpha)
-function maskOf(def, rope = false) {
+// Which channels of a layer count, and where its alpha comes from (uLayerChannels): all of
+// it, its color only, its alpha only, its color with its brightness as alpha, its brightness as
+// alpha only, or one channel as alpha
+const LAYER_CHANNELS = [
+  [/^(MIX_)?RGBA$|^$|^MIX_RGB_A$/, 0],
+  [/^MIX_RGB(_ALPHAMASK|_RGBMASK)?$/, 1],
+  [/^MIX_A$/, 2],
+  [/^MIX_RGBA_RGBALPHA$|^MIX_RGB_A_RGBALPHA$/, 3],
+  [/^MIX_A_RGBALPHA$/, 4],
+  [/^MIX_RALPHA$/, 5],
+  [/^MIX_GALPHA$/, 6],
+  [/^MIX_BALPHA$/, 7],
+];
+const channelsOf = (layer) => {
+  const name = (layer.m_nTextureChannels ?? "").replace("SPRITECARD_TEXTURE_CHANNEL_", "");
+  return LAYER_CHANNELS.find(([pattern]) => pattern.test(name))?.[1] ?? 0;
+};
+// How a layer is put over the ones before it (uLayerBlend): times them when the file names nothing
+const LAYER_BLENDS = {
+  SPRITECARD_TEXTURE_BLEND_MULTIPLY: 0,
+  SPRITECARD_TEXTURE_BLEND_MOD2X: 1,
+  SPRITECARD_TEXTURE_BLEND_REPLACE: 2,
+  SPRITECARD_TEXTURE_BLEND_ADD: 3,
+  SPRITECARD_TEXTURE_BLEND_SUBTRACT: 4,
+  SPRITECARD_TEXTURE_BLEND_AVERAGE: 5,
+  SPRITECARD_TEXTURE_BLEND_LUMINANCE: 6,
+};
+
+// The next layer that is a picture too, put over the first (a tiling noise made round by a soft
+// smoke over it, a mask giving the alpha only): its texture, or the base one when it names none
+function layerOf(def) {
   const color = colorLayerOf(def);
-  const layer = (def.m_vecTexturesInput ?? []).find((input) => input !== color && /_MIX_A$/.test(input.m_nTextureChannels ?? "") && !input.m_bReplaceTextureWithGradient && !input.m_nTextureType);
-  if (!layer) return null;
-  return layer.m_hTexture ?? (rope ? BASE_ROPE : BASE_SPRITE);
+  return layersOf(def).find((input) => input !== color && !input.m_bReplaceTextureWithGradient && !NOT_PICTURE.test(input.m_nTextureType ?? "")) ?? null;
 }
 
-// The mask loaded into the material once there
-function useMask(def, mat, system, rope = false) {
-  const mask = maskOf(def, rope);
-  if (!mask) return;
-  system.host.loadTexture(mask).then((loaded) => {
+// That layer loaded into the material once there: drawn over the whole quad with its own scale
+// and offset (in the first frame of its sheet, if it has one), repeating; the picture's own
+// texture again (its color from one sheet, its alpha from another channel) in the same frame
+function useLayer(def, mat, system, rope = false) {
+  const layer = layerOf(def);
+  if (!layer) return;
+  const same = layer.m_hTexture && layer.m_hTexture.toLowerCase() === textureOf(def, rope)?.toLowerCase();
+  mat.uniforms.uLayerSameFrame.value = same ? 1 : 0;
+  const controls = layer.m_TextureControls ?? {};
+  mat.uniforms.uLayerTransform.value.set(num(controls.m_flFinalTextureScaleU, 1), num(controls.m_flFinalTextureScaleV, 1), num(controls.m_flFinalTextureOffsetU, 0), num(controls.m_flFinalTextureOffsetV, 0));
+  mat.uniforms.uLayerChannels.value = channelsOf(layer);
+  mat.uniforms.uLayerBlend.value = LAYER_BLENDS[layer.m_nTextureBlendMode] ?? 0;
+  mat.uniforms.uLayerAmount.value = num(layer.m_flTextureBlend, 1);
+  system.host.loadTexture(layer.m_hTexture ?? (rope ? BASE_ROPE : BASE_SPRITE)).then((loaded) => {
     if (!loaded) return;
-    mat.uniforms.uMask.value = loaded.texture;
-    mat.uniforms.uHasMask.value = 1;
+    const frame = [0, 0, 1, 1];
+    frameOf(loaded.sheet, 0, 0, 0, {}, frame, 0);
+    mat.uniforms.uLayerRect.value.fromArray(frame);
+    if (!loaded.sheet?.sequences?.length) loaded.texture.wrapS = loaded.texture.wrapT = THREE.RepeatWrapping;
+    mat.uniforms.uLayer.value = loaded.texture;
+    mat.uniforms.uHasLayer.value = 1;
   });
 }
 
@@ -72,6 +114,22 @@ function useMask(def, mat, system, rope = false) {
 function textureTransformOf(def) {
   const controls = colorLayerOf(def)?.m_TextureControls ?? {};
   return new THREE.Vector4(num(controls.m_flFinalTextureScaleU, 1), num(controls.m_flFinalTextureScaleV, 1), num(controls.m_flFinalTextureOffsetU, 0), num(controls.m_flFinalTextureOffsetV, 0));
+}
+
+// The same where it changes as the system runs (a tiling noise scrolled by the system's age):
+// put in the material each frame
+const TEXTURE_CONTROLS = ["m_flFinalTextureScaleU", "m_flFinalTextureScaleV", "m_flFinalTextureOffsetU", "m_flFinalTextureOffsetV"];
+function textureScrollOf(def, mat) {
+  const controls = colorLayerOf(def)?.m_TextureControls ?? {};
+  if (!TEXTURE_CONTROLS.some((key) => controls[key] && typeof controls[key] === "object" && controls[key].m_nType !== "PF_TYPE_LITERAL")) return () => {};
+  const inputs = TEXTURE_CONTROLS.map((key, k) => compileFloat(controls[key], k < 2 ? 1 : 0));
+  return (system) => mat.uniforms.uTexTransform.value.set(...inputs.map((input) => input(system, -1)));
+}
+
+// A texture that is not a sheet repeats where its scale or offset moves it past its edges
+function tiles(def) {
+  const controls = colorLayerOf(def)?.m_TextureControls ?? {};
+  return TEXTURE_CONTROLS.some((key, k) => controls[key] !== undefined && num(controls[key], NaN) !== (k < 2 ? 1 : 0));
 }
 
 // A trail's color and alpha at its tail, as scales of its head's
@@ -83,7 +141,7 @@ function tailOf(def) {
 
 // A layer that recolors the texture: its brightness looked up in a gradient
 function lookupOf(def) {
-  const layer = (def.m_vecTexturesInput ?? []).find((input) => input.m_nTextureType === "SPRITECARD_TEXTURE_1D_COLOR_LOOKUP" && input.m_bReplaceTextureWithGradient);
+  const layer = layersOf(def).find((input) => input.m_nTextureType === "SPRITECARD_TEXTURE_1D_COLOR_LOOKUP" && input.m_bReplaceTextureWithGradient);
   const stops = layer?.m_Gradient?.m_Stops;
   if (!stops?.length) return null;
   const sorted = [...stops].sort((a, b) => a.m_flPosition - b.m_flPosition);
@@ -113,7 +171,10 @@ function useTexture(def, mat, loaded) {
   mat.uniforms.uHasMap.value = 1;
   const channels = colorLayerOf(def)?.m_nTextureChannels ?? "";
   const over = mat.uniforms.uMod.value < 0.5 && mat.blendDst === THREE.OneMinusSrcAlphaFactor;
-  mat.uniforms.uAlphaFromColor.value = /RGBALPHA/.test(channels) || (loaded.opaque && over) ? 1 : 0;
+  // One channel as the alpha (MIX_RALPHA: a grey texture without alpha, its red)
+  const single = channels.match(/MIX_([RGB])ALPHA$/)?.[1];
+  mat.uniforms.uAlphaChannel.value = single ? "RGB".indexOf(single) + 1 : 0;
+  mat.uniforms.uAlphaFromColor.value = !single && (/RGBALPHA/.test(channels) || (loaded.opaque && over)) ? 1 : 0;
   // Only the alpha of the texture counts
   mat.uniforms.uWhite.value = /MIX_A($|_)/.test(channels.replace("SPRITECARD_TEXTURE_CHANNEL_", "")) ? 1 : 0;
 }
@@ -328,8 +389,15 @@ const FRAGMENT = /* glsl */ `
   uniform float uPremultiply;
   uniform float uGammaColor;
   uniform float uAddSelf;
-  uniform sampler2D uMask;
-  uniform float uHasMask;
+  uniform float uAlphaChannel;
+  uniform sampler2D uLayer;
+  uniform float uHasLayer;
+  uniform vec4 uLayerRect;
+  uniform float uLayerSameFrame;
+  uniform vec4 uLayerTransform;
+  uniform int uLayerChannels;
+  uniform int uLayerBlend;
+  uniform float uLayerAmount;
   uniform vec3 uColorScale;
   uniform int uColorBlend;
   uniform sampler2D uSceneDepth;
@@ -341,6 +409,17 @@ const FRAGMENT = /* glsl */ `
   varying vec2 vUv;
   varying vec2 vLocal;
   varying vec4 vColor;
+  // A layer's value put over the one before it, as uLayerBlend says, by uLayerAmount
+  vec4 layered(vec4 c, vec4 l) {
+    vec4 r = c * l;
+    if (uLayerBlend == 1) r = c * l * 2.0;
+    else if (uLayerBlend == 2) r = l;
+    else if (uLayerBlend == 3) r = c + l;
+    else if (uLayerBlend == 4) r = c - l;
+    else if (uLayerBlend == 5) r = (c + l) * 0.5;
+    else if (uLayerBlend == 6) r = c * vec4(vec3(dot(l.rgb, vec3(0.2126, 0.7152, 0.0722))), l.a);
+    return mix(c, r, uLayerAmount);
+  }
   vec3 colorScaled(vec3 c) {
     if (uColorBlend == 1) return c * uColorScale * 2.0;
     if (uColorBlend == 2) return uColorScale;
@@ -357,8 +436,19 @@ const FRAGMENT = /* glsl */ `
     vec4 texel = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0);
     float bright = max(texel.r, max(texel.g, texel.b));
     if (uAlphaFromColor > 0.5) texel.a *= bright;
-    if (uHasMask > 0.5) texel.a *= texture2D(uMask, vLocal).a;
+    if (uAlphaChannel > 0.5) texel.a = uAlphaChannel < 1.5 ? texel.r : uAlphaChannel < 2.5 ? texel.g : texel.b;
     if (uWhite > 0.5) texel.rgb = vec3(1.0);
+    if (uHasLayer > 0.5) {
+      vec4 l = texture2D(uLayer, uLayerSameFrame > 0.5 ? vUv : uLayerRect.xy + (vLocal * uLayerTransform.xy + uLayerTransform.zw) * uLayerRect.zw);
+      float lb = max(l.r, max(l.g, l.b));
+      if (uLayerChannels == 3 || uLayerChannels == 4) l.a = lb;
+      else if (uLayerChannels == 5) l.a = l.r;
+      else if (uLayerChannels == 6) l.a = l.g;
+      else if (uLayerChannels == 7) l.a = l.b;
+      vec4 over = layered(texel, l);
+      if (uLayerChannels != 2 && uLayerChannels != 4 && uLayerChannels < 5) texel.rgb = over.rgb;
+      if (uLayerChannels != 1) texel.a = clamp(over.a, 0.0, 1.0);
+    }
     if (uHasLookup > 0.5) texel.rgb = texture2D(uLookup, vec2(clamp(bright, 0.0, 1.0), 0.5)).rgb;
     float alpha = texel.a * vColor.a;
     // Feathered: fading out where the scene behind is nearer than m_flFeatheringMaxDist, gone
@@ -426,8 +516,15 @@ function material(def, vertexShader, orientation) {
       // Colors are not turned by the hue shift at m_nHSVShiftControlPoint: it is the one a
       // prismatic gem gives (C_OP_HSVShiftToCP), none without a gem, and none are worn here
       uAddSelf: { value: 0 },
-      uMask: { value: null },
-      uHasMask: { value: 0 },
+      uAlphaChannel: { value: 0 },
+      uLayer: { value: null },
+      uHasLayer: { value: 0 },
+      uLayerRect: { value: new THREE.Vector4(0, 0, 1, 1) },
+      uLayerSameFrame: { value: 0 },
+      uLayerTransform: { value: new THREE.Vector4(1, 1, 0, 0) },
+      uLayerChannels: { value: 0 },
+      uLayerBlend: { value: 0 },
+      uLayerAmount: { value: 1 },
       uColorScale: { value: new THREE.Vector3(1, 1, 1) },
       uColorBlend: { value: 0 },
       uDepthBias: { value: num(def.m_flDepthBias, 0) * UNIT },
@@ -496,6 +593,7 @@ function quads(def, system, trail) {
   const orientation = trail ? 4 : ORIENTATIONS[def.m_nOrientationType] ?? 0;
   const mat = material(def, SPRITE_VERTEX, orientation);
   const colorScale = colorScaleOf(def, mat);
+  const moveTexture = textureScrollOf(def, mat);
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.frustumCulled = false;
   mesh.renderOrder = 10;
@@ -509,10 +607,11 @@ function quads(def, system, trail) {
       if (!loaded) return;
       sheet = loaded.sheet;
       ready = true;
+      if (!sheet?.sequences?.length && tiles(def)) loaded.texture.wrapS = loaded.texture.wrapT = THREE.RepeatWrapping;
       useTexture(def, mat, loaded);
     });
   }
-  useMask(def, mat, system);
+  useLayer(def, mat, system);
   const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;
   const alphaScale = num(def.m_flAlphaScale, 1);
   const sequenceOverride = def.m_nSequenceOverride ?? -1;
@@ -530,6 +629,7 @@ function quads(def, system, trail) {
       geometry.instanceCount = n;
       if (!mesh.visible) return;
       colorScale(system);
+      moveTexture(system);
       cameraRange(mat, camera);
       const p = system.float(0);
       const q = system.float(2);
@@ -627,6 +727,7 @@ function rope(def, system) {
   geometry.setAttribute("color", colors);
   const mat = material(def, ROPE_VERTEX, 0);
   const colorScale = colorScaleOf(def, mat);
+  const moveTexture = textureScrollOf(def, mat);
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.frustumCulled = false;
   mesh.renderOrder = 10;
@@ -643,7 +744,7 @@ function rope(def, system) {
       useTexture(def, mat, loaded);
     });
   }
-  useMask(def, mat, system, true);
+  useLayer(def, mat, system, true);
   const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;
   const alphaScale = num(def.m_flAlphaScale, 1);
   const worldSize = num(def.m_flTextureVWorldSize, 10) || 10;
@@ -663,6 +764,7 @@ function rope(def, system) {
       mesh.visible = n > 1 && ready;
       if (!mesh.visible) return;
       colorScale(system);
+      moveTexture(system);
       cameraRange(mat, camera);
       const p = system.float(0);
       const tint = system.float(6);

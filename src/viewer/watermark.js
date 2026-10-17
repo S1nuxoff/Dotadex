@@ -1,8 +1,10 @@
 import * as THREE from "three";
 
 // The site's mark, carved into the pedestal under the hero. It is drawn over the pedestal
-// rather than as stone of its own, so it suits whatever pedestal the game gives: the bottom
-// of the carving in shade, and its walls lit or shaded by a light from the upper left.
+// rather than as stone of its own, so it suits whatever pedestal the game gives. The carving is
+// traced for real in the shader (parallax occlusion): from each point the view ray goes down
+// into the letters until it meets a wall or the floor, so from any side it reads as sunk in,
+// with the near walls hidden under the edge and the far ones in view. The light is the scene's.
 
 const WATERMARK = `${import.meta.env.BASE_URL}stage/watermark.png`;
 
@@ -10,21 +12,24 @@ const carvingShader = {
   vertexShader: /* glsl */ `
     varying vec2 vUv;
     varying vec3 vWorld;
+    varying vec3 vRay;
     void main() {
       vUv = uv;
       vec4 world = modelMatrix * vec4(position, 1.0);
       vWorld = world.xyz;
+      // From the camera to this point, in the card's own space (its z is up out of the ground)
+      vRay = position - (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz;
       gl_Position = projectionMatrix * viewMatrix * world;
     }
   `,
   fragmentShader: /* glsl */ `
     uniform sampler2D uShape;
     uniform vec2 uTexel;
-    // Toward the light, along the ground in the card's own directions (set each frame by the stage)
-    uniform vec2 uToLight;
+    uniform float uAspect;
+    // Toward the light, in the card's own space (set each frame by the stage)
+    uniform vec3 uLight;
+    // How deep the carving goes, in texels of the logo
     uniform float uDepth;
-    uniform float uRim;
-    uniform float uShadow;
     uniform vec2 uFogDirection;
     uniform float uFogNear;
     uniform float uFogFar;
@@ -32,23 +37,69 @@ const carvingShader = {
     uniform float uFogOuter;
     varying vec2 vUv;
     varying vec3 vWorld;
+    varying vec3 vRay;
+
+    // Read without mipmaps: it is read inside loops, where a level can't be picked
+    float inside(vec2 uv) { return textureLod(uShape, uv, 0.0).r; }
+
+    // The card is uAspect wide and one high: a step in its space as a step in the texture
+    vec2 toUv(vec2 step) { return vec2(step.x / uAspect, step.y); }
+
     void main() {
-      vec2 toLight = uToLight * uTexel;
-      float inside = texture2D(uShape, vUv).r;
-      // Thin walls along the carving's edge: the one on the light's side faces away from it and
-      // is in shade, the one across faces the light
-      float shadedWall = inside * (1.0 - texture2D(uShape, vUv + toLight * 5.0).r);
-      float litWall = inside * (1.0 - texture2D(uShape, vUv - toLight * 5.0).r);
-      // The shaded wall throws its shadow across the floor
-      float shadow = inside * (1.0 - texture2D(uShape, vUv + toLight * 16.0).r);
-      // Darkened stone for the floor, shadow and shaded wall; a little lighter stone for the lit wall
-      float dark = clamp(inside * uDepth + shadow * uShadow + shadedWall * 0.5, 0.0, 0.92);
-      vec3 color = vec3(0.0);
-      float alpha = dark;
-      if (litWall > shadedWall) {
-        color = vec3(0.3, 0.28, 0.26);
-        alpha = litWall * uRim;
+      float edge = inside(vUv);
+      if (edge < 0.01) {
+        discard;
       }
+      float depth = uDepth * uTexel.y;
+      vec3 ray = normalize(vRay);
+      ray.z = min(ray.z, -0.05);
+      // Down the view ray until it leaves the letter (a wall) or reaches the floor
+      // (Looking along the ground the ray is cut short: it meets a wall long before anyway)
+      vec2 slide = ray.xy / -ray.z;
+      slide *= min(1.0, 6.0 / max(length(slide), 1e-4));
+      vec2 across = toUv(slide * depth);
+      const int STEPS = 48;
+      vec2 uv = vUv;
+      bool wall = false;
+      float reached = 1.0;
+      for (int i = 1; i <= STEPS; i++) {
+        float f = float(i) / float(STEPS);
+        vec2 at = vUv + across * f;
+        if (inside(at) < 0.5) {
+          wall = true;
+          reached = f;
+          break;
+        }
+        uv = at;
+      }
+      vec3 light = normalize(uLight);
+      // How bright the surface is against the pedestal's top around it, which faces up
+      float top = max(light.z, 0.15);
+      float bright;
+      if (wall) {
+        // The wall faces into the letter
+        vec2 s = uTexel * 2.0;
+        vec2 slope = vec2(inside(uv + vec2(s.x, 0.0)) - inside(uv - vec2(s.x, 0.0)), inside(uv + vec2(0.0, s.y)) - inside(uv - vec2(0.0, s.y)));
+        vec3 normal = length(slope) > 0.0 ? vec3(normalize(slope), 0.0) : vec3(0.0, 0.0, 1.0);
+        bright = max(dot(normal, light), 0.0) / top;
+        // Darker down the wall, toward the floor
+        bright *= mix(0.9, 0.55, reached);
+      } else {
+        // The floor, in the shadow of the wall between it and the light
+        vec2 up = toUv(light.xy / max(light.z, 0.05) * depth);
+        float lit = 1.0;
+        for (int i = 1; i <= 24; i++) {
+          if (inside(uv + up * (float(i) / 24.0)) < 0.5) {
+            lit = 0.0;
+            break;
+          }
+        }
+        bright = mix(0.18, 0.5, lit);
+      }
+      // Darkened or lightened stone over the pedestal
+      vec3 color = bright > 1.0 ? vec3(0.35, 0.32, 0.29) : vec3(0.0);
+      float alpha = bright > 1.0 ? min((bright - 1.0) * 0.5, 0.4) : 1.0 - bright;
+      alpha *= smoothstep(0.01, 0.5, edge);
       // Fading into the dark behind the hero with the pedestal itself
       alpha *= 1.0 - smoothstep(uFogNear, uFogFar, dot(vWorld.xz, uFogDirection));
       alpha *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vWorld.xz));
@@ -112,10 +163,9 @@ export async function createWatermark(fog) {
       uniforms: {
         uShape: { value: loaded.texture },
         uTexel: { value: loaded.texel },
-        uToLight: { value: new THREE.Vector2(-0.6, -0.8) },
-        uDepth: { value: 0.4 },
-        uRim: { value: 0.35 },
-        uShadow: { value: 0.3 },
+        uAspect: { value: loaded.aspect },
+        uLight: { value: new THREE.Vector3(0.4, -0.5, 0.75) },
+        uDepth: { value: 24 },
         uFogDirection: fog.direction,
         uFogNear: fog.near,
         uFogFar: fog.far,

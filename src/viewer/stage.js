@@ -1512,11 +1512,7 @@ export class Stage {
       // The carved mark is shaded by the light that lights the hero: the game's, or the key from the camera
       if (this.watermark) {
         const light = this.portraitLit ? this.portraitDir.clone() : this.key.position.clone().transformDirection(this.camera.matrixWorld);
-        const local = light.transformDirection(this.watermark.matrixWorld.clone().invert());
-        const toLight = this.watermark.material.uniforms.uToLight.value;
-        if (Math.hypot(local.x, local.y) > 1e-3) {
-          toLight.set(local.x, local.y).normalize();
-        }
+        this.watermark.material.uniforms.uLight.value.copy(light.transformDirection(this.watermark.matrixWorld.clone().invert()));
       }
     }
     stageRim.value.lerp(this.rimTarget, reducedMotion.matches ? 1 : Math.min(delta * 3, 1));

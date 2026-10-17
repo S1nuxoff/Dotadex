@@ -13,12 +13,36 @@ const toCamera = new THREE.Vector3();
 // value, or the default for anything that varies
 const num = (value, fallback) => (typeof value === "number" && Number.isFinite(value) ? value : typeof value?.m_flLiteralValue === "number" ? value.m_flLiteralValue : fallback);
 
+// What the game draws where a layer names no texture: a soft white dot for sprites and trails,
+// a soft band for ropes (2172 sprites' first layers name none)
+const BASE_SPRITE = "materials/particle/base_sprite.vtex";
+const BASE_ROPE = "materials/particle/base_rope.vtex";
+
 // The texture a renderer draws, and its sheet of frames; none where the first layer is a
 // gradient in place of a texture (drawn here it would be a square)
-function textureOf(def) {
+function textureOf(def, rope = false) {
   const layer = def.m_vecTexturesInput?.[0];
   if (layer?.m_bReplaceTextureWithGradient) return null;
-  return layer?.m_hTexture ?? def.m_hTexture ?? null;
+  return layer?.m_hTexture ?? def.m_hTexture ?? (layer ? (rope ? BASE_ROPE : BASE_SPRITE) : null);
+}
+
+// A later layer that gives the alpha only (MIX_A), over the whole quad: its texture, or the
+// base one when it names none (a tiling texture made round by the soft dot's alpha)
+function maskOf(def, rope = false) {
+  const layer = (def.m_vecTexturesInput ?? []).slice(1).find((input) => /_MIX_A$/.test(input.m_nTextureChannels ?? "") && !input.m_bReplaceTextureWithGradient && !input.m_nTextureType);
+  if (!layer) return null;
+  return layer.m_hTexture ?? (rope ? BASE_ROPE : BASE_SPRITE);
+}
+
+// The mask loaded into the material once there
+function useMask(def, mat, system, rope = false) {
+  const mask = maskOf(def, rope);
+  if (!mask) return;
+  system.host.loadTexture(mask).then((loaded) => {
+    if (!loaded) return;
+    mat.uniforms.uMask.value = loaded.texture;
+    mat.uniforms.uHasMask.value = 1;
+  });
 }
 
 // The first texture's final scale and offset, u and v: (scale u, scale v, offset u, offset v)
@@ -149,6 +173,7 @@ const SPRITE_VERTEX = /* glsl */ `
   uniform vec4 uTexTransform;
   uniform vec4 uTail;
   varying vec2 vUv;
+  varying vec2 vLocal;
   varying vec4 vColor;
   // Normalized, or a fallback where the vector is nothing (normalize gives NaN there on graphics cards)
   vec3 safeNormalize(vec3 v) {
@@ -160,6 +185,7 @@ const SPRITE_VERTEX = /* glsl */ `
     vec3 center = iPosition + safeNormalize(cameraPosition - iPosition) * uCameraBias;
     // The texture's own scale and offset (a scale of -1 turns it round), within the frame
     vUv = iFrame.xy + (uv * uTexTransform.xy + uTexTransform.zw) * iFrame.zw;
+    vLocal = uv;
     vColor = iColor;
     // A trail's color and alpha scaled towards its tail (uv.y 0), full at its head
     if (uOrientation == 4) vColor *= mix(uTail, vec4(1.0), uv.y);
@@ -224,7 +250,10 @@ const FRAGMENT = /* glsl */ `
   uniform float uMod;
   uniform float uPremultiply;
   uniform float uGammaColor;
+  uniform sampler2D uMask;
+  uniform float uHasMask;
   varying vec2 vUv;
+  varying vec2 vLocal;
   varying vec4 vColor;
   void main() {
     // The particle's color as the file gives it is in gamma space; the game turns it linear
@@ -233,6 +262,7 @@ const FRAGMENT = /* glsl */ `
     vec4 texel = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0);
     float bright = max(texel.r, max(texel.g, texel.b));
     if (uAlphaFromColor > 0.5) texel.a *= bright;
+    if (uHasMask > 0.5) texel.a *= texture2D(uMask, vLocal).a;
     if (uWhite > 0.5) texel.rgb = vec3(1.0);
     if (uHasLookup > 0.5) texel.rgb = texture2D(uLookup, vec2(clamp(bright, 0.0, 1.0), 0.5)).rgb;
     float alpha = texel.a * vColor.a;
@@ -291,6 +321,8 @@ function material(def, vertexShader, orientation) {
       uMod: { value: 0 },
       uPremultiply: { value: 0 },
       uGammaColor: { value: def.m_bGammaCorrectVertexColors === false ? 0 : 1 },
+      uMask: { value: null },
+      uHasMask: { value: 0 },
       uOrientation: { value: orientation },
       uTexTransform: { value: textureTransformOf(def) },
       uTail: { value: tailOf(def) },
@@ -365,6 +397,7 @@ function quads(def, system, trail) {
       useTexture(def, mat, loaded);
     });
   }
+  useMask(def, mat, system);
   const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;
   const alphaScale = num(def.m_flAlphaScale, 1);
   const sequenceOverride = def.m_nSequenceOverride ?? -1;
@@ -444,9 +477,11 @@ const ROPE_VERTEX = /* glsl */ `
   attribute vec4 color;
   uniform vec4 uTexTransform;
   varying vec2 vUv;
+  varying vec2 vLocal;
   varying vec4 vColor;
   void main() {
     vUv = uv * uTexTransform.xy + uTexTransform.zw;
+    vLocal = uv;
     vColor = color;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
@@ -477,7 +512,7 @@ function rope(def, system) {
   mesh.visible = false;
   let sheet = null;
   let ready = false;
-  const texture = textureOf(def);
+  const texture = textureOf(def, true);
   if (texture) {
     system.host.loadTexture(texture).then((loaded) => {
       if (!loaded) return;
@@ -487,6 +522,7 @@ function rope(def, system) {
       useTexture(def, mat, loaded);
     });
   }
+  useMask(def, mat, system, true);
   const radiusScale = num(def.m_flRadiusScale, 1) * UNIT;
   const alphaScale = num(def.m_flAlphaScale, 1);
   const worldSize = num(def.m_flTextureVWorldSize, 10) || 10;

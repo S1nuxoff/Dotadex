@@ -690,6 +690,14 @@ function models(def, system) {
       const original = node.material;
       if (override && STAND_IN.test(original.name ?? "")) node.visible = false;
       node.material = new THREE.MeshBasicMaterial({ map: original.map ?? null, transparent: true, alphaTest: original.alphaTest || 0.5, side: THREE.DoubleSide, depthWrite: true });
+      // Laid over what is behind it as the model's own material says: added (Terrorblade's
+      // blade planes, black where nothing glows) or see-through
+      const flags = original.userData?.vmat?.IntParams ?? {};
+      if (flags.F_ADDITIVE_BLEND || flags.F_TRANSLUCENT || flags.F_BLEND_MODE) {
+        node.material.alphaTest = 0;
+        node.material.depthWrite = false;
+        if (flags.F_ADDITIVE_BLEND || flags.F_BLEND_MODE === 2) node.material.blending = THREE.AdditiveBlending;
+      }
       node.frustumCulled = false;
       materials.push(node.material);
     });

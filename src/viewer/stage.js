@@ -8,7 +8,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
-import { createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
+import { colorParam, createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
 import { createWatermark } from "./watermark.js";
@@ -229,7 +229,7 @@ function plainMaterial(material, textures) {
     layer.texture.needsUpdate = true;
     uniforms[`tDetail${index}`] = { value: layer.texture };
     uniforms[`uDetailScale${index}`] = { value: new THREE.Vector2(layer.scale?.[0] || 1, layer.scale?.[1] || 1) };
-    uniforms[`uDetailTint${index}`] = { value: new THREE.Color(...(layer.tint ?? [1, 1, 1]).slice(0, 3)) };
+    uniforms[`uDetailTint${index}`] = { value: new THREE.Color(...(colorParam(layer.tint) ?? [1, 1, 1]).slice(0, 3)) };
     uniforms[`uDetailAmount${index}`] = { value: layer.amount ?? 1 };
   });
   const declarations = layers

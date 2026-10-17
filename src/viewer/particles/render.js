@@ -18,10 +18,21 @@ const num = (value, fallback) => (typeof value === "number" && Number.isFinite(v
 const BASE_SPRITE = "materials/particle/base_sprite.vtex";
 const BASE_ROPE = "materials/particle/base_rope.vtex";
 
-// The texture a renderer draws, and its sheet of frames; none where the first layer is a
+// Layers that change how another is drawn instead of giving a picture of their own: a UV
+// distortion bends the picture's lookup, a color lookup recolors it, a normal map lights it
+const NOT_PICTURE = /UVDISTORTION|COLOR_LOOKUP|NORMALMAP/;
+
+// The layer that gives the picture: the first that is one (a UV distortion map listed first,
+// drawn as the picture, was a tiling square of its pattern)
+function colorLayerOf(def) {
+  const layers = def.m_vecTexturesInput ?? [];
+  return layers.find((input) => !NOT_PICTURE.test(input.m_nTextureType ?? "")) ?? layers[0];
+}
+
+// The texture a renderer draws, and its sheet of frames; none where the picture layer is a
 // gradient in place of a texture (drawn here it would be a square)
 function textureOf(def, rope = false) {
-  const layer = def.m_vecTexturesInput?.[0];
+  const layer = colorLayerOf(def);
   if (layer?.m_bReplaceTextureWithGradient) return null;
   return layer?.m_hTexture ?? def.m_hTexture ?? (layer ? (rope ? BASE_ROPE : BASE_SPRITE) : null);
 }
@@ -40,7 +51,8 @@ export function sheetTextureOf(system) {
 // A later layer that gives the alpha only (MIX_A), over the whole quad: its texture, or the
 // base one when it names none (a tiling texture made round by the soft dot's alpha)
 function maskOf(def, rope = false) {
-  const layer = (def.m_vecTexturesInput ?? []).slice(1).find((input) => /_MIX_A$/.test(input.m_nTextureChannels ?? "") && !input.m_bReplaceTextureWithGradient && !input.m_nTextureType);
+  const color = colorLayerOf(def);
+  const layer = (def.m_vecTexturesInput ?? []).find((input) => input !== color && /_MIX_A$/.test(input.m_nTextureChannels ?? "") && !input.m_bReplaceTextureWithGradient && !input.m_nTextureType);
   if (!layer) return null;
   return layer.m_hTexture ?? (rope ? BASE_ROPE : BASE_SPRITE);
 }
@@ -58,7 +70,7 @@ function useMask(def, mat, system, rope = false) {
 
 // The first texture's final scale and offset, u and v: (scale u, scale v, offset u, offset v)
 function textureTransformOf(def) {
-  const controls = def.m_vecTexturesInput?.[0]?.m_TextureControls ?? {};
+  const controls = colorLayerOf(def)?.m_TextureControls ?? {};
   return new THREE.Vector4(num(controls.m_flFinalTextureScaleU, 1), num(controls.m_flFinalTextureScaleV, 1), num(controls.m_flFinalTextureOffsetU, 0), num(controls.m_flFinalTextureOffsetV, 0));
 }
 
@@ -99,7 +111,7 @@ function lookupOf(def) {
 function useTexture(def, mat, loaded) {
   mat.uniforms.uMap.value = loaded.texture;
   mat.uniforms.uHasMap.value = 1;
-  const channels = def.m_vecTexturesInput?.[0]?.m_nTextureChannels ?? "";
+  const channels = colorLayerOf(def)?.m_nTextureChannels ?? "";
   const over = mat.uniforms.uMod.value < 0.5 && mat.blendDst === THREE.OneMinusSrcAlphaFactor;
   mat.uniforms.uAlphaFromColor.value = /RGBALPHA/.test(channels) || (loaded.opaque && over) ? 1 : 0;
   // Only the alpha of the texture counts

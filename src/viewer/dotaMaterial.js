@@ -278,8 +278,15 @@ export function setDotaKeyDir(viewDir) {
 // Shared so a rarity change recolors every material at once
 export const stageRim = { value: new THREE.Color("#c9a45c") };
 
+// A vmat's color, or the fallback where it gives none or a broken one (some skins' vmats give
+// [null, null]: as a color that is NaN, and the glow pass draws NaN as black over the model)
+export function colorParam(values) {
+  return Array.isArray(values) && values.length >= 3 && values.slice(0, 3).every(Number.isFinite) ? values : null;
+}
+
 function vector(values, fallback) {
-  return values ? new THREE.Color(values[0], values[1], values[2]) : new THREE.Color(...fallback);
+  const color = colorParam(values) ?? fallback;
+  return new THREE.Color(color[0], color[1], color[2]);
 }
 
 // textures: { g_tColor: Texture, ... } matched by the vmat texture names
@@ -389,7 +396,7 @@ function createGlowMaterial(vmat, textures, color, side) {
   if (scale <= 0 || (!masks1 && !float.g_flSelfIllumBlendToFull)) {
     return null;
   }
-  const tint = vmat.VectorParams?.g_vBloomColor ?? [1, 1, 1];
+  const tint = colorParam(vmat.VectorParams?.g_vBloomColor) ?? [1, 1, 1];
   return new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader: /* glsl */ `

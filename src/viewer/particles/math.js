@@ -28,14 +28,15 @@ const offset = new THREE.Vector3();
 const boneTurn = new THREE.Quaternion();
 
 // An attachment's place and turn in the scene, from the bones it hangs on (a Map of the model's
-// bones by name); false when none of them is there. Its offsets and turns are in the bones' own
-// space: the bones keep the game's axes, so they apply as they are (only inches to metres).
+// bones by name in lower case, bonesOf); false when none of them is there. Its offsets and turns
+// are in the bones' own space: the bones keep the game's axes, so they apply as they are (only
+// inches to metres).
 export function attachmentTransform(attachment, bones, position, quaternion) {
   position.set(0, 0, 0);
   let weightSum = 0;
   let first = true;
   for (const [name, weight, offsetIn = [0, 0, 0], rotation = [0, 0, 0, 1]] of attachment.bones) {
-    const bone = bones.get(name);
+    const bone = bones.get(name.toLowerCase());
     if (!bone || !weight) continue;
     bone.updateWorldMatrix(true, false);
     offset.set((offsetIn[0] ?? 0) * UNIT, (offsetIn[1] ?? 0) * UNIT, (offsetIn[2] ?? 0) * UNIT).applyMatrix4(bone.matrixWorld);
@@ -56,11 +57,13 @@ export function attachmentTransform(attachment, bones, position, quaternion) {
   return true;
 }
 
-// The bones of a model's scene by name, the first of each name
+// The bones of a model's scene by name in lower case (the game matches them in any case), the
+// first of each name
 export function bonesOf(root) {
   const bones = new Map();
   root.traverse((node) => {
-    if (node.isBone && !bones.has(node.name)) bones.set(node.name, node);
+    const name = node.name.toLowerCase();
+    if (node.isBone && !bones.has(name)) bones.set(name, node);
   });
   return bones;
 }

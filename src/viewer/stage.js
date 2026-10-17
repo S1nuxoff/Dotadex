@@ -327,37 +327,39 @@ function environmentMaterial(material) {
 // Not an animation: the model standing in the pose it was made in
 export const T_POSE = "T-pose";
 
-// Makes the skinned meshes of `part` follow the bones of `root` with the same names.
+// Makes the skinned meshes of `part` follow the bones of `root` with the same names, in any
+// letter case as the game matches them (Anti-Mage's base has Spine_0, many of his items spine_0).
 // Bones only the part has (chains, cloth) are moved under their parent in the root skeleton.
 function attach(root, part) {
   const bones = new Map();
-  root.traverse((node) => node.isBone && bones.set(node.name, node));
+  const key = (bone) => bone.name.toLowerCase();
+  root.traverse((node) => node.isBone && bones.set(key(node), node));
 
   const partBones = [];
   part.traverse((node) => node.isBone && partBones.push(node));
 
   for (const bone of partBones) {
-    if (bones.has(bone.name) || !bone.parent?.isBone) {
+    if (bones.has(key(bone)) || !bone.parent?.isBone) {
       continue;
     }
-    const parent = bones.get(bone.parent.name);
+    const parent = bones.get(key(bone.parent));
     if (parent && parent !== bone.parent) {
       parent.add(bone);
-      bone.traverse((node) => node.isBone && !bones.has(node.name) && bones.set(node.name, node));
+      bone.traverse((node) => node.isBone && !bones.has(key(node)) && bones.set(key(node), node));
     }
   }
 
   part.traverse((node) => {
     if (node.isSkinnedMesh) {
       const skeleton = node.skeleton;
-      const shared = skeleton.bones.map((bone) => bones.get(bone.name) ?? bone);
+      const shared = skeleton.bones.map((bone) => bones.get(key(bone)) ?? bone);
       node.bind(new THREE.Skeleton(shared, skeleton.boneInverses), node.bindMatrix);
     }
   });
 
   // Drop the part's own copies of shared bones so animation tracks resolve to one node per name
   for (const bone of partBones) {
-    if (bones.get(bone.name) !== bone && bone.parent) {
+    if (bones.get(key(bone)) !== bone && bone.parent) {
       bone.removeFromParent();
     }
   }

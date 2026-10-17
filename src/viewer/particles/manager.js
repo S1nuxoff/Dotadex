@@ -6,11 +6,13 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ControlPoint, ParticleSystem } from "./system.js";
 import { attachmentTransform, bonesOf, quaternionToSource, toSource, UNIT } from "./math.js";
 import { unsupported } from "./operators.js";
+import { sheetTextureOf } from "./render.js";
 
 const systemCache = new Map();
 const snapshotCache = new Map();
 const snapshots = new Map(); // the ones loaded, for the systems to read as they run
 const textureCache = new Map();
+const textures = new Map(); // the ones loaded, for initializers that read a sheet as particles are made
 const attachmentCache = new Map();
 let attachedModels = null; // loaded once: a Set of the models that have attachments, or null while the dataset has no list
 const textureLoader = new THREE.TextureLoader();
@@ -130,7 +132,8 @@ export class ParticleManager {
   }
 
   // The snapshots and models an effect's systems use, all of them loaded before it starts (a
-  // snapshot something worn puts in place of the effect's own: that one)
+  // snapshot something worn puts in place of the effect's own: that one), and the textures of
+  // systems whose particles live as long as their sheet's sequence
   async loadResources(def, swaps = {}, seen = new Set()) {
     if (!def || seen.has(def)) return;
     seen.add(def);
@@ -139,7 +142,8 @@ export class ParticleManager {
       .filter((op) => op._class === "C_OP_RenderModels" && !op.m_bDisableOperator)
       .flatMap((op) => (op.m_ModelList ?? []).map((entry) => entry?.m_model).filter(Boolean));
     const snapshot = def.m_hSnapshot && (swaps[def.m_hSnapshot.toLowerCase()] ?? def.m_hSnapshot);
-    await Promise.all([snapshot && this.loadSnapshot(snapshot), ...modelPaths.map((path) => this.loadModel(path)), ...children.map((child) => this.loadResources(child, swaps, seen))]);
+    const sheet = (def.m_Initializers ?? []).some((op) => op._class === "C_INIT_SequenceLifeTime" && !op.m_bDisableOperator) && sheetTextureOf(def);
+    await Promise.all([snapshot && this.loadSnapshot(snapshot), sheet && this.loadTexture(sheet), ...modelPaths.map((path) => this.loadModel(path)), ...children.map((child) => this.loadResources(child, swaps, seen))]);
   }
 
   // A snapshot's points on a model: each at the vertex nearest to it in the model's own pose, so
@@ -210,11 +214,18 @@ export class ParticleManager {
         Promise.all([textureLoader.loadAsync(`${url}.png`).catch(() => null), fetchJson(`${url}.json`)]).then(([texture, sheet]) => {
           if (!texture) return null;
           texture.colorSpace = THREE.SRGBColorSpace;
-          return { texture, sheet, opaque: isOpaque(texture.image) };
+          const loaded = { texture, sheet, opaque: isOpaque(texture.image) };
+          textures.set(key, loaded);
+          return loaded;
         })
       );
     }
     return textureCache.get(key);
+  }
+
+  // A texture already loaded, or null
+  loadedTexture(path) {
+    return textures.get(path.toLowerCase().replace(/\.vtex$/, "")) ?? null;
   }
 
   // The model the effects are on, and the models it is made of (for their attachments)
@@ -318,6 +329,7 @@ export class ParticleManager {
       },
       loadSystem: (path) => this.loadSystem(path),
       loadTexture: (path) => this.loadTexture(path),
+      loadedTexture: (path) => this.loadedTexture(path),
       loadModel: (path) => this.loadModel(path),
       loadedModel: (path) => this.loadedModel(path),
       controlPoint(index) {

@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import { compileFloat, compileVector } from "./inputs.js";
 import { bias as biasOf, clamp, lerp, noise, quaternionToSource, random, randomInSphere, remap, toSource } from "./math.js";
-import { RENDERERS } from "./render.js";
+import { RENDERERS, sheetTextureOf } from "./render.js";
 import { STEP, VECTOR_FIELDS } from "./system.js";
 
 const v1 = new THREE.Vector3();
@@ -1049,7 +1049,24 @@ DEFS.C_OP_NormalLock = (def) => {
     },
   };
 };
-DEFS.C_INIT_SequenceLifeTime = nothing;
+
+// Lives as long as its sequence of the sheet plays at m_flFramerate frames a second (the sheet is
+// loaded before the effect starts; without one the particle keeps its lifetime)
+DEFS.C_INIT_SequenceLifeTime = (def, system) => {
+  const rate = def.m_flFramerate ?? 30;
+  const texture = sheetTextureOf(system.def);
+  return {
+    init(system, start, end) {
+      const sequences = texture && system.host.loadedTexture?.(texture)?.sheet?.sequences;
+      if (!sequences?.length || rate <= 0) return;
+      const life = system.float(1);
+      const sequence = system.float(9);
+      for (let i = start; i < end; i++) {
+        life[i] = sequences[Math.abs(Math.floor(sequence[i])) % sequences.length].frames.length / rate;
+      }
+    },
+  };
+};
 
 // ---------------------------------------------------------------- operators
 
@@ -1913,6 +1930,68 @@ DEFS.C_OP_WorldTraceConstraint = () => ({
   },
 });
 
+// Kept on the ground, at its height plus m_flOffset, while the ground is within the trace: from
+// m_flTraceOffset above the particle down m_flMaxTraceLength; the ground under the hero is the
+// only world here, flat at height 0, so its normal is up (m_bSetNormal)
+DEFS.C_OP_MovementPlaceOnGround = (def) => {
+  const offset = compileFloat(def.m_flOffset, 0);
+  const length = def.m_flMaxTraceLength ?? 128;
+  const above = def.m_flTraceOffset ?? 64;
+  const normal = Boolean(def.m_bSetNormal);
+  return {
+    update(system) {
+      const p = system.float(0);
+      const q = system.float(2);
+      const n = system.float(21);
+      for (let i = 0; i < system.count; i++) {
+        const top = p[i * 3 + 2] + above;
+        if (top < 0 || top - length > 0) continue;
+        p[i * 3 + 2] = q[i * 3 + 2] = offset(system, i);
+        if (normal) {
+          n[i * 3] = n[i * 3 + 1] = 0;
+          n[i * 3 + 2] = 1;
+        }
+      }
+    },
+  };
+};
+
+// Hue turned by m_flHueAdjust degrees, saturation and lightness moved by their adjusts, each step
+// from the color the particle has before it: one this operator wrote last step is undone first,
+// so the turn is not added up step after step
+const hsl = new THREE.Color();
+const hslOut = { h: 0, s: 0, l: 0 };
+DEFS.C_OP_ColorAdjustHSL = (def) => {
+  const hue = compileFloat(def.m_flHueAdjust, 0);
+  const saturation = compileFloat(def.m_flSaturationAdjust, 0);
+  const lightness = compileFloat(def.m_flLightnessAdjust, 0);
+  let written = new Map();
+  return {
+    update(system) {
+      const color = system.float(6);
+      const next = new Map();
+      for (let i = 0; i < system.count; i++) {
+        const id = system.ids[i];
+        const k = i * 3;
+        const memo = written.get(id) ?? new Float32Array(6);
+        if (!(written.has(id) && color[k] === memo[3] && color[k + 1] === memo[4] && color[k + 2] === memo[5])) {
+          memo[0] = color[k];
+          memo[1] = color[k + 1];
+          memo[2] = color[k + 2];
+        }
+        hsl.setRGB(memo[0], memo[1], memo[2]).getHSL(hslOut);
+        const h = hslOut.h + hue(system, i) / 360;
+        hsl.setHSL(h - Math.floor(h), clamp(hslOut.s + saturation(system, i), 0, 1), clamp(hslOut.l + lightness(system, i), 0, 1));
+        memo[3] = color[k] = hsl.r;
+        memo[4] = color[k + 1] = hsl.g;
+        memo[5] = color[k + 2] = hsl.b;
+        next.set(id, memo);
+      }
+      written = next;
+    },
+  };
+};
+
 // ------------------------------------------------------ control point setters
 
 DEFS.C_OP_SetSingleControlPointPosition = (def) => {
@@ -2017,6 +2096,44 @@ DEFS.C_OP_SetChildControlPoints = (def) => {
         for (let k = 0; k < count && first + k < system.count; k++) {
           const i = first + k;
           child.system.ownControlPoint(childPoint + k).position.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+        }
+      }
+    },
+  };
+};
+
+// One control point of each child in group m_nChildGroupID, in the order the file lists them, put
+// where a particle is: the k-th child's at particle m_nFirstSourcePoint + k; as many children
+// as m_nNumControlPoints, or as there are particles (m_bNumBasedOnParticleCount). Turned to face
+// the way the particle moves (m_bSetOrientation), or its m_nOrientationField
+DEFS.C_OP_SetPerChildControlPoint = (def) => {
+  const group = def.m_nChildGroupID ?? 0;
+  const childPoint = def.m_nFirstControlPoint ?? 0;
+  const count = def.m_nNumControlPoints ?? 1;
+  const first = def.m_nFirstSourcePoint ?? 0;
+  const step = def.m_nParticleIncrement ?? 1;
+  const byCount = Boolean(def.m_bNumBasedOnParticleCount);
+  const orient = Boolean(def.m_bSetOrientation);
+  const field = def.m_nOrientationField ?? -1;
+  const forward = new THREE.Vector3(1, 0, 0);
+  return {
+    update(system) {
+      const p = system.float(0);
+      const q = system.float(2);
+      const n = orient && field >= 0 && VECTOR_FIELDS.has(field) ? system.float(field) : null;
+      const children = system.children.filter((child) => (child.def.m_nGroupID ?? 0) === group);
+      const total = Math.min(children.length, byCount ? system.count : count);
+      for (let k = 0; k < total; k++) {
+        const i = first + k * step;
+        const child = children[k].system;
+        if (!child || i >= system.count) continue;
+        const point = child.ownControlPoint(childPoint);
+        point.previous.copy(point.position);
+        point.position.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+        if (orient) {
+          if (n) v1.set(n[i * 3], n[i * 3 + 1], n[i * 3 + 2]);
+          else v1.set(p[i * 3] - q[i * 3], p[i * 3 + 1] - q[i * 3 + 1], p[i * 3 + 2] - q[i * 3 + 2]);
+          if (v1.lengthSq() > 1e-12) point.quaternion.setFromUnitVectors(forward, v1.normalize());
         }
       }
     },

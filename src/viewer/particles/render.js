@@ -26,6 +26,17 @@ function textureOf(def, rope = false) {
   return layer?.m_hTexture ?? def.m_hTexture ?? (layer ? (rope ? BASE_ROPE : BASE_SPRITE) : null);
 }
 
+// The texture of a system's first renderer that draws one, whose sheet gives the sequences
+// particles play (null when none does)
+export function sheetTextureOf(system) {
+  for (const def of system.m_Renderers ?? []) {
+    if (def.m_bDisableOperator) continue;
+    if (def._class === "C_OP_RenderSprites" || def._class === "C_OP_RenderTrails") return textureOf(def);
+    if (def._class === "C_OP_RenderRopes") return textureOf(def, true);
+  }
+  return null;
+}
+
 // A later layer that gives the alpha only (MIX_A), over the whole quad: its texture, or the
 // base one when it names none (a tiling texture made round by the soft dot's alpha)
 function maskOf(def, rope = false) {

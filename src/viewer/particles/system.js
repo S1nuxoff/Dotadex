@@ -75,18 +75,20 @@ export class ParticleSystem {
     this.constraints = build(def.m_Constraints, "constraint");
     this.renderers = build(def.m_Renderers, "renderer");
 
-    // Spawned systems: started after their delay, end-cap ones when this one ends
+    // Spawned systems: started after their delay, end-cap ones when this one ends; kept in the
+    // order the file lists them, as operators setting one child after another count them
     this.children = [];
-    for (const child of def.m_Children ?? []) {
+    (def.m_Children ?? []).forEach((child, order) => {
       if (!child?.m_ChildRef || child.m_bDisableChild) {
-        continue;
+        return;
       }
       host.loadSystem(child.m_ChildRef).then((childDef) => {
         if (childDef && !this.disposed) {
-          this.children.push({ system: null, def: childDef, delay: child.m_flDelay ?? 0, endcap: Boolean(child.m_bEndCap) });
+          this.children.push({ system: null, def: childDef, order, delay: child.m_flDelay ?? 0, endcap: Boolean(child.m_bEndCap) });
+          this.children.sort((a, b) => a.order - b.order);
         }
       });
-    }
+    });
     this.accumulator = 0;
   }
 
@@ -283,6 +285,13 @@ export class ParticleSystem {
     if (this.endcap) {
       this.endcapAge += dt;
     }
+    // Children start after their delay, or with the end, before this step's operators set
+    // their control points
+    for (const child of this.children) {
+      if (!child.system && (child.endcap ? this.endcap : this.age >= child.delay)) {
+        child.system = new ParticleSystem(child.def, this.host, this);
+      }
+    }
     for (const op of this.preEmission) op.update?.(this, dt);
     if (!this.endcap) {
       for (const op of this.emitters) op.emit?.(this, dt);
@@ -293,12 +302,6 @@ export class ParticleSystem {
     for (const op of this.constraints) op.update?.(this, dt);
     if (this.dead.subarray(0, this.count).some((flag) => flag)) {
       this.compact();
-    }
-    // Children start after their delay, or with the end
-    for (const child of this.children) {
-      if (!child.system && (child.endcap ? this.endcap : this.age >= child.delay)) {
-        child.system = new ParticleSystem(child.def, this.host, this);
-      }
     }
   }
 

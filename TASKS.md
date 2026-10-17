@@ -28,6 +28,7 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 
 ## Models and other
 
+- [ ] **M-02 Hero forms and summons on the hero page.** Everything should be seeable: Lycan's wolf, Dragon Knight's dragon, Terrorblade's demon, Lone Druid's true form, Undying's golem, Phoenix's egg, Death Prophet's ghost, Visage's familiar, Witch Doctor's and Juggernaut's wards (`ability*`, `shapeshift`, `summon` slots), with their cosmetics. They are no longer put on the hero's skeleton (commit `2200723`). Proposed: a "Form" switch on the hero page when the hero has such slots (Hero / each form by its slot's name); a form is shown as its own model (the chosen cosmetic or the default) with its effects, and choosing a cosmetic of that slot in Change Outfit switches to it.
 - [ ] **M-01 Head showing through the helmet.** Seen on Anti-Mage with a helmet; common across the site. After the particles.
 
 ## Later: abilities as in a match
@@ -41,6 +42,7 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 ## Archive
 
 ### 2026-10-17
+- [x] **`C_INIT_RadiusFromCPObject`** (99 systems): the radius is the scale of the object at the control point, 1 here. Terrorblade's blade planes (`terrorblade_weapon_planes`, a model particle) were drawn at the default radius 5 and covered the scene. Not checked on the site yet.
 - [x] **Snapshots made on another model than the effect's.** Void Spirit's blade glow lay as a flat frame at his feet: its snapshots (`blade_*_fx.vsnap`, no skinning stream) are in his weapon model's own space, while the effect is the hero's, so the points were bound to the hero's ankles. Now the model whose vertices fit a snapshot best is taken (the effect's own while it fits about as well). Not checked on the site yet.
 - [x] **Other units dressed on heroes.** Defaults and items of `ability*`, `shapeshift` and `summon` slots (Lycan's wolf, Dragon Knight's dragon, Lone Druid's true form, Phoenix's egg, Terrorblade's demon, Undying's golem, Death Prophet's ghost, Visage's familiar, Witch Doctor's and Juggernaut's wards) were put on the hero's skeleton and stretched over it; now they are not worn and their items are shown alone. Not checked on the site yet.
 - [x] **P-03 Snapshot swaps by cosmetics (`particle_snapshot` in `items_game`).** 231 items replace the default weapon's snapshot with their own (`asset` → `modifier`). Needs: export the items' snapshots (no `.vpcf` refers to them, so P-01 missed them), the swaps in the catalog (`scripts/build-catalog.mjs`), the swap applied on the site. Seen on Anti-Mage: a set's off-hand blade glows in the default blade's shape (e.g. Glaive of the Mage Slayer — Off-Hand: `antimage_weapon_offhand.vsnap` → `slasher_offhand_fx.vsnap`). The export adds the 222 snapshots items put in place (`itemSnapshots`), the catalog gives each item its swaps (`particles.snapshots`, 228 items), the site uses a worn item's snapshot in place of the default one wherever an effect reads it (when the dataset has it). 211 new snapshots uploaded; checked on the site (Anti-Mage's set blades). Commits `a34bd81`; `6da7ba6`, `fae103c` (dota2-model-tracker).

@@ -978,6 +978,15 @@ DEFS.C_INIT_RemapCPtoVector = (def) => {
   };
 };
 
+// The radius the scale of the object at a control point (m_nControlPoint): models a particle draws
+// at its own size then (Terrorblade's blade planes). The viewer draws every model at its own
+// scale, so that is 1
+DEFS.C_INIT_RadiusFromCPObject = () => ({
+  init(system, start, end) {
+    system.float(3).fill(1, start, end);
+  },
+});
+
 // Initializers that do nothing visible here: velocities inherited from still control points
 const nothing = () => ({});
 // Made moving as their control point does, by a share of its speed

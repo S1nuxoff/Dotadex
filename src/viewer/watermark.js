@@ -123,14 +123,17 @@ const carvingShader = {
       vec3 color = bright > 1.0 ? vec3(0.35, 0.32, 0.29) : vec3(0.0);
       float alpha = bright > 1.0 ? min((bright - 1.0) * 0.5, 0.4) : 1.0 - bright;
       // Fading into the dark behind the hero with the pedestal itself
-      float fade = smoothstep(0.01, 0.5, edge);
-      fade *= 1.0 - smoothstep(uFogNear, uFogFar, dot(vWorld.xz, uFogDirection));
-      fade *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vWorld.xz));
+      float fog = 1.0 - smoothstep(uFogNear, uFogFar, dot(vWorld.xz, uFogDirection));
+      fog *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vWorld.xz));
+      float fade = smoothstep(0.01, 0.5, edge) * fog;
       alpha *= fade;
       #ifdef GLOW_PASS
         // Drawn again in the stage's halo pass: only the light, which the pass blurs into a
         // halo and adds over the frame
-        gl_FragColor = vec4(uGlowColor * uGlow * glow * fade, 1.0);
+        // A light shines through the dark the stone sinks into: the fog takes only half of it.
+        // Its core runs hot, toward white, the halo keeps the hero's color
+        vec3 hot = mix(uGlowColor, vec3(1.0), 0.35);
+        gl_FragColor = vec4(hot * uGlow * glow * smoothstep(0.01, 0.5, edge) * mix(1.0, fog, 0.5), 1.0);
       #else
         gl_FragColor = vec4(color, alpha);
       #endif
@@ -200,7 +203,7 @@ export async function createWatermark(fog, band) {
         uLight: { value: new THREE.Vector3(0.4, -0.5, 0.75) },
         uDepth: { value: 24 },
         uGlowColor: stageTint,
-        uGlow: { value: 0.35 },
+        uGlow: { value: 1.0 },
         uFogDirection: fog.direction,
         uFogNear: fog.near,
         uFogFar: fog.far,

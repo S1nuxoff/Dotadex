@@ -82,12 +82,17 @@ const idByName = new Map();
 
 // The particle systems an item shows: those it creates, and those it puts in place of others
 // (the dataset has each as particles/<path>.json). Modifiers of a style other than the first
-// are left out.
+// are left out, and so are those the game shows only in its alternate loadout view.
 function particlesOf(item) {
   const add = [];
   const swap = [];
   for (const visual of Object.values(item?.visuals ?? {})) {
     if (!visual || typeof visual !== "object" || (visual.style !== undefined && String(visual.style) !== "0")) {
+      continue;
+    }
+    // Shown only in the game's other loadout view (a hero's alternate form, as Terrorblade's
+    // demon), not on the hero as it stands
+    if (String(visual.spawn_in_alternate_loadout_only ?? "0") === "1") {
       continue;
     }
     const system = (value) => (typeof value === "string" && value.toLowerCase().endsWith(".vpcf") ? value.toLowerCase() : null);

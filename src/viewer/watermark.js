@@ -181,7 +181,7 @@ export async function createWatermark(fog) {
         uLight: { value: new THREE.Vector3(0.4, -0.5, 0.75) },
         uDepth: { value: 24 },
         uGlowColor: stageTint,
-        uGlow: { value: 1.2 },
+        uGlow: { value: 0.6 },
         uFogDirection: fog.direction,
         uFogNear: fog.near,
         uFogFar: fog.far,

@@ -1472,9 +1472,14 @@ export class Stage {
     }
     const swapped = [];
     const hidden = [];
+    // Anything of the particles, however deep (the meshes of the models particles draw too)
+    const inParticles = (node) => {
+      for (let parent = node.parent; parent; parent = parent.parent) if (parent.name === "particles") return true;
+      return false;
+    };
     this.scene.traverse((node) => {
       // Particles are left out of the glow pass, they glow with the bloom of the frame
-      if (node.isPoints || node.isSprite || node.userData.skipGlow || node.parent?.name === "particles") {
+      if (node.isPoints || node.isSprite || node.userData.skipGlow || inParticles(node)) {
         if (node.visible) {
           node.visible = false;
           hidden.push(node);

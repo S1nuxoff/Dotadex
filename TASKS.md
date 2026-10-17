@@ -45,6 +45,7 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 ## Archive
 
 ### 2026-10-17
+- [x] **Particle colors turned linear (`m_bGammaCorrectVertexColors`, default true).** Colors were used as given (gamma space): every particle came out lighter and whiter than the game's. 497 renderers write `false`, none `true`, so the default is on.
 - [x] **P-01 Snapshots (`.vsnap`) in the dataset.** 3105 files at `particles/<path>.vsnap.json`, uploaded; exporter and `particles-state.json` pushed, the workflow keeps them current. Commits `a510272`, `cbb4c21` (dota2-model-tracker).
 - [x] **Sakura petals never spawned.** A noise input as a system's emission rate gave 0 (`inputs.js`). Commit `492e1dc`.
 - [x] **`InheritFromParentParticles` inherited the tint instead of the radius.** The default is field 3: across 65k `.vpcf` field 6 is written out 606 times, field 3 never. Commit `492e1dc`.

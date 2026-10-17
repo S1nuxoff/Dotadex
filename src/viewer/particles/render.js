@@ -221,9 +221,13 @@ const FRAGMENT = /* glsl */ `
   uniform float uHalf;
   uniform float uMod;
   uniform float uPremultiply;
+  uniform float uGammaColor;
   varying vec2 vUv;
   varying vec4 vColor;
   void main() {
+    // The particle's color as the file gives it is in gamma space; the game turns it linear
+    // unless the renderer says not to (m_bGammaCorrectVertexColors)
+    vec3 tint = uGammaColor > 0.5 ? pow(max(vColor.rgb, 0.0), vec3(2.2)) : vColor.rgb;
     vec4 texel = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0);
     float bright = max(texel.r, max(texel.g, texel.b));
     if (uAlphaFromColor > 0.5) texel.a *= bright;
@@ -232,12 +236,12 @@ const FRAGMENT = /* glsl */ `
     float alpha = texel.a * vColor.a;
     if (uMod > 0.5) {
       // Mid grey where the particle is see-through, so it leaves what is behind as it is
-      vec3 mod2x = mix(vec3(0.5), texel.rgb * vColor.rgb, clamp(alpha, 0.0, 1.0));
+      vec3 mod2x = mix(vec3(0.5), texel.rgb * tint, clamp(alpha, 0.0, 1.0));
       if (any(isnan(mod2x))) discard;
       gl_FragColor = vec4(clamp(mod2x, 0.0, 1.0), 1.0);
       return;
     }
-    vec4 color = vec4(texel.rgb * vColor.rgb * uOverbright * uHalf, alpha);
+    vec4 color = vec4(texel.rgb * tint * uOverbright * uHalf, alpha);
     // Kept finite and little above white: the frame's bloom starts at 1.3, and an overbright
     // particle let through spreads into a halo far bigger than the game's
     if (any(isnan(color)) || color.a < 0.002) discard;
@@ -284,6 +288,7 @@ function material(def, vertexShader, orientation) {
       uHalf: { value: 1 },
       uMod: { value: 0 },
       uPremultiply: { value: 0 },
+      uGammaColor: { value: def.m_bGammaCorrectVertexColors === false ? 0 : 1 },
       uOrientation: { value: orientation },
       uTexTransform: { value: textureTransformOf(def) },
       uTail: { value: tailOf(def) },

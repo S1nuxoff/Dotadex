@@ -96,6 +96,59 @@ function fadeTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
+// The site's mark, carved into the ground under the model: from the logo's shape (its alpha),
+// a height map sunk where the logo is, and a mask a little wider than it, so the carved
+// edges show their relief
+const WATERMARK = `${ROCKS}watermark.png`;
+async function watermarkTextures() {
+  const image = await new THREE.ImageLoader().loadAsync(WATERMARK).catch(() => null);
+  if (!image) {
+    return null;
+  }
+  // A canvas in the logo's proportions, with room around it for the soft edges
+  const pad = 48;
+  const w = 2048 - pad * 2;
+  const h = Math.round((w * image.height) / image.width);
+  const width = 2048;
+  const height = h + pad * 2;
+  const canvas = () => {
+    const c = document.createElement("canvas");
+    c.width = width;
+    c.height = height;
+    return c;
+  };
+  // The logo's shape in white on transparent
+  const shape = canvas();
+  const shapeContext = shape.getContext("2d");
+  shapeContext.drawImage(image, pad, pad, w, h);
+  shapeContext.globalCompositeOperation = "source-in";
+  shapeContext.fillStyle = "#fff";
+  shapeContext.fillRect(0, 0, width, height);
+  // Height: white stone with the shape sunk in, its walls slightly sloped
+  const heightCanvas = canvas();
+  const heightContext = heightCanvas.getContext("2d");
+  heightContext.fillStyle = "#fff";
+  heightContext.fillRect(0, 0, width, height);
+  heightContext.filter = "blur(3px)";
+  heightContext.globalCompositeOperation = "difference";
+  heightContext.drawImage(shape, 0, 0);
+  // Mask: the shape grown a little, by stacking blurred copies, then softened
+  const maskCanvas = canvas();
+  const maskContext = maskCanvas.getContext("2d");
+  maskContext.fillStyle = "#000";
+  maskContext.fillRect(0, 0, width, height);
+  maskContext.filter = "blur(8px)";
+  for (let i = 0; i < 4; i++) {
+    maskContext.drawImage(shape, 0, 0);
+  }
+  const texture = (c) => {
+    const t = new THREE.CanvasTexture(c);
+    t.anisotropy = 8;
+    return t;
+  };
+  return { height: texture(heightCanvas), mask: texture(maskCanvas), aspect: width / height };
+}
+
 export class RockStage {
   constructor(scene) {
     this.group = new THREE.Group();
@@ -230,6 +283,7 @@ export class RockStage {
       this.ground.material.color.set(0x3c3e44);
       this.ground.material.needsUpdate = true;
     }
+    this.buildMark(stoneMap);
 
     LAYOUT.forEach(([, angle, distance, size, turn], index) => {
       const gltf = loaded[index];
@@ -273,6 +327,63 @@ export class RockStage {
     });
   }
 
+  // The carved mark: a card on the ground with the same stone as the ground under it, lined up
+  // with it, darker in the carving and with the carving's relief
+  async buildMark(stoneMap) {
+    const textures = await watermarkTextures();
+    if (!textures) {
+      return;
+    }
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x3c3e44,
+      roughness: 1,
+      metalness: 0,
+      map: stoneMap?.clone() ?? null,
+      alphaMap: textures.mask,
+      bumpMap: textures.height,
+      bumpScale: 4,
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
+    material.onBeforeCompile = (shader) => {
+      // The bottom of the carving lies in shade
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+        diffuseColor.rgb *= mix(0.35, 1.0, texture2D(bumpMap, vBumpMapUv).r);`
+      );
+    };
+    this.mark = new THREE.Mesh(new THREE.PlaneGeometry(textures.aspect, 1), material);
+    this.mark.rotation.x = -Math.PI / 2;
+    this.mark.receiveShadow = true;
+    this.mark.renderOrder = -0.5;
+    this.mark.userData.skipGlow = true;
+    this.group.add(this.mark);
+    this.markAspect = textures.aspect;
+    this.fitMark();
+  }
+
+  // The mark spans a little more than the model's footprint; its stone repeats as the ground's
+  fitMark() {
+    if (!this.mark || !this.radius) {
+      return;
+    }
+    const width = this.radius * 2.8;
+    const scale = width / this.markAspect;
+    this.mark.scale.setScalar(scale);
+    const map = this.mark.material.map;
+    const groundRepeat = this.ground.material.map?.repeat.x;
+    if (map && groundRepeat) {
+      // The ground's texture runs groundRepeat times across its diameter, centered
+      const ground = this.ground.scale.x * 2;
+      map.repeat.set((groundRepeat * width) / ground, (groundRepeat * scale) / ground);
+      map.offset.set(groundRepeat / 2 - map.repeat.x / 2, groundRepeat / 2 - map.repeat.y / 2);
+    }
+  }
+
   // center: the model's footprint center on the ground, radius: footprint radius, height: model height
   // view: how far the camera stands, so the ground always reaches past the fog, whatever
   // the model's shape
@@ -296,6 +407,8 @@ export class RockStage {
     this.glow.distance = radius * 6;
     this.glowBase = radius * 6;
     this.glow.intensity = this.glowBase * (this.glowStrength ?? 1);
+    this.radius = radius;
+    this.fitMark();
   }
 
   // Glowing models light the stones around them more

@@ -356,7 +356,7 @@ export class ParticleManager {
       lines.push(`effect ${this.paths[index]}`);
       describe(effect.system, 1);
     }
-    console.warn(`[particles] ${lines.join("\n")}`);
+    console.debug(`[particles] ${lines.join("\n")}`);
   }
 
   dispose() {

@@ -484,11 +484,12 @@ export class Stage {
     this.veilSince = performance.now();
     // Stony ground instead of the stone pedestal, with real shadows
     this.rockStage = new RockStage(this.scene);
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.fog = new THREE.FogExp2(0x0b1017, 0.001);
 
 
-    this.clock = new THREE.Clock();
+    this.timer = new THREE.Timer();
+    this.timer.connect(document);
     this.group = null;
     this.mixer = null;
     this.actions = {};
@@ -528,7 +529,7 @@ export class Stage {
     this.glowComposer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.65, 0.45, 0.15));
     this.glowBlack = new THREE.MeshBasicMaterial({ color: 0x000000 });
     this.glowMix = new ShaderPass({
-      uniforms: { tDiffuse: { value: null }, tGlow: { value: this.glowComposer.renderTarget2.texture } },
+      uniforms: { tDiffuse: { value: null }, tGlow: { value: null } },
       vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: `uniform sampler2D tDiffuse; uniform sampler2D tGlow; varying vec2 vUv;
         void main() { vec4 base = texture2D(tDiffuse, vUv); gl_FragColor = vec4(base.rgb + texture2D(tGlow, vUv).rgb, base.a); }`,
@@ -1498,7 +1499,8 @@ export class Stage {
   }
 
   frame() {
-    const delta = Math.min(this.clock.getDelta(), 0.1);
+    this.timer.update();
+    const delta = Math.min(this.timer.getDelta(), 0.1);
     if (this.mixer && !this.paused) {
       this.mixer.update(delta * this.speed);
       this.playAnimationSounds();
@@ -1830,6 +1832,7 @@ export class Stage {
 
   dispose() {
     this.renderer.setAnimationLoop(null);
+    this.timer.dispose();
     this.resizeObserver.disconnect();
     this.controls.dispose();
     this.renderer.dispose();

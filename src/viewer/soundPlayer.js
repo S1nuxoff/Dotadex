@@ -12,6 +12,16 @@ function audioContext() {
   return context;
 }
 
+// Decoding needs no sound out, so it goes through an offline context: the live one is made only
+// once the person has acted, as browsers warn about one made before
+let decoder = null;
+function decodeContext() {
+  decoder ??= new OfflineAudioContext(1, 1, 44100);
+  return decoder;
+}
+
+const mayPlay = () => navigator.userActivation?.hasBeenActive ?? true;
+
 // Called from a click: browsers only let a page make sound after the person acted
 export function unlockSound() {
   audioContext().resume().catch(() => {});
@@ -44,7 +54,7 @@ async function fetchBuffer(url) {
   if (!res?.ok) {
     return null;
   }
-  return audioContext().decodeAudioData(await res.arrayBuffer()).catch(() => null);
+  return decodeContext().decodeAudioData(await res.arrayBuffer()).catch(() => null);
 }
 
 export function preloadSound(url) {
@@ -71,6 +81,9 @@ export function playLoaded(url, { volume = 1, rate = 1 } = {}) {
   const buffer = buffers.get(url);
   if (!buffer) {
     preloadSound(url);
+    return;
+  }
+  if (!mayPlay()) {
     return;
   }
   const ctx = audioContext();

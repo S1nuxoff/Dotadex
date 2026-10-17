@@ -4,7 +4,7 @@
 // particles' places, sizes, colors and frames written each frame.
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
-import { compileFloat } from "./inputs.js";
+import { compileFloat, compileVector } from "./inputs.js";
 import { attachmentTransform, bonesOf, UNIT } from "./math.js";
 
 const toCamera = new THREE.Vector3();
@@ -185,6 +185,56 @@ function frameOf(sheet, sequenceIndex, age, normalizedAge, def, out, offset) {
   out[offset + 3] = frame[3] / sheet.height;
 }
 
+// The scene's depth for depth feathering (soft edges where a particle meets the model or the
+// ground), shared by every particle material: the stage writes it each frame as the distance from
+// the camera, in a texture of the frame's size (none while it does not)
+export const SCENE_DEPTH = {
+  uSceneDepth: { value: null },
+  uHasSceneDepth: { value: 0 },
+  uSceneSize: { value: new THREE.Vector2(1, 1) },
+};
+
+// The renderer's own color over the particles' (m_vecColorScale), put together with it as
+// m_nColorBlendType says (times it when the file names none)
+const COLOR_BLENDS = {
+  PARTICLE_COLOR_BLEND_MULTIPLY: 0,
+  PARTICLE_COLOR_BLEND_MULTIPLY2X: 1,
+  PARTICLE_COLOR_BLEND_MOD2X: 1,
+  PARTICLE_COLOR_BLEND_REPLACE: 2,
+  PARTICLE_COLOR_BLEND_ADD: 3,
+  PARTICLE_COLOR_BLEND_MIN: 4,
+  PARTICLE_COLOR_BLEND_MAX: 5,
+};
+function colorScaleOf(def, mat) {
+  if (!def.m_vecColorScale) return () => {};
+  const scale = compileVector(def.m_vecColorScale, [1, 1, 1]);
+  const out = [1, 1, 1];
+  mat.uniforms.uColorBlend.value = COLOR_BLENDS[def.m_nColorBlendType] ?? 0;
+  return (system) => {
+    scale(system, -1, out);
+    mat.uniforms.uColorScale.value.set(out[0], out[1], out[2]);
+  };
+}
+
+// The camera's near and far planes, for a particle's own distance from it (depth feathering)
+function cameraRange(mat, camera) {
+  if (!camera?.isPerspectiveCamera) return;
+  mat.uniforms.uCameraNear.value = camera.near;
+  mat.uniforms.uCameraFar.value = camera.far;
+}
+
+// Drawn nearer the camera by m_flDepthBias units than it is (farther, below nothing) for the
+// depth test only, so what it lies on does not cut it, and it keeps its size on the screen
+const DEPTH_BIAS = /* glsl */ `
+  uniform float uDepthBias;
+  vec4 depthBiased(vec4 clip) {
+    if (uDepthBias == 0.0) return clip;
+    float viewZ = min(-clip.w + uDepthBias, -1e-4);
+    clip.z = (projectionMatrix[2][2] * viewZ + projectionMatrix[3][2]) / -viewZ * clip.w;
+    return clip;
+  }
+`;
+
 const SPRITE_VERTEX = /* glsl */ `
   attribute vec3 iPosition;
   attribute vec4 iColor;
@@ -200,6 +250,7 @@ const SPRITE_VERTEX = /* glsl */ `
   varying vec2 vUv;
   varying vec2 vLocal;
   varying vec4 vColor;
+  ${DEPTH_BIAS}
   // Normalized, or a fallback where the vector is nothing (normalize gives NaN there on graphics cards)
   vec3 safeNormalize(vec3 v) {
     float l = length(v);
@@ -230,7 +281,7 @@ const SPRITE_VERTEX = /* glsl */ `
       // Facing the camera
       vec4 view = modelViewMatrix * vec4(center, 1.0);
       view.xy += corner;
-      gl_Position = projectionMatrix * view;
+      gl_Position = depthBiased(projectionMatrix * view);
       return;
     }
     vec3 right;
@@ -256,14 +307,15 @@ const SPRITE_VERTEX = /* glsl */ `
       right = safeNormalize(cross(along, toCamera));
       float length = max(length(iVelocity), iSizeRoll.x);
       vec3 world = center + right * (uv.x - 0.5) * 2.0 * size - along * (1.0 - uv.y) * length;
-      gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
+      gl_Position = depthBiased(projectionMatrix * viewMatrix * vec4(world, 1.0));
       return;
     }
-    gl_Position = projectionMatrix * viewMatrix * vec4(center + right * corner.x + up * corner.y, 1.0);
+    gl_Position = depthBiased(projectionMatrix * viewMatrix * vec4(center + right * corner.x + up * corner.y, 1.0));
   }
 `;
 
 const FRAGMENT = /* glsl */ `
+  #include <packing>
   uniform sampler2D uMap;
   uniform float uHasMap;
   uniform sampler2D uLookup;
@@ -278,13 +330,30 @@ const FRAGMENT = /* glsl */ `
   uniform float uAddSelf;
   uniform sampler2D uMask;
   uniform float uHasMask;
+  uniform vec3 uColorScale;
+  uniform int uColorBlend;
+  uniform sampler2D uSceneDepth;
+  uniform float uHasSceneDepth;
+  uniform vec2 uSceneSize;
+  uniform vec3 uFeather;
+  uniform float uCameraNear;
+  uniform float uCameraFar;
   varying vec2 vUv;
   varying vec2 vLocal;
   varying vec4 vColor;
+  vec3 colorScaled(vec3 c) {
+    if (uColorBlend == 1) return c * uColorScale * 2.0;
+    if (uColorBlend == 2) return uColorScale;
+    if (uColorBlend == 3) return c + uColorScale;
+    if (uColorBlend == 4) return min(c, uColorScale);
+    if (uColorBlend == 5) return max(c, uColorScale);
+    return c * uColorScale;
+  }
   void main() {
-    // The particle's color as the file gives it is in gamma space; the game turns it linear
-    // unless the renderer says not to (m_bGammaCorrectVertexColors)
-    vec3 tint = uGammaColor > 0.5 ? pow(max(vColor.rgb, 0.0), vec3(2.2)) : vColor.rgb;
+    // The particle's color as the file gives it is in gamma space, the renderer's color over it;
+    // the game turns it linear unless the renderer says not to (m_bGammaCorrectVertexColors)
+    vec3 shown = colorScaled(vColor.rgb);
+    vec3 tint = uGammaColor > 0.5 ? pow(max(shown, 0.0), vec3(2.2)) : shown;
     vec4 texel = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0);
     float bright = max(texel.r, max(texel.g, texel.b));
     if (uAlphaFromColor > 0.5) texel.a *= bright;
@@ -292,6 +361,13 @@ const FRAGMENT = /* glsl */ `
     if (uWhite > 0.5) texel.rgb = vec3(1.0);
     if (uHasLookup > 0.5) texel.rgb = texture2D(uLookup, vec2(clamp(bright, 0.0, 1.0), 0.5)).rgb;
     float alpha = texel.a * vColor.a;
+    // Feathered: fading out where the scene behind is nearer than m_flFeatheringMaxDist, gone
+    // within m_flFeatheringMinDist (x on, y min, z max, in the scene's units)
+    if (uFeather.x > 0.5 && uHasSceneDepth > 0.5) {
+      float behind = texture2D(uSceneDepth, gl_FragCoord.xy / uSceneSize).r;
+      float own = -perspectiveDepthToViewZ(gl_FragCoord.z, uCameraNear, uCameraFar);
+      alpha *= clamp((behind - own - uFeather.y) / max(uFeather.z - uFeather.y, 1e-4), 0.0, 1.0);
+    }
     if (uMod > 0.5) {
       // Mid grey where the particle is see-through, so it leaves what is behind as it is
       vec3 mod2x = mix(vec3(0.5), texel.rgb * tint, clamp(alpha, 0.0, 1.0));
@@ -352,6 +428,15 @@ function material(def, vertexShader, orientation) {
       uAddSelf: { value: 0 },
       uMask: { value: null },
       uHasMask: { value: 0 },
+      uColorScale: { value: new THREE.Vector3(1, 1, 1) },
+      uColorBlend: { value: 0 },
+      uDepthBias: { value: num(def.m_flDepthBias, 0) * UNIT },
+      uFeather: {
+        value: new THREE.Vector3(/_ON_/.test(def.m_nFeatheringMode ?? "") ? 1 : 0, num(def.m_flFeatheringMinDist, 0) * UNIT, num(def.m_flFeatheringMaxDist, 1) * UNIT),
+      },
+      uCameraNear: { value: 0.1 },
+      uCameraFar: { value: 100 },
+      ...SCENE_DEPTH,
       uOrientation: { value: orientation },
       uTexTransform: { value: textureTransformOf(def) },
       uTail: { value: tailOf(def) },
@@ -410,6 +495,7 @@ function quads(def, system, trail) {
   geometry.instanceCount = 0;
   const orientation = trail ? 4 : ORIENTATIONS[def.m_nOrientationType] ?? 0;
   const mat = material(def, SPRITE_VERTEX, orientation);
+  const colorScale = colorScaleOf(def, mat);
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.frustumCulled = false;
   mesh.renderOrder = 10;
@@ -438,11 +524,13 @@ function quads(def, system, trail) {
 
   return {
     object: mesh,
-    render(system) {
+    render(system, camera) {
       const n = system.count;
       mesh.visible = n > 0 && ready;
       geometry.instanceCount = n;
       if (!mesh.visible) return;
+      colorScale(system);
+      cameraRange(mat, camera);
       const p = system.float(0);
       const q = system.float(2);
       const tint = system.float(6);
@@ -508,11 +596,12 @@ const ROPE_VERTEX = /* glsl */ `
   varying vec2 vUv;
   varying vec2 vLocal;
   varying vec4 vColor;
+  ${DEPTH_BIAS}
   void main() {
     vUv = uv * uTexTransform.xy + uTexTransform.zw;
     vLocal = uv;
     vColor = color;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    gl_Position = depthBiased(projectionMatrix * modelViewMatrix * vec4(position, 1.0));
   }
 `;
 
@@ -537,6 +626,7 @@ function rope(def, system) {
   geometry.setAttribute("uv", uvs);
   geometry.setAttribute("color", colors);
   const mat = material(def, ROPE_VERTEX, 0);
+  const colorScale = colorScaleOf(def, mat);
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.frustumCulled = false;
   mesh.renderOrder = 10;
@@ -572,6 +662,8 @@ function rope(def, system) {
       const n = system.count;
       mesh.visible = n > 1 && ready;
       if (!mesh.visible) return;
+      colorScale(system);
+      cameraRange(mat, camera);
       const p = system.float(0);
       const tint = system.float(6);
       const alpha = system.float(7);

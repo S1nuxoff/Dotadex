@@ -683,6 +683,8 @@ const fromSnapshot = (def, point) => {
     },
   };
 };
+// m_bRigid (set in nearly every file) has the game carry a point by its strongest bone alone
+// instead of the bones' blend: the vertex it is bound to here moves all but the same way
 DEFS.C_INIT_InitSkinnedPositionFromCPSnapshot = (def) => fromSnapshot(def, def.m_nSnapshotControlPointNumber ?? 0);
 
 // A snapshot whose points are in a control point's own space (a blade's points along the bone
@@ -810,6 +812,9 @@ DEFS.C_INIT_NormalAlignToCP = (def) => {
   };
 };
 
+// A field from the particle's number, m_nInputMin..m_nInputMax remapped to the output range
+// (counting round again past the end, m_bWrap); particles outside the range left as they are
+// (m_bActiveRange)
 DEFS.C_INIT_RemapParticleCountToScalar = (def) => {
   const inMin = def.m_nInputMin ?? 0;
   const inMax = def.m_nInputMax ?? 10;
@@ -818,11 +823,13 @@ DEFS.C_INIT_RemapParticleCountToScalar = (def) => {
   const field = def.m_nFieldOutput ?? 3;
   const scale = Boolean(def.m_bScaleInitialRange);
   const wrap = Boolean(def.m_bWrap);
+  const active = Boolean(def.m_bActiveRange);
   return {
     init(system, start, end) {
       for (let i = start; i < end; i++) {
         let count = system.ids[i];
         if (wrap && inMax > inMin) count = inMin + ((count - inMin) % (inMax - inMin + 1));
+        if (active && (count < inMin || count > inMax)) continue;
         const value = remap(count, inMin, inMax, outMin, outMax);
         const current = VECTOR_FIELDS.has(field) ? system.float(field)[i * 3] : system.float(field)[i];
         writeFloat(system, field, i, scale ? current * value : value);

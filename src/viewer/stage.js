@@ -8,11 +8,13 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import { FullScreenQuad, Pass } from "three/addons/postprocessing/Pass.js";
 import { colorParam, createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
 import { createWatermark } from "./watermark.js";
 import { ParticleManager } from "./particles/manager.js";
+import { SCENE_DEPTH } from "./particles/render.js";
 import { playLoaded, playWhenReady, preloadSound } from "./soundPlayer.js";
 import { playUiSound } from "../uiSounds.js";
 
@@ -410,6 +412,52 @@ const veilShader = {
   `,
 };
 
+// The scene's depth as the distance from the camera, in a texture the particles read (they are
+// drawn against the frame's own depth, which they cannot read while drawing into it)
+class SceneDepthPass extends Pass {
+  constructor(camera) {
+    super();
+    this.needsSwap = false;
+    this.camera = camera;
+    this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false });
+    this.quad = new FullScreenQuad(
+      new THREE.ShaderMaterial({
+        uniforms: { tDepth: { value: null }, uNear: { value: 0.1 }, uFar: { value: 100 } },
+        vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+        fragmentShader: `#include <packing>
+          uniform sampler2D tDepth; uniform float uNear; uniform float uFar; varying vec2 vUv;
+          void main() { gl_FragColor = vec4(vec3(-perspectiveDepthToViewZ(texture2D(tDepth, vUv).r, uNear, uFar)), 1.0); }`,
+        depthTest: false,
+        depthWrite: false,
+      })
+    );
+  }
+
+  render(renderer, writeBuffer, readBuffer) {
+    if (!readBuffer.depthTexture || !this.camera.isPerspectiveCamera) {
+      SCENE_DEPTH.uHasSceneDepth.value = 0;
+      return;
+    }
+    if (this.target.width !== readBuffer.width || this.target.height !== readBuffer.height) {
+      this.target.setSize(readBuffer.width, readBuffer.height);
+    }
+    const uniforms = this.quad.material.uniforms;
+    uniforms.tDepth.value = readBuffer.depthTexture;
+    uniforms.uNear.value = this.camera.near;
+    uniforms.uFar.value = this.camera.far;
+    renderer.setRenderTarget(this.target);
+    this.quad.render(renderer);
+    SCENE_DEPTH.uSceneDepth.value = this.target.texture;
+    SCENE_DEPTH.uSceneSize.value.set(readBuffer.width, readBuffer.height);
+    SCENE_DEPTH.uHasSceneDepth.value = 1;
+  }
+
+  dispose() {
+    this.target.dispose();
+    this.quad.dispose();
+  }
+}
+
 export class Stage {
   constructor(canvas) {
     this.canvas = canvas;
@@ -505,7 +553,8 @@ export class Stage {
 
     // Glow around what is brighter than white: glowing parts and strong highlights, as in the game.
     // The glow is added to the colors only, so the page still shows through around the model.
-    this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
+    // Its frames keep their depth as a texture, for the particles' soft edges (SceneDepthPass)
+    this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(1, 1) }));
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.35, 1.3);
     Object.assign(this.bloom.blendMaterial, {
@@ -520,6 +569,7 @@ export class Stage {
     // The particles after the bloom, over the frame and against its depth: their glow is in
     // their textures, and the bloom made each bright one a halo far larger than the game's
     this.particleScene = new THREE.Scene();
+    this.composer.addPass(new SceneDepthPass(this.camera));
     const particlePass = new RenderPass(this.particleScene, this.camera);
     particlePass.clear = false;
     this.composer.addPass(particlePass);
@@ -1601,6 +1651,7 @@ export class Stage {
     }
     // While developing, ?nobloom draws the frame without the bloom and the halos
     if (import.meta.env.DEV && window.location.search.includes("nobloom")) {
+      SCENE_DEPTH.uHasSceneDepth.value = 0;
       this.renderer.render(this.scene, this.camera);
       this.renderer.autoClear = false;
       this.renderer.render(this.particleScene, this.camera);

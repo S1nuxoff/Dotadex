@@ -233,7 +233,6 @@ export async function createWatermark(fog, band) {
   mesh.material.uniforms.uGap.value = round / repeat / logo - 1;
   mesh.rotation.x = -Math.PI / 2;
   mesh.renderOrder = 1;
-  mesh.userData.watermark = true;
   // The same in either shading, which swaps the pedestal's materials for these
   mesh.userData.dota = mesh.userData.pbr = mesh.material;
   return mesh;

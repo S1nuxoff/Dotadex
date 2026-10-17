@@ -33,9 +33,6 @@ const CAMERA_RAISE = 0.15;
 
 // The height of the letters of the site's mark round the pedestal's edge, as a share of its radius
 const WATERMARK_BAND = 0.06;
-function dropWatermarks(pedestal) {
-  pedestal.children.filter((child) => child.userData.watermark).forEach((child) => child.removeFromParent());
-}
 
 // The pedestal's far side sinks into the dark behind the hero, as the game's depth fog hides it:
 // fading with how far a point lies beyond the hero along the camera's view on the ground
@@ -1073,10 +1070,9 @@ export class Stage {
     if (pedestalUrl !== this.pedestalUrl) {
       this.pedestalUrl = pedestalUrl;
       if (this.pedestal) {
-        this.scene.remove(this.pedestal);
-        // The pedestal is kept loaded and may come back: it gets its mark again then
-        dropWatermarks(this.pedestal);
+        this.dropModel(this.pedestal);
         this.pedestal = null;
+        this.watermark = null;
       }
       if (pedestalUrl) {
         loadModel(pedestalUrl).then(
@@ -1086,9 +1082,9 @@ export class Stage {
             }
             // Shaded like the heroes and taking the hero's shadow; dark, in the tint its material
             // gives (the page's mask fades its edge, as in the game)
-            this.pedestal = gltf.scene;
-            // A pedestal kept loaded may still have the mark of a stage before this one
-            dropWatermarks(this.pedestal);
+            // A copy of its own: the loaded model is kept for the next time it is shown, and taking
+            // its materials as they are would darken an already darkened pedestal again
+            this.pedestal = gltf.scene.clone();
             this.pedestal.rotation.y = this.group?.rotation.y ?? 0;
             this.pedestal.traverse((node) => {
               const tint = node.isMesh && node.material?.userData?.vmat?.VectorParams?.g_vColorTint;
@@ -1138,7 +1134,6 @@ export class Stage {
 
   // The site's mark carved in a ring along the edge of the pedestal's top, turning with the pedestal
   async carveWatermark(pedestal, radius) {
-    dropWatermarks(pedestal);
     // Where the flat top ends: down onto the pedestal along lines out from the center, the last
     // point still at the center's height, the middle one of all the lines
     pedestal.updateMatrixWorld(true);
@@ -1170,7 +1165,6 @@ export class Stage {
     if (!mark || this.pedestal !== pedestal) {
       return;
     }
-    dropWatermarks(pedestal);
     mark.position.copy(pedestal.worldToLocal(new THREE.Vector3(0, top, 0)));
     mark.scale.setScalar(ring / pedestal.scale.x);
     this.watermark = mark;

@@ -28,6 +28,7 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 
 ## Models and other
 
+- [ ] **M-03 Terrorblade's default blade glow on other weapons (open question).** 8 of his 9 weapons create the default weapon's effects in `items_game` (`terrorblade_ambient_sword_blade`, `_blade_2`: a model of glowing planes made for the default blades), so the site draws that glow round blades of other shapes (seen with a set's crescent blades). Nothing in the data hides or reshapes it. Left as the data says until someone sees in the game that it is not there.
 - [ ] **M-02 Hero forms and summons on the hero page.** Everything should be seeable: Lycan's wolf, Dragon Knight's dragon, Terrorblade's demon, Lone Druid's true form, Undying's golem, Phoenix's egg, Death Prophet's ghost, Visage's familiar, Witch Doctor's and Juggernaut's wards (`ability*`, `shapeshift`, `summon` slots), with their cosmetics. They are no longer put on the hero's skeleton (commit `2200723`). Agreed with the user on 2026-10-17: a "Form" switch on the hero page when the hero has such slots (Hero / each form by its slot's name); a form is shown as its own model (the chosen cosmetic or the default) with its effects, and choosing a cosmetic of that slot in Change Outfit switches to it.
 - [ ] **M-01 Head showing through the helmet.** Seen on Anti-Mage with a helmet; common across the site. After the particles.
 

@@ -83,9 +83,12 @@ const idByName = new Map();
 // The particle systems an item shows: those it creates, and those it puts in place of others
 // (the dataset has each as particles/<path>.json), and the snapshots it puts in place of others
 // (a weapon's own points for the default weapon's glow, particles/<path>.vsnap.json). Modifiers of a style other than the first
-// are left out, and so are those the game shows only in its alternate loadout view.
+// are left out, and so are those the game shows only in its alternate loadout view. A courier's
+// effects of one of its forms are kept apart (flying, ground).
 function particlesOf(item) {
   const add = [];
+  const flying = [];
+  const ground = [];
   const swap = [];
   const snapshots = [];
   for (const visual of Object.values(item?.visuals ?? {})) {
@@ -99,15 +102,17 @@ function particlesOf(item) {
     }
     const system = (value) => (typeof value === "string" && value.toLowerCase().endsWith(".vpcf") ? value.toLowerCase() : null);
     if (visual.type === "particle_create" && system(visual.modifier)) {
-      add.push(system(visual.modifier));
+      // A courier's effect of one form only (a flying courier's rockets)
+      const form = String(visual.flying_courier_only ?? "0") === "1" ? flying : String(visual.ground_courier_only ?? "0") === "1" ? ground : add;
+      form.push(system(visual.modifier));
     } else if (visual.type === "particle" && system(visual.asset) && system(visual.modifier)) {
       swap.push([system(visual.asset), system(visual.modifier)]);
     } else if (visual.type === "particle_snapshot" && typeof visual.asset === "string" && typeof visual.modifier === "string") {
       snapshots.push([visual.asset.toLowerCase(), visual.modifier.toLowerCase()]);
     }
   }
-  return add.length || swap.length || snapshots.length
-    ? { ...(add.length && { add }), ...(swap.length && { swap }), ...(snapshots.length && { snapshots }) }
+  return add.length || flying.length || ground.length || swap.length || snapshots.length
+    ? { ...(add.length && { add }), ...(flying.length && { flying }), ...(ground.length && { ground }), ...(swap.length && { swap }), ...(snapshots.length && { snapshots }) }
     : null;
 }
 

@@ -246,8 +246,15 @@ export function outfitParticles(catalog, outfit) {
   }
   if (!outfit.hero) {
     const item = catalog.itemsById[outfit.focus];
-    const models = itemUrls(catalog, item, outfit.style).map((url) => url.split("#")[0]);
-    return (item?.particles?.add ?? []).map((system) => ({ system, models }));
+    let models = itemUrls(catalog, item, outfit.style).map((url) => url.split("#")[0]);
+    let systems = item?.particles?.add ?? [];
+    // A courier shows one form at a time, with that form's own effects
+    if (item?.kind === "courier" && models.length > 1) {
+      models = [models[(outfit.variant ?? 0) % models.length]];
+      const flying = /flying/.test(models[0]);
+      systems = [...systems, ...((flying ? item.particles?.flying : item.particles?.ground) ?? [])];
+    }
+    return systems.map((system) => ({ system, models }));
   }
   const hero = catalog.heroesById[outfit.hero];
   const persona = outfit.persona && hero.personas?.[outfit.persona - 1] ? outfit.persona : 0;

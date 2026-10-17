@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { stageTint } from "./effects.js";
 
 // The site's mark, carved into the pedestal under the hero. It is drawn over the pedestal
 // rather than as stone of its own, so it suits whatever pedestal the game gives. The carving is
@@ -30,6 +31,9 @@ const carvingShader = {
     uniform vec3 uLight;
     // How deep the carving goes, in texels of the logo
     uniform float uDepth;
+    // A soft glow from the bottom of the carving, in the hero's color
+    uniform vec3 uGlowColor;
+    uniform float uGlow;
     uniform vec2 uFogDirection;
     uniform float uFogNear;
     uniform float uFogFar;
@@ -76,7 +80,9 @@ const carvingShader = {
       // How bright the surface is against the pedestal's top around it, which faces up
       float top = max(light.z, 0.15);
       float bright;
+      float glow = 1.0;
       if (wall) {
+        glow = reached * 0.8;
         // The wall faces into the letter
         vec2 s = uTexel * 2.0;
         vec2 slope = vec2(inside(uv + vec2(s.x, 0.0)) - inside(uv - vec2(s.x, 0.0)), inside(uv + vec2(0.0, s.y)) - inside(uv - vec2(0.0, s.y)));
@@ -99,11 +105,13 @@ const carvingShader = {
       // Darkened or lightened stone over the pedestal
       vec3 color = bright > 1.0 ? vec3(0.35, 0.32, 0.29) : vec3(0.0);
       float alpha = bright > 1.0 ? min((bright - 1.0) * 0.5, 0.4) : 1.0 - bright;
-      alpha *= smoothstep(0.01, 0.5, edge);
       // Fading into the dark behind the hero with the pedestal itself
-      alpha *= 1.0 - smoothstep(uFogNear, uFogFar, dot(vWorld.xz, uFogDirection));
-      alpha *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vWorld.xz));
-      gl_FragColor = vec4(color, alpha);
+      float fade = smoothstep(0.01, 0.5, edge);
+      fade *= 1.0 - smoothstep(uFogNear, uFogFar, dot(vWorld.xz, uFogDirection));
+      fade *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vWorld.xz));
+      alpha *= fade;
+      // Premultiplied, so the glow adds to the stone it darkens
+      gl_FragColor = vec4(color * alpha + uGlowColor * uGlow * glow * fade, alpha);
       #include <colorspace_fragment>
     }
   `,
@@ -156,6 +164,7 @@ export async function createWatermark(fog) {
     new THREE.ShaderMaterial({
       ...carvingShader,
       transparent: true,
+      premultipliedAlpha: true,
       depthWrite: false,
       polygonOffset: true,
       polygonOffsetFactor: -2,
@@ -166,6 +175,8 @@ export async function createWatermark(fog) {
         uAspect: { value: loaded.aspect },
         uLight: { value: new THREE.Vector3(0.4, -0.5, 0.75) },
         uDepth: { value: 24 },
+        uGlowColor: stageTint,
+        uGlow: { value: 0.25 },
         uFogDirection: fog.direction,
         uFogNear: fog.near,
         uFogFar: fog.far,

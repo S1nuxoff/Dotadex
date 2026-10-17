@@ -276,6 +276,35 @@ function withinSphere(def, inputs) {
 DEFS.C_INIT_CreateWithinSphere = (def) => withinSphere(def, false);
 DEFS.C_INIT_CreateWithinSphereTransform = (def) => withinSphere(def, true);
 
+// Spread evenly over a sphere round a control point, one point after another along a spiral
+// from pole to pole (as many as the particles the system holds, or the density squared), each
+// moving out from the centre (in, when its speed is below nothing)
+DEFS.C_INIT_CreateSpiralSphere = (def) => {
+  const point = def.m_nOverrideCP >= 0 ? def.m_nOverrideCP : def.m_nControlPointNumber ?? 0;
+  const radius = def.m_flInitialRadius ?? 1;
+  const speedMin = def.m_flInitialSpeedMin ?? 0;
+  const speedMax = def.m_flInitialSpeedMax ?? 0;
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  let next = 0;
+  return {
+    init(system, start, end) {
+      const cp = system.controlPoint(point).position;
+      const total = def.m_bUseParticleCount ? system.maxParticles : Math.max(1, def.m_nDensity ?? 10) ** 2;
+      const p = system.float(0);
+      const q = system.float(2);
+      for (let i = start; i < end; i++) {
+        const k = next++ % total;
+        const z = 1 - (2 * (k + 0.5)) / total;
+        const ring = Math.sqrt(Math.max(0, 1 - z * z));
+        v1.set(Math.cos(k * golden) * ring, Math.sin(k * golden) * ring, z);
+        for (let c = 0; c < 3; c++) p[i * 3 + c] = q[i * 3 + c] = cp.getComponent(c) + v1.getComponent(c) * radius;
+        const speed = random(speedMin, speedMax);
+        if (speed) setVelocity(system, i, v1.x * speed, v1.y * speed, v1.z * speed);
+      }
+    },
+  };
+};
+
 DEFS.C_INIT_CreateWithinBox = (def) => {
   const min = compileVector(def.m_vecMin, [0, 0, 0]);
   const max = compileVector(def.m_vecMax, [0, 0, 0]);
@@ -1434,7 +1463,8 @@ DEFS.C_OP_SetToCP = (def) => {
 DEFS.C_OP_MovementRotateParticleAroundAxis = (def) => {
   const axis = compileVector(def.m_vecRotAxis, [0, 0, 1]);
   const rate = compileFloat(def.m_flRotRate, 180);
-  const point = cpOf(def);
+  // Most files name the control point m_nCP, the newer ones as a transform input
+  const point = def.m_nCP ?? cpOf(def);
   const local = Boolean(def.m_bLocalSpace);
   const q = new THREE.Quaternion();
   return {

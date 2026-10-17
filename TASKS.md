@@ -18,7 +18,7 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 - [ ] **P-07 `attribute_controlled_attached_particles`.** 828 entries in `items_game`: which attachments an effect's CPs follow. Needed for unusual courier/ward effects.
 - [ ] **P-08 Status-effect color warps (`colorwarp_*`, 6 textures).** Volume textures (z slices) for `RenderStatusEffect`; do them with the status effects (A-02).
 - [ ] **P-09 "What's missing" report in the export.** Count the resources effects refer to (textures, models, snapshots, materials) that the dataset lacks, next to `coverage.json`, so gaps show up by themselves.
-- [ ] **P-10 Animations of particle models** (`m_ActivityName`, 58; `m_sequenceName`).
+- [~] **P-10 Animations of particle models** (`m_ActivityName`, 58; `m_sequenceName`). With V-07: `m_ActivityName` on `RenderModels` picks the sequence with that activity from `.sequences.json` (21 renderers). Left: `m_sequenceName` and activities on other operators.
 
 ## Particles: site (`src/viewer/particles/`)
 
@@ -27,7 +27,7 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 - [ ] **V-03 Operators by how often they are used.** Take the top of `npm run particles:coverage` (e.g. `C_OP_RotateVector`).
 - [ ] **V-04 Every way control points are driven.** Only the `.vpcf`'s first configuration now; add hitboxes, `CUSTOMORIGIN`, CPs from `items_game` (P-04, P-07).
 - [ ] **V-05 Renderers skipped now.** Refraction (`m_bRefract`), bloom-only renderers, lights from particles (`RenderDeferredLight`).
-- [~] **V-07 (next) Animated model particles that drive control points.** `C_OP_RenderModels` with `m_bAnimated` plays a named sequence (`C_INIT_RandomNamedModelSequence`, `C_OP_RemapNamedModelSequenceOnceTimed`), and `C_OP_SetControlPointsToModelParticles` puts CPs at that model's attachments as it animates. Kid Invoker's orbs (`invoker_kid_orbs_loadout`: rig `invoker_kid_orbs_loadout.vmdl`, sequences `game_spawn_orbs_loadout` → `game_idle_orbs_loadout` after 10.25 s, `attach_orb1..3` → CP3) all fall to his feet because none of this runs. Needs the particle model's animations and attachments (already exported with models?), the sequence played, CPs set from the attachments, and the rig itself not drawn if it has no visible mesh. Related: P-10.
+- [~] **V-07 (next) Animated model particles that drive control points.** Done, waiting for a look on the site: Kid Invoker's orbs (`invoker_kid_orbs_loadout`) should rise with `game_spawn_orbs_loadout` and circle his head with `game_idle_orbs_loadout`, their effects following `attach_orb1..3`. In code: each model particle has its own skinned copy that plays its sequence (field 13 unless `m_nAnimationField`, from when the particle took it, `m_flAnimationRate`/30, looping as the sequence says or `m_bForceLoopingAnimation`); `C_INIT_RandomNamedModelSequence` (output 9 by default), `C_OP_RemapNamedModelSequenceOnceTimed`/`EndCap`, `C_OP_SetControlPointsToModelParticles` (attachments; hitboxes fall back to the particle's place, P-06), `C_OP_RemapCPOrientationToRotations`; models of `RenderModels` loaded before an effect starts. The export writes `models/<path>.sequences.json` (looping, activities from the `ASEQ` block) for the 1570 particle models that have sequences: **not uploaded yet**, the site falls back to the glb's clips, all looping. Not done: `m_bManualAnimFrame`, blending between sequences, `C_INIT_RemapParticleCountToNamedModelSequenceScalar` (3).
 
 ## Models and other
 

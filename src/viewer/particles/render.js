@@ -3,7 +3,8 @@
 // particle's movement, and ropes through the particles in order. One draw a system, the
 // particles' places, sizes, colors and frames written each frame.
 import * as THREE from "three";
-import { UNIT } from "./math.js";
+import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
+import { attachmentTransform, bonesOf, UNIT } from "./math.js";
 
 const toCamera = new THREE.Vector3();
 
@@ -601,22 +602,36 @@ const offSnapshot = (system) =>
   });
 
 // A model a particle: placed, turned by its roll, yaw and pitch and scaled by its radius, its
-// texture tinted by the particle's color, unlit like the other particles
+// texture tinted by the particle's color, unlit like the other particles. An animated one plays
+// the sequence its field holds (the sequence's number in the model, as the named-sequence
+// operators write it; the activity's, when the renderer names one) from when the particle took
+// it, looping as the sequence does; operators find the model's attachments on it.
 function models(def, system) {
   const group = new THREE.Group();
   group.visible = false;
   const path = (def.m_ModelList ?? []).find((entry) => entry?.m_model)?.m_model;
-  let template = null;
-  const pool = [];
-  if (path) {
-    system.host.loadModel?.(path).then((scene) => {
-      template = scene;
+  // Loaded before the effect starts; a model still on its way is drawn once there
+  let model = (path && system.host.loadedModel?.(path)) ?? null;
+  if (path && !model) {
+    system.host.loadModel?.(path).then((loaded) => {
+      model = loaded;
     });
   }
+  const pool = [];
   const radiusScale = num(def.m_flRadiusScale, 1);
   const alphaScale = num(def.m_flAlphaScale, 1);
+  const animated = Boolean(def.m_bAnimated);
+  const field = def.m_nAnimationField ?? 13;
+  const rateField = def.m_nAnimationScaleField;
+  // The rate in frames a second, the sequences' own being 30
+  const speed = num(def.m_flAnimationRate, 30) / 30;
+  const forceLoop = Boolean(def.m_bForceLoopingAnimation);
+  const activity = def.m_ActivityName;
+  // What each particle plays, by its id: the sequence and when it took it
+  const playing = new Map();
+
   const instance = () => {
-    const object = template.clone(true);
+    const object = cloneSkinned(model.scene);
     const materials = [];
     object.traverse((node) => {
       if (!node.isMesh) return;
@@ -626,36 +641,89 @@ function models(def, system) {
       materials.push(node.material);
     });
     object.userData.materials = materials;
+    object.userData.bones = bonesOf(object);
+    if (animated && model.clips.length) object.userData.mixer = new THREE.AnimationMixer(object);
     group.add(object);
     return object;
   };
+
+  // The sequence a particle plays: by the renderer's activity, else its field's number
+  const sequenceOf = (system, i) => {
+    if (activity) {
+      const name = model.names.find((name) => model.sequences[name].activities?.includes(activity));
+      if (name) return name;
+    }
+    return model.names[Math.round(system.float(field)[i])] ?? model.names[0];
+  };
+
+  // Particle i's model where the particle is, posed as its sequence is now
+  const place = (system, i, object) => {
+    const p = system.float(0);
+    const j = i * 3;
+    object.position.set(p[j + 1] * UNIT, p[j + 2] * UNIT, p[j] * UNIT);
+    // The game's turns about its up, left and ahead axes, in the scene's
+    object.rotation.set(system.float(20)[i], system.float(12)[i], system.float(4)[i], "YXZ");
+    object.scale.setScalar(Math.max(0, system.float(3)[i]) * radiusScale);
+    const mixer = object.userData.mixer;
+    if (!mixer) return;
+    const id = system.ids[i];
+    const name = sequenceOf(system, i);
+    let state = playing.get(id);
+    if (!state || state.name !== name) {
+      state = { name, start: system.age };
+      playing.set(id, state);
+    }
+    state.seen = system.age;
+    const clip = model.clips.find((clip) => clip.name === name);
+    if (!clip) return;
+    if (object.userData.clip !== clip) {
+      mixer.stopAllAction();
+      object.userData.action = mixer.clipAction(clip).play();
+      object.userData.clip = clip;
+    }
+    const rate = speed * (rateField !== undefined ? system.float(rateField)[i] : 1);
+    const elapsed = Math.max(0, system.age - state.start) * rate;
+    const looping = forceLoop || (model.sequences[name]?.looping ?? true);
+    const length = clip.duration || 1;
+    object.userData.action.time = looping ? elapsed % length : Math.min(elapsed, length - 1e-4);
+    mixer.update(0);
+    object.updateMatrixWorld(true);
+  };
+
   return {
     object: group,
+    // The place and turn of attachment name on particle i's model, in the scene; false
+    // without the model or the attachment
+    attachment(system, i, name, position, quaternion) {
+      const attachment = model?.attachments[name];
+      if (!attachment || i >= system.count) return false;
+      while (pool.length <= i) pool.push(instance());
+      place(system, i, pool[i]);
+      return attachmentTransform(attachment, pool[i].userData.bones, position, quaternion);
+    },
     render(system) {
       const n = system.count;
-      group.visible = n > 0 && template !== null;
+      group.visible = n > 0 && model !== null;
       if (!group.visible) return;
       while (pool.length < n) pool.push(instance());
-      const p = system.float(0);
       const tint = system.float(6);
       const alpha = system.float(7);
-      const radius = system.float(3);
-      const roll = system.float(4);
-      const yaw = system.float(12);
-      const pitch = system.float(20);
       for (const [i, object] of pool.entries()) {
         object.visible = i < n;
         if (i >= n) continue;
+        place(system, i, object);
         const j = i * 3;
-        object.position.set(p[j + 1] * UNIT, p[j + 2] * UNIT, p[j] * UNIT);
-        // The game's turns about its up, left and ahead axes, in the scene's
-        object.rotation.set(pitch[i], yaw[i], roll[i], "YXZ");
-        object.scale.setScalar(Math.max(0, radius[i]) * radiusScale);
         for (const material of object.userData.materials) {
           material.color.setRGB(Math.min(Math.max(tint[j], 0), 1), Math.min(Math.max(tint[j + 1], 0), 1), Math.min(Math.max(tint[j + 2], 0), 1), THREE.SRGBColorSpace);
           material.opacity = Math.min(Math.max(alpha[i], 0), 1) * alphaScale;
         }
       }
+      // Particles gone since
+      for (const [id, state] of playing) if (state.seen !== system.age) playing.delete(id);
+    },
+    // A sequence's number in the model by its name, -1 when it has none of that name
+    sequence(name) {
+      return model ? model.names.indexOf(name) : -1;
     },
     dispose() {
       for (const object of pool) for (const material of object.userData.materials) material.dispose();

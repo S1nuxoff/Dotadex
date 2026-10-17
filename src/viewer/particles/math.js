@@ -22,6 +22,49 @@ export function quaternionToSource(scene, target = new THREE.Quaternion()) {
   return target.setFromRotationMatrix(rotation);
 }
 
+// Pᵀ, the scene's axes back to the game's, as a turn
+const TO_SOURCE_AXES = new THREE.Quaternion().setFromRotationMatrix(PT);
+const offset = new THREE.Vector3();
+const boneTurn = new THREE.Quaternion();
+
+// An attachment's place and turn in the scene, from the bones it hangs on (a Map of the model's
+// bones by name); false when none of them is there. Its offsets and turns are in the bones' own
+// space: the bones keep the game's axes, so they apply as they are (only inches to metres).
+export function attachmentTransform(attachment, bones, position, quaternion) {
+  position.set(0, 0, 0);
+  let weightSum = 0;
+  let first = true;
+  for (const [name, weight, offsetIn = [0, 0, 0], rotation = [0, 0, 0, 1]] of attachment.bones) {
+    const bone = bones.get(name);
+    if (!bone || !weight) continue;
+    bone.updateWorldMatrix(true, false);
+    offset.set((offsetIn[0] ?? 0) * UNIT, (offsetIn[1] ?? 0) * UNIT, (offsetIn[2] ?? 0) * UNIT).applyMatrix4(bone.matrixWorld);
+    position.addScaledVector(offset, weight);
+    weightSum += weight;
+    if (first) {
+      bone.getWorldQuaternion(quaternion);
+      // The bone's axes are the game's, so its turn is put in the scene's terms the other way
+      // round from the model's (whose axes are the scene's): turned back by the axes'
+      // permutation here, as the control point takes it through quaternionToSource
+      boneTurn.set(rotation[0] ?? 0, rotation[1] ?? 0, rotation[2] ?? 0, rotation[3] ?? 1);
+      quaternion.multiply(boneTurn).multiply(TO_SOURCE_AXES);
+      first = false;
+    }
+  }
+  if (weightSum <= 0) return false;
+  position.divideScalar(weightSum);
+  return true;
+}
+
+// The bones of a model's scene by name, the first of each name
+export function bonesOf(root) {
+  const bones = new Map();
+  root.traverse((node) => {
+    if (node.isBone && !bones.has(node.name)) bones.set(node.name, node);
+  });
+  return bones;
+}
+
 export const random = (min, max) => min + Math.random() * (max - min);
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (value, min, max) => Math.min(Math.max(value, min), max);

@@ -3,7 +3,7 @@
 // parameters a file leaves out. A class not here is skipped (and counted, see supportedClasses).
 import * as THREE from "three";
 import { compileFloat, compileVector } from "./inputs.js";
-import { bias as biasOf, clamp, lerp, noise, random, randomInSphere, remap } from "./math.js";
+import { bias as biasOf, clamp, lerp, noise, quaternionToSource, random, randomInSphere, remap, toSource } from "./math.js";
 import { RENDERERS } from "./render.js";
 import { STEP, VECTOR_FIELDS } from "./system.js";
 
@@ -344,6 +344,54 @@ const sequence = (field) => (def) => {
 };
 DEFS.C_INIT_RandomSequence = sequence(9);
 DEFS.C_INIT_RandomSecondSequence = sequence(13);
+
+// The system's model renderer, which knows its model's sequences and attachments
+const modelRenderer = (system) => system.renderers.find((renderer) => renderer.sequence);
+// A named sequence's number in the system's model, -1 when it is not there
+const sequenceNumber = (system, name) => modelRenderer(system)?.sequence(name) ?? -1;
+
+// One of the named sequences of the model the system draws, at random
+DEFS.C_INIT_RandomNamedModelSequence = (def) => {
+  const names = arr(def.m_names, []);
+  const field = def.m_nFieldOutput ?? 9;
+  return {
+    init(system, start, end) {
+      if (!names.length) return;
+      const data = system.float(field);
+      for (let i = start; i < end; i++) {
+        const number = sequenceNumber(system, names[Math.floor(Math.random() * names.length)]);
+        if (number >= 0) data[i] = number;
+      }
+    },
+  };
+};
+
+// Particles playing one of the in-names go on to the out-name in its place: after some time
+// (seconds or, proportional, of their life), or as the system ends
+const remapNamedSequence = (def, when) => {
+  const pairs = arr(def.m_inNames, []).map((name, k) => [name, arr(def.m_outNames, [])[k]]).filter(([, out]) => out);
+  const input = def.m_nFieldInput ?? 9;
+  const output = def.m_nFieldOutput ?? 9;
+  return {
+    update(system) {
+      const numbers = pairs.map(([from, to]) => [sequenceNumber(system, from), sequenceNumber(system, to)]).filter(([from, to]) => from >= 0 && to >= 0);
+      if (!numbers.length) return;
+      const read = system.float(input);
+      const write = system.float(output);
+      for (let i = 0; i < system.count; i++) {
+        if (!when(system, i)) continue;
+        const found = numbers.find(([from]) => Math.round(read[i]) === from);
+        if (found) write[i] = found[1];
+      }
+    },
+  };
+};
+DEFS.C_OP_RemapNamedModelSequenceOnceTimed = (def) => {
+  const time = def.m_flRemapTime ?? 1;
+  const proportional = Boolean(def.m_bProportional);
+  return remapNamedSequence(def, (system, i) => (proportional ? system.normalizedAge(i) : system.age - system.float(8)[i]) >= time);
+};
+DEFS.C_OP_RemapNamedModelSequenceEndCap = (def) => remapNamedSequence(def, (system) => system.endcap);
 
 DEFS.C_INIT_InitialVelocityNoise = (def) => {
   const min = compileVector(def.m_vecOutputMin, [0, 0, 0]);
@@ -1718,6 +1766,54 @@ DEFS.C_OP_SetChildControlPoints = (def) => {
           child.system.ownControlPoint(childPoint + k).position.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
         }
       }
+    },
+  };
+};
+
+// Control points at the system's model particles, each at an attachment of its model as it is
+// posed now (hitboxes are not in the dataset yet: the particle's own place then)
+DEFS.C_OP_SetControlPointsToModelParticles = (def) => {
+  const firstPoint = def.m_nFirstControlPoint ?? 0;
+  const count = def.m_nNumControlPoints ?? 1;
+  const first = def.m_nFirstSourcePoint ?? 0;
+  const name = def.m_bAttachment ? def.m_AttachmentName : null;
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  return {
+    update(system) {
+      const renderer = modelRenderer(system);
+      const p = system.float(0);
+      for (let k = 0; k < count && first + k < system.count; k++) {
+        const i = first + k;
+        const point = system.ownControlPoint(firstPoint + k);
+        point.previous.copy(point.position);
+        if (name && renderer?.attachment(system, i, name, position, quaternion)) {
+          toSource(position, point.position);
+          quaternionToSource(quaternion, point.quaternion);
+        } else {
+          point.position.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+        }
+      }
+    },
+  };
+};
+
+// The particles turned as a control point is (and by a turn of their own after it), as roll,
+// pitch and yaw
+DEFS.C_OP_RemapCPOrientationToRotations = (def) => {
+  const cp = cpOf(def);
+  const rotation = arr(def.m_vecRotation, [0, 0, 0]);
+  // Source angles: pitch about y, yaw about z, roll about x
+  const offset = new THREE.Quaternion().setFromEuler(new THREE.Euler(rotation[2] * deg, rotation[0] * deg, rotation[1] * deg, "ZYX"));
+  const turn = new THREE.Quaternion();
+  const euler = new THREE.Euler();
+  return {
+    update(system) {
+      turn.copy(system.controlPoint(cp).quaternion).multiply(offset);
+      euler.setFromQuaternion(turn, "ZYX");
+      system.float(4).fill(euler.x, 0, system.count);
+      system.float(20).fill(euler.y, 0, system.count);
+      system.float(12).fill(euler.z, 0, system.count);
     },
   };
 };

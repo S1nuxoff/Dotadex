@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ControlPoint, ParticleSystem } from "./system.js";
-import { quaternionToSource, toSource, UNIT } from "./math.js";
+import { attachmentTransform, bonesOf, quaternionToSource, toSource, UNIT } from "./math.js";
 import { unsupported } from "./operators.js";
 
 const systemCache = new Map();
@@ -15,6 +15,7 @@ const attachmentCache = new Map();
 let attachedModels = null; // loaded once: a Set of the models that have attachments, or null while the dataset has no list
 const textureLoader = new THREE.TextureLoader();
 const modelCache = new Map();
+const models = new Map(); // the ones loaded, for the systems to find the moment they start
 const modelLoader = new GLTFLoader();
 
 // Whether an image has no see-through texel at all: a texture saved without its alpha
@@ -39,20 +40,8 @@ function fetchJson(url) {
     .catch(() => null);
 }
 
-// An attachment's offset and turn in its bone's own space: the bones keep the game's axes, so
-// both apply as they are (only inches to metres)
-const boneOffset = (offset, target) => target.set((offset[0] ?? 0) * UNIT, (offset[1] ?? 0) * UNIT, (offset[2] ?? 0) * UNIT);
-function boneRotation(rotation, target) {
-  return target.set(rotation[0] ?? 0, rotation[1] ?? 0, rotation[2] ?? 0, rotation[3] ?? 1);
-}
-
-// Pᵀ, the scene's axes back to the game's, as a turn
-const TO_SOURCE_AXES = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().set(0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1));
-
 const v1 = new THREE.Vector3();
-const v2 = new THREE.Vector3();
 const q1 = new THREE.Quaternion();
-const q2 = new THREE.Quaternion();
 const scale = new THREE.Vector3();
 
 export class ParticleManager {
@@ -96,14 +85,32 @@ export class ParticleManager {
     return this.loadSystem(path);
   }
 
-  // A model particles are drawn as (.vmdl, exported as .glb next to the others): its scene, or
-  // null when the dataset has none
+  // A model particles are drawn as (.vmdl, exported as .glb next to the others), or null when the
+  // dataset has none: { scene, clips, sequences, names, attachments }, its sequences in the
+  // game's order ({ name: { looping, activities } } from the export, the clips' without it)
   loadModel(path) {
     const key = path.toLowerCase().replace(/\.vmdl$/, "");
     if (!modelCache.has(key)) {
-      modelCache.set(key, modelLoader.loadAsync(`${this.base}${key}.glb`).then((gltf) => gltf.scene, () => null));
+      attachedModels ??= fetchJson(`${this.base}particles/attached-models.json`).then((list) => list && new Set(list));
+      const attachments = attachedModels.then((attached) => (!attached || attached.has(`${key}.attachments.json`) ? fetchJson(`${this.base}${key}.attachments.json`) : null));
+      modelCache.set(
+        key,
+        Promise.all([modelLoader.loadAsync(`${this.base}${key}.glb`).catch(() => null), fetchJson(`${this.base}${key}.sequences.json`), attachments]).then(([gltf, sequences, attachments]) => {
+          if (!gltf) return null;
+          const clips = gltf.animations ?? [];
+          const model = { scene: gltf.scene, clips, sequences: sequences ?? Object.fromEntries(clips.map((clip) => [clip.name, {}])), attachments: attachments ?? {} };
+          model.names = Object.keys(model.sequences);
+          models.set(key, model);
+          return model;
+        })
+      );
     }
     return modelCache.get(key);
+  }
+
+  // A model already loaded, or null
+  loadedModel(path) {
+    return models.get(path.toLowerCase().replace(/\.vmdl$/, "")) ?? null;
   }
 
   // A snapshot (.vsnap): its streams by name, positions in the model's own space in the game's
@@ -122,12 +129,15 @@ export class ParticleManager {
     return snapshotCache.get(key);
   }
 
-  // The snapshots an effect's systems use, all of them loaded before it starts
-  async loadSnapshots(def, seen = new Set()) {
+  // The snapshots and models an effect's systems use, all of them loaded before it starts
+  async loadResources(def, seen = new Set()) {
     if (!def || seen.has(def)) return;
     seen.add(def);
     const children = await Promise.all((def.m_Children ?? []).filter((child) => child?.m_ChildRef).map((child) => this.loadSystem(child.m_ChildRef)));
-    await Promise.all([def.m_hSnapshot && this.loadSnapshot(def.m_hSnapshot), ...children.map((child) => this.loadSnapshots(child, seen))]);
+    const modelPaths = (def.m_Renderers ?? [])
+      .filter((op) => op._class === "C_OP_RenderModels" && !op.m_bDisableOperator)
+      .flatMap((op) => (op.m_ModelList ?? []).map((entry) => entry?.m_model).filter(Boolean));
+    await Promise.all([def.m_hSnapshot && this.loadSnapshot(def.m_hSnapshot), ...modelPaths.map((path) => this.loadModel(path)), ...children.map((child) => this.loadResources(child, seen))]);
   }
 
   // A snapshot's points on the given meshes: each at the vertex nearest to it in the model's
@@ -186,10 +196,9 @@ export class ParticleManager {
   async setModel(group, urls) {
     const request = ++this.request;
     this.model = group;
-    this.bones = new Map();
+    this.bones = group ? bonesOf(group) : new Map();
     this.meshes = [];
     group?.traverse((node) => {
-      if (node.isBone && !this.bones.has(node.name)) this.bones.set(node.name, node);
       if (node.isMesh && node.visible && node.geometry?.attributes?.position) this.meshes.push(node);
     });
     this.totalVertices = this.meshes.reduce((sum, mesh) => sum + mesh.geometry.attributes.position.count, 0);
@@ -227,7 +236,7 @@ export class ParticleManager {
     if (!this.model) return;
     const list = this.list ?? [];
     const defs = await Promise.all(list.map((effect) => this.loadEffect(effect.system)));
-    await Promise.all(defs.map((def) => this.loadSnapshots(def)));
+    await Promise.all(defs.map((def) => this.loadResources(def)));
     if (request !== this.request) return;
     for (const [index, def] of defs.entries()) {
       if (!def) continue;
@@ -275,6 +284,7 @@ export class ParticleManager {
       loadSystem: (path) => this.loadSystem(path),
       loadTexture: (path) => this.loadTexture(path),
       loadModel: (path) => this.loadModel(path),
+      loadedModel: (path) => this.loadedModel(path),
       controlPoint(index) {
         let point = points.get(index);
         if (!point) {
@@ -304,8 +314,8 @@ export class ParticleManager {
     point.previous.copy(point.position);
     const attachment = driver.m_attachmentName && this.attachments[driver.m_attachmentName];
     const type = driver.m_iAttachType ?? "PATTACH_ABSORIGIN_FOLLOW";
-    if (attachment && /POINT/.test(type)) {
-      this.attachmentTransform(attachment, v1, q1);
+    if (attachment && /POINT/.test(type) && attachmentTransform(attachment, this.bones, v1, q1)) {
+      // At the attachment
     } else if (this.model) {
       this.model.updateWorldMatrix(true, false);
       this.model.matrixWorld.decompose(v1, q1, scale);
@@ -322,36 +332,6 @@ export class ParticleManager {
       point.position.z += offset[2];
     }
     point.speed = point.position.distanceTo(point.previous) * 60;
-  }
-
-  // An attachment's place and turn in the scene, from the bones it hangs on
-  attachmentTransform(attachment, position, quaternion) {
-    position.set(0, 0, 0);
-    let weightSum = 0;
-    let first = true;
-    for (const [name, weight, offset, rotation] of attachment.bones) {
-      const bone = this.bones.get(name);
-      if (!bone || !weight) continue;
-      bone.updateWorldMatrix(true, false);
-      // Its own vector: the caller's position may be v1
-      boneOffset(offset ?? [0, 0, 0], v2).applyMatrix4(bone.matrixWorld);
-      position.addScaledVector(v2, weight);
-      weightSum += weight;
-      if (first) {
-        bone.getWorldQuaternion(q2);
-        // The bone's axes are the game's, so its turn is put in the scene's terms the other way
-        // round from the model's (whose axes are the scene's): turned back by the axes'
-        // permutation here, as the control point takes it through quaternionToSource
-        quaternion.copy(q2).multiply(boneRotation(rotation ?? [0, 0, 0, 1], q1.clone())).multiply(TO_SOURCE_AXES);
-        first = false;
-      }
-    }
-    if (weightSum > 0) {
-      position.divideScalar(weightSum);
-    } else if (this.model) {
-      this.model.getWorldPosition(position);
-      quaternion.identity();
-    }
   }
 
   // A random point of the model's surface, in the game's space, and how to find it again

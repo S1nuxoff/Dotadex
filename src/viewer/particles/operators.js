@@ -944,8 +944,66 @@ DEFS.C_INIT_RemapCPtoVector = (def) => {
 
 // Initializers that do nothing visible here: velocities inherited from still control points
 const nothing = () => ({});
-DEFS.C_INIT_InheritVelocity = nothing;
-DEFS.C_INIT_NormalOffset = nothing;
+// Made moving as their control point does, by a share of its speed
+DEFS.C_INIT_InheritVelocity = (def) => {
+  const point = def.m_nControlPointNumber ?? 0;
+  const scale = def.m_flVelocityScale ?? 1;
+  return {
+    init(system, start, end) {
+      const cp = system.controlPoint(point);
+      // Its movement since the last frame, a second's worth
+      v1.subVectors(cp.position, cp.previous).multiplyScalar(60 * scale);
+      for (let i = start; i < end; i++) setVelocity(system, i, v1.x, v1.y, v1.z, true);
+    },
+  };
+};
+
+// The normal turned by a random offset, in a control point's space if asked, then made unit
+DEFS.C_INIT_NormalOffset = (def) => {
+  const min = arr(def.m_OffsetMin, [0, 0, 0]);
+  const max = arr(def.m_OffsetMax, [0, 0, 0]);
+  const point = def.m_nControlPointNumber ?? 0;
+  const local = Boolean(def.m_bLocalCoords);
+  const normalize = Boolean(def.m_bNormalize);
+  return {
+    init(system, start, end) {
+      const cp = system.controlPoint(point);
+      const normal = system.float(21);
+      for (let i = start; i < end; i++) {
+        v1.set(random(min[0], max[0]), random(min[1], max[1]), random(min[2], max[2]));
+        if (local) v1.applyQuaternion(cp.quaternion);
+        v2.set(normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]).add(v1);
+        if (normalize && v2.lengthSq() > 0) v2.normalize();
+        normal[i * 3] = v2.x;
+        normal[i * 3 + 1] = v2.y;
+        normal[i * 3 + 2] = v2.z;
+      }
+    },
+  };
+};
+
+// Normals turned as their control point turns
+DEFS.C_OP_NormalLock = (def) => {
+  const point = def.m_nControlPointNumber ?? 0;
+  let last = null;
+  const turn = new THREE.Quaternion();
+  return {
+    update(system) {
+      const cp = system.controlPoint(point);
+      if (last) {
+        turn.copy(last).invert().premultiply(cp.quaternion);
+        const normal = system.float(21);
+        for (let i = 0; i < system.count; i++) {
+          v1.set(normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]).applyQuaternion(turn);
+          normal[i * 3] = v1.x;
+          normal[i * 3 + 1] = v1.y;
+          normal[i * 3 + 2] = v1.z;
+        }
+      }
+      last = (last ?? new THREE.Quaternion()).copy(cp.quaternion);
+    },
+  };
+};
 DEFS.C_INIT_SequenceLifeTime = nothing;
 
 // ---------------------------------------------------------------- operators

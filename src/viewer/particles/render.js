@@ -119,7 +119,9 @@ function blendingOf(def, material) {
     material.blendDstAlpha = THREE.OneFactor;
     material.uniforms.uPremultiply.value = 1;
   } else {
-    // Over what is behind as its alpha says, the color already times its alpha
+    // Over what is behind as its alpha says, the color already times its alpha; with some of
+    // itself added on top (m_flAddSelfAmount), brighter where it covers no more
+    material.uniforms.uAddSelf.value = num(def.m_flAddSelfAmount, 0);
     material.blending = THREE.CustomBlending;
     material.blendEquation = THREE.AddEquation;
     material.blendSrc = THREE.OneFactor;
@@ -250,6 +252,7 @@ const FRAGMENT = /* glsl */ `
   uniform float uMod;
   uniform float uPremultiply;
   uniform float uGammaColor;
+  uniform float uAddSelf;
   uniform sampler2D uMask;
   uniform float uHasMask;
   varying vec2 vUv;
@@ -279,7 +282,7 @@ const FRAGMENT = /* glsl */ `
     if (any(isnan(color)) || color.a < 0.002) discard;
     vec3 rgb = clamp(color.rgb, 0.0, 1.5);
     float a = clamp(color.a, 0.0, 1.0);
-    gl_FragColor = vec4(uPremultiply > 0.5 ? rgb * a : rgb, a);
+    gl_FragColor = vec4(uPremultiply > 0.5 ? min(rgb * a * (1.0 + uAddSelf), vec3(1.5)) : rgb, a);
     #include <colorspace_fragment>
   }
 `;
@@ -321,6 +324,7 @@ function material(def, vertexShader, orientation) {
       uMod: { value: 0 },
       uPremultiply: { value: 0 },
       uGammaColor: { value: def.m_bGammaCorrectVertexColors === false ? 0 : 1 },
+      uAddSelf: { value: 0 },
       uMask: { value: null },
       uHasMask: { value: 0 },
       uOrientation: { value: orientation },
@@ -489,8 +493,10 @@ const ROPE_VERTEX = /* glsl */ `
 
 // A ribbon through the particles in the order they were made, as wide as each is
 function rope(def, system) {
-  // Each stretch between two particles cut into this many, along a smooth curve through them
-  const tess = Math.min(Math.max(Math.round(num(def.m_nMinTesselation, 0)), 0), 8);
+  // Each stretch between two particles cut into this many, along a smooth curve through them: the
+  // game picks between the least and the most by the stretch's length, the most here (a rope
+  // through a few particles round a fan stays round)
+  const tess = Math.min(Math.max(Math.round(Math.max(num(def.m_nMinTesselation, 0), num(def.m_nMaxTesselation, 0))), 0), 8);
   const max = (system.maxParticles - 1) * (tess + 1) + 1;
   const geometry = new THREE.BufferGeometry();
   const positions = new THREE.BufferAttribute(new Float32Array(max * 2 * 3), 3).setUsage(THREE.DynamicDrawUsage);

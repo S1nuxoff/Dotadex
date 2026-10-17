@@ -226,8 +226,9 @@ export function outfitUrls(catalog, outfit) {
 
 // The particle systems on screen, as the game puts them: the hero's own effects, those of what it
 // wears (or wears by default) added, and those an item puts in place of others swapped.
-// [{ system, models }]: the models whose surface an effect's particles rise from, its item's
-// (the hero's for the hero's own effects)
+// [{ system, models, snapshots }]: the models whose surface an effect's particles rise from, its
+// item's (the hero's for the hero's own effects), and the snapshots what is worn puts in place of
+// others ({ default: its own }, a weapon's points for the default weapon's glow)
 export function outfitParticles(catalog, outfit) {
   if (outfit.scene) {
     return [];
@@ -266,8 +267,14 @@ export function outfitParticles(catalog, outfit) {
       effects.push({ system, models: models.map((url) => url.split("#")[0]) });
     }
   }
+  const snapshots = {};
+  for (const { item } of worn) {
+    for (const [from, to] of item.particles?.snapshots ?? []) snapshots[from] = to;
+  }
   const seen = new Set();
-  return effects.filter((effect) => !seen.has(effect.system) && seen.add(effect.system));
+  return effects
+    .filter((effect) => !seen.has(effect.system) && seen.add(effect.system))
+    .map((effect) => (Object.keys(snapshots).length ? { ...effect, snapshots } : effect));
 }
 
 export async function loadCatalog() {

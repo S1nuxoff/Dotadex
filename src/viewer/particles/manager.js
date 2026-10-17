@@ -129,15 +129,17 @@ export class ParticleManager {
     return snapshotCache.get(key);
   }
 
-  // The snapshots and models an effect's systems use, all of them loaded before it starts
-  async loadResources(def, seen = new Set()) {
+  // The snapshots and models an effect's systems use, all of them loaded before it starts (a
+  // snapshot something worn puts in place of the effect's own: that one)
+  async loadResources(def, swaps = {}, seen = new Set()) {
     if (!def || seen.has(def)) return;
     seen.add(def);
     const children = await Promise.all((def.m_Children ?? []).filter((child) => child?.m_ChildRef).map((child) => this.loadSystem(child.m_ChildRef)));
     const modelPaths = (def.m_Renderers ?? [])
       .filter((op) => op._class === "C_OP_RenderModels" && !op.m_bDisableOperator)
       .flatMap((op) => (op.m_ModelList ?? []).map((entry) => entry?.m_model).filter(Boolean));
-    await Promise.all([def.m_hSnapshot && this.loadSnapshot(def.m_hSnapshot), ...modelPaths.map((path) => this.loadModel(path)), ...children.map((child) => this.loadResources(child, seen))]);
+    const snapshot = def.m_hSnapshot && (swaps[def.m_hSnapshot.toLowerCase()] ?? def.m_hSnapshot);
+    await Promise.all([snapshot && this.loadSnapshot(snapshot), ...modelPaths.map((path) => this.loadModel(path)), ...children.map((child) => this.loadResources(child, swaps, seen))]);
   }
 
   // A snapshot's points on the given meshes: each at the vertex nearest to it in the model's
@@ -219,10 +221,11 @@ export class ParticleManager {
     this.restart();
   }
 
-  // [{ system, models }]: systems by their path in the game, and the models they rise from
+  // [{ system, models, snapshots }]: systems by their path in the game, the models they rise
+  // from, and snapshots put in place of others ({ default: its own })
   setEffects(list) {
     const sorted = [...list].sort((a, b) => a.system.localeCompare(b.system));
-    const key = sorted.map((effect) => `${effect.system}@${(effect.models ?? []).join(",")}`).join("|");
+    const key = sorted.map((effect) => `${effect.system}@${(effect.models ?? []).join(",")}${effect.snapshots ? JSON.stringify(effect.snapshots) : ""}`).join("|");
     if (key === this.key) return;
     this.key = key;
     this.list = sorted;
@@ -236,11 +239,11 @@ export class ParticleManager {
     if (!this.model) return;
     const list = this.list ?? [];
     const defs = await Promise.all(list.map((effect) => this.loadEffect(effect.system)));
-    await Promise.all(defs.map((def) => this.loadResources(def)));
+    await Promise.all(defs.map((def, index) => this.loadResources(def, list[index].snapshots)));
     if (request !== this.request) return;
     for (const [index, def] of defs.entries()) {
       if (!def) continue;
-      const host = this.hostFor(def, list[index].models);
+      const host = this.hostFor(def, list[index].models, list[index].snapshots);
       this.effects.push({ system: new ParticleSystem(def, host), host });
     }
     if (unsupported.size) {
@@ -256,7 +259,7 @@ export class ParticleManager {
 
   // What a root system asks of the world: control points driven as its first configuration
   // says (attachments of the parent model, its origin), textures, children, the model surface
-  hostFor(def, models = []) {
+  hostFor(def, models = [], swaps = {}) {
     const drivers = def.m_controlPointConfigurations?.[0]?.m_drivers ?? [];
     const points = new Map();
     const driven = new Map();
@@ -271,14 +274,21 @@ export class ParticleManager {
     const meshes = own.length ? own : this.meshes;
     const total = meshes.reduce((sum, mesh) => sum + mesh.geometry.attributes.position.count, 0);
     const placed = new Map();
+    // The snapshot in use: something worn may put its own in place of the effect's (when the
+    // dataset has it)
+    const swapped = (path) => {
+      const key = path.toLowerCase();
+      return swaps[key] && snapshots.get(swaps[key]) ? swaps[key] : key;
+    };
     return {
       // A snapshot's points found on this effect's models once
       snapshotPoints(path) {
+        path = swapped(path);
         if (!placed.has(path)) placed.set(path, manager.snapshotPoints(path, meshes));
         return placed.get(path);
       },
       // A snapshot's streams as the file gives them, or null
-      snapshotData: (path) => snapshots.get(path.toLowerCase()) ?? null,
+      snapshotData: (path) => snapshots.get(swapped(path)) ?? null,
       surface: {
         sample: (position, normal) => this.sampleSurface(position, normal, meshes, total),
         position: (binding, target) => this.surfacePosition(binding, target),

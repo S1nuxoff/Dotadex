@@ -81,11 +81,13 @@ const items = [];
 const idByName = new Map();
 
 // The particle systems an item shows: those it creates, and those it puts in place of others
-// (the dataset has each as particles/<path>.json). Modifiers of a style other than the first
+// (the dataset has each as particles/<path>.json), and the snapshots it puts in place of others
+// (a weapon's own points for the default weapon's glow, particles/<path>.vsnap.json). Modifiers of a style other than the first
 // are left out, and so are those the game shows only in its alternate loadout view.
 function particlesOf(item) {
   const add = [];
   const swap = [];
+  const snapshots = [];
   for (const visual of Object.values(item?.visuals ?? {})) {
     if (!visual || typeof visual !== "object" || (visual.style !== undefined && String(visual.style) !== "0")) {
       continue;
@@ -100,9 +102,13 @@ function particlesOf(item) {
       add.push(system(visual.modifier));
     } else if (visual.type === "particle" && system(visual.asset) && system(visual.modifier)) {
       swap.push([system(visual.asset), system(visual.modifier)]);
+    } else if (visual.type === "particle_snapshot" && typeof visual.asset === "string" && typeof visual.modifier === "string") {
+      snapshots.push([visual.asset.toLowerCase(), visual.modifier.toLowerCase()]);
     }
   }
-  return add.length || swap.length ? { ...(add.length && { add }), ...(swap.length && { swap }) } : null;
+  return add.length || swap.length || snapshots.length
+    ? { ...(add.length && { add }), ...(swap.length && { swap }), ...(snapshots.length && { snapshots }) }
+    : null;
 }
 
 // A hero's own effects: those of its default items that have no model (its ambient effects)

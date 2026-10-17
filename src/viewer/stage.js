@@ -1426,6 +1426,10 @@ export class Stage {
         glowing.push([node, glow]);
       }
     });
+    // The light in the carved mark on the pedestal
+    if (this.watermark?.parent?.visible && this.watermark.parent.parent) {
+      glowing.push([this.watermark, this.watermark.userData.glowMaterial]);
+    }
     this.glowMix.enabled = glowing.length > 0;
     if (!glowing.length) {
       return;

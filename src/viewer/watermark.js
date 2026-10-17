@@ -82,7 +82,8 @@ const carvingShader = {
       float bright;
       float glow = 1.0;
       if (wall) {
-        glow = reached * 0.8;
+        // Lit from below: brightest at the foot of the wall
+        glow = pow(reached, 1.5) * 0.9;
         // The wall faces into the letter
         vec2 s = uTexel * 2.0;
         vec2 slope = vec2(inside(uv + vec2(s.x, 0.0)) - inside(uv - vec2(s.x, 0.0)), inside(uv + vec2(0.0, s.y)) - inside(uv - vec2(0.0, s.y)));
@@ -110,8 +111,13 @@ const carvingShader = {
       fade *= 1.0 - smoothstep(uFogNear, uFogFar, dot(vWorld.xz, uFogDirection));
       fade *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vWorld.xz));
       alpha *= fade;
-      // Premultiplied, so the glow adds to the stone it darkens
-      gl_FragColor = vec4(color * alpha + uGlowColor * uGlow * glow * fade, alpha);
+      #ifdef GLOW_PASS
+        // Drawn again in the stage's halo pass: only the light, which the pass blurs into a
+        // halo and adds over the frame
+        gl_FragColor = vec4(uGlowColor * uGlow * glow * fade, 1.0);
+      #else
+        gl_FragColor = vec4(color, alpha);
+      #endif
       #include <colorspace_fragment>
     }
   `,
@@ -164,7 +170,6 @@ export async function createWatermark(fog) {
     new THREE.ShaderMaterial({
       ...carvingShader,
       transparent: true,
-      premultipliedAlpha: true,
       depthWrite: false,
       polygonOffset: true,
       polygonOffsetFactor: -2,
@@ -176,7 +181,7 @@ export async function createWatermark(fog) {
         uLight: { value: new THREE.Vector3(0.4, -0.5, 0.75) },
         uDepth: { value: 24 },
         uGlowColor: stageTint,
-        uGlow: { value: 0.25 },
+        uGlow: { value: 1.2 },
         uFogDirection: fog.direction,
         uFogNear: fog.near,
         uFogFar: fog.far,
@@ -185,9 +190,20 @@ export async function createWatermark(fog) {
       },
     })
   );
+  // Its light alone, for the stage's halo pass
+  mesh.userData.glowMaterial = new THREE.ShaderMaterial({
+    ...carvingShader,
+    defines: { GLOW_PASS: "" },
+    uniforms: mesh.material.uniforms,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  });
   mesh.rotation.x = -Math.PI / 2;
   mesh.renderOrder = 1;
-  mesh.userData.skipGlow = true;
   mesh.userData.aspect = loaded.aspect;
   // The same in either shading, which swaps the pedestal's materials for these
   mesh.userData.dota = mesh.userData.pbr = mesh.material;

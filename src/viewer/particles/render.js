@@ -4,6 +4,7 @@
 // particles' places, sizes, colors and frames written each frame.
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
+import { compileFloat } from "./inputs.js";
 import { attachmentTransform, bonesOf, UNIT } from "./math.js";
 
 const toCamera = new THREE.Vector3();
@@ -623,12 +624,21 @@ function models(def, system) {
   const animated = Boolean(def.m_bAnimated);
   const field = def.m_nAnimationField ?? 13;
   const rateField = def.m_nAnimationScaleField;
-  // The rate in frames a second, the sequences' own being 30
-  const speed = num(def.m_flAnimationRate, 30) / 30;
+  // The rate in frames a second, the sequences' own being 30; scaled, in frames for each 1000
+  // units the particle moves (birds, fish and butterflies beat their wings as fast as they fly:
+  // the files give them 250 to 2000 there, and 30 to projectiles flying 1000 units a second)
+  const rate = compileFloat(def.m_flAnimationRate, 30);
+  const bySpeed = Boolean(def.m_bScaleAnimationRate);
   const forceLoop = Boolean(def.m_bForceLoopingAnimation);
   const activity = def.m_ActivityName;
   // What each particle plays, by its id: the sequence and when it took it
   const playing = new Map();
+
+  // A model drawn with a material of the effect's own in place of its own (not in the dataset
+  // yet, P-05): its own texture stands in, unless the model only has a stand-in material (a flat
+  // gray or white the artist never meant to be seen), which would come out a blank shell
+  const override = Boolean(def.m_hOverrideMaterial);
+  const STAND_IN = /^(gray|grey|white|black)(_\d+)?$|^default$|^dev[_/]|primary_white/i;
 
   const instance = () => {
     const object = cloneSkinned(model.scene);
@@ -636,6 +646,7 @@ function models(def, system) {
     object.traverse((node) => {
       if (!node.isMesh) return;
       const original = node.material;
+      if (override && STAND_IN.test(original.name ?? "")) node.visible = false;
       node.material = new THREE.MeshBasicMaterial({ map: original.map ?? null, transparent: true, alphaTest: original.alphaTest || 0.5, side: THREE.DoubleSide, depthWrite: true });
       node.frustumCulled = false;
       materials.push(node.material);
@@ -670,7 +681,7 @@ function models(def, system) {
     if (!name) return;
     let state = playing.get(id);
     if (!state || state.name !== name) {
-      state = { name, start: system.age };
+      state = { name, time: 0, last: system.age };
       playing.set(id, state);
     }
     state.seen = system.age;
@@ -681,8 +692,10 @@ function models(def, system) {
       object.userData.action = mixer.clipAction(clip).play();
       object.userData.clip = clip;
     }
-    const rate = speed * (rateField !== undefined ? system.float(rateField)[i] : 1);
-    const elapsed = Math.max(0, system.age - state.start) * rate;
+    const frames = rate(system, i) * (rateField !== undefined ? system.float(rateField)[i] : 1) * (bySpeed ? system.speed(i) / 1000 : 1);
+    state.time += Math.max(0, system.age - state.last) * (frames / 30);
+    state.last = system.age;
+    const elapsed = state.time;
     const looping = forceLoop || (model.sequences[name]?.looping ?? true);
     const length = clip.duration || 1;
     object.userData.action.time = looping ? elapsed % length : Math.min(elapsed, length - 1e-4);

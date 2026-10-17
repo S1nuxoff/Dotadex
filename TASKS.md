@@ -13,19 +13,19 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 
 - [ ] **P-03 Snapshot swaps by cosmetics (`particle_snapshot` in `items_game`).** 231 items replace the default weapon's snapshot with their own (`asset` → `modifier`). Needs: export the items' snapshots (no `.vpcf` refers to them, so P-01 missed them), the swaps in the catalog (`scripts/build-catalog.mjs`), the swap applied on the site.
 - [ ] **P-04 Control point values from items (`particle_control_point`).** 34 items set a CP, often a color (Doom's Molten Fracture: CP26 = `1.0 0.9 0.7`). Into the catalog, set on the site.
-- [ ] **P-05 Particle materials (`.vmat`).** 236 effects (7%): models with an override material (`m_hOverrideMaterial`, 130), ground projections (`RenderProjected`, 158), `RenderCables`, `RenderBlobs`. Export the material's parameters and textures.
+- [ ] **P-05 Particle materials (`.vmat`).** 236 effects (7%): models with an override material (`m_hOverrideMaterial`, 130), ground projections (`RenderProjected`, 158), `RenderCables`, `RenderBlobs`. Export the material's parameters and textures. Until then a model with an override material whose own material is a stand-in (`gray_25`, white, `dev/...`) is hidden: Dawnbreaker's Red Dawn weapon drew its fire cone as a white shell.
 - [ ] **P-06 Model hitboxes.** Used by `CreateOnModel` (329), `LockToBone` (237), `MoveToHitbox` (41), `SetHitboxToModel`/`Closest`; we use random vertices instead. Read them from the model data next to the attachments (`readAttachments`).
 - [ ] **P-07 `attribute_controlled_attached_particles`.** 828 entries in `items_game`: which attachments an effect's CPs follow. Needed for unusual courier/ward effects.
 - [ ] **P-08 Status-effect color warps (`colorwarp_*`, 6 textures).** Volume textures (z slices) for `RenderStatusEffect`; do them with the status effects (A-02).
 - [ ] **P-09 "What's missing" report in the export.** Count the resources effects refer to (textures, models, snapshots, materials) that the dataset lacks, next to `coverage.json`, so gaps show up by themselves.
-- [~] **P-10 Animations of particle models** (`m_ActivityName`, 58; `m_sequenceName`). With V-07: `m_ActivityName` on `RenderModels` picks the sequence with that activity from `.sequences.json` (21 renderers). Left: `m_sequenceName` and activities on other operators.
+- [~] **P-10 Animations of particle models** (`m_ActivityName`, 58; `m_sequenceName`). With V-07: `m_ActivityName` on `RenderModels` picks the sequence with that activity from `.sequences.json` (21 renderers). Left: `m_sequenceName` and activities on other operators. `m_bScaleAnimationRate` taken as frames for each 1000 units the particle moves (inferred from the files: 250 to 2000 on birds, fish and butterflies, the default 30 on projectiles); butterflies and Pangolier's parrot flapped 10 to 20 times too fast.
 
 ## Particles: site (`src/viewer/particles/`)
 
 - [ ] **V-01 `InitFromCPSnapshot` in the attachment's space.** Its points are local to a CP (`m_nLocalSpaceCP`), not the model's space; we still put them on a random vertex and `MovementRigidAttachToCP` moves them a second time. White dots in the air on default Anti-Mage (`antimage_blade_primary`, snapshot `antimage_weapon_primary.vsnap`); likely many weapons.
 - [ ] **V-02 Lit particle models.** `C_OP_RenderModels` draws unlit (`MeshBasicMaterial`), not with the Dota shader.
 - [ ] **V-03 Operators by how often they are used.** Take the top of `npm run particles:coverage` (e.g. `C_OP_RotateVector`).
-- [ ] **V-04 Every way control points are driven.** Only the `.vpcf`'s first configuration now; add hitboxes, `CUSTOMORIGIN`, CPs from `items_game` (P-04, P-07).
+- [ ] **V-04 Every way control points are driven.** Only the `.vpcf`'s first configuration now; add hitboxes, `CUSTOMORIGIN`, CPs from `items_game` (P-04, P-07). Seen on Muerta's default weapon effect (`muerta_weapon_secondary_ambient_glow`): its path runs between CP3 and CP4, which the root leaves at `PATTACH_WORLDORIGIN` and the game sets in code (not in `items_game` nor the weapon model), so its 12 glows pile up at her feet as a green square.
 - [ ] **V-05 Renderers skipped now.** Refraction (`m_bRefract`), bloom-only renderers, lights from particles (`RenderDeferredLight`).
 
 ## Models and other

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { createAudio, soundsBase } from "./Voice.jsx";
+import { soundsBase } from "./Voice.jsx";
 import { getVolume, musicVolume, onVolume, setVolume } from "../volume.js";
 
 // The game's own menu music, one track after another, as the main menu plays it
 const TRACKS = [
   "sounds/music/valve_dota_001/music/ui_main_01.mp3",
-  "sounds/music/valve_dota_001/music/ui_hero_select.mp3",
+  "sounds/music/valve_dota_001/music/ui_hero_select.wav",
   "sounds/music/valve_dota_001/music/ui_main_02.mp3",
   "sounds/music/valve_dota_001/music/ui_world_map.mp3",
   "sounds/music/valve_dota_001/diretide/ui_main_03.mp3",
@@ -21,7 +21,7 @@ export function useMenuMusic(modelsBase) {
         return;
       }
       if (!audio.current) {
-        const element = createAudio(soundsBase(modelsBase) + TRACKS[track.current]);
+        const element = new Audio(soundsBase(modelsBase) + TRACKS[track.current]);
         // On to the next track when one ends, round and round; one that will not load is skipped
         const next = () => {
           if (audio.current !== element) {
@@ -32,14 +32,7 @@ export function useMenuMusic(modelsBase) {
           play();
         };
         element.addEventListener("ended", next);
-        let failures = 0;
-        element.addEventListener("error", () => {
-          // The first error is the .mp3 giving way to the .wav; a second means neither is there
-          failures += 1;
-          if (failures > 1) {
-            next();
-          }
-        });
+        element.addEventListener("error", next);
         audio.current = element;
       }
       audio.current.volume = Math.min(musicVolume(), 1);

@@ -101,7 +101,7 @@ export function SoundList({ base, files, labels }) {
   return (
     <ul className="space-y-0.5">
       {files.map((file, index) => (
-        <Line key={file} url={base + file} label={labels?.[index] ?? file.split("/").pop().replace(/\.mp3$/, "")} playing={playing === file} onPlay={() => toggle(file)} />
+        <Line key={file} url={base + file} label={labels?.[index] ?? file.split("/").pop().replace(/\.(mp3|wav)$/, "")} playing={playing === file} onPlay={() => toggle(file)} />
       ))}
     </ul>
   );

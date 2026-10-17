@@ -9,6 +9,7 @@ import { unsupported } from "./operators.js";
 const systemCache = new Map();
 const textureCache = new Map();
 const attachmentCache = new Map();
+let attachedModels = null; // loaded once: a Set of the models that have attachments, or null while the dataset has no list
 const textureLoader = new THREE.TextureLoader();
 
 // Whether an image has no see-through texel at all: a texture saved without its alpha
@@ -117,9 +118,13 @@ export class ParticleManager {
       if (node.isMesh && node.visible && node.geometry?.attributes?.position) this.meshes.push(node);
     });
     this.totalVertices = this.meshes.reduce((sum, mesh) => sum + mesh.geometry.attributes.position.count, 0);
+    // Only the models the dataset lists as having attachments have a file of them
+    attachedModels ??= fetchJson(`${this.base}particles/attached-models.json`).then((list) => list && new Set(list));
+    const attached = await attachedModels;
     const lists = await Promise.all(
       (urls ?? []).map((url) => {
         const file = url.split("#")[0].replace(/\.glb$/, ".attachments.json");
+        if (attached && file.startsWith(this.base) && !attached.has(file.slice(this.base.length))) return null;
         if (!attachmentCache.has(file)) attachmentCache.set(file, fetchJson(file));
         return attachmentCache.get(file);
       })

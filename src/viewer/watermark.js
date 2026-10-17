@@ -20,6 +20,8 @@ const carvingShader = {
   fragmentShader: /* glsl */ `
     uniform sampler2D uShape;
     uniform vec2 uTexel;
+    // Toward the light, along the ground in the card's own directions (set each frame by the stage)
+    uniform vec2 uToLight;
     uniform float uDepth;
     uniform float uRim;
     uniform float uShadow;
@@ -31,7 +33,7 @@ const carvingShader = {
     varying vec2 vUv;
     varying vec3 vWorld;
     void main() {
-      vec2 toLight = normalize(vec2(-0.6, 0.8)) * uTexel;
+      vec2 toLight = uToLight * uTexel;
       float inside = texture2D(uShape, vUv).r;
       // Thin walls along the carving's edge: the one on the light's side faces away from it and
       // is in shade, the one across faces the light
@@ -110,6 +112,7 @@ export async function createWatermark(fog) {
       uniforms: {
         uShape: { value: loaded.texture },
         uTexel: { value: loaded.texel },
+        uToLight: { value: new THREE.Vector2(-0.6, -0.8) },
         uDepth: { value: 0.4 },
         uRim: { value: 0.35 },
         uShadow: { value: 0.3 },

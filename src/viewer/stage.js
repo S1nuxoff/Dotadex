@@ -1133,7 +1133,7 @@ export class Stage {
     const hit = ray.intersectObject(pedestal, true)[0];
     const top = pedestal.worldToLocal(new THREE.Vector3(0, hit ? hit.point.y : box.max.y, 0));
     mark.position.copy(top);
-    mark.scale.setScalar((radius * 0.9) / mark.userData.aspect / pedestal.scale.x);
+    mark.scale.setScalar((radius * 0.5) / mark.userData.aspect / pedestal.scale.x);
     this.watermark?.removeFromParent();
     this.watermark = mark;
     pedestal.add(mark);
@@ -1509,6 +1509,15 @@ export class Stage {
       const view = new THREE.Vector3();
       this.camera.getWorldDirection(view);
       pedestalFog.direction.value.set(view.x, view.z).normalize();
+      // The carved mark is shaded by the light that lights the hero: the game's, or the key from the camera
+      if (this.watermark) {
+        const light = this.portraitLit ? this.portraitDir.clone() : this.key.position.clone().transformDirection(this.camera.matrixWorld);
+        const local = light.transformDirection(this.watermark.matrixWorld.clone().invert());
+        const toLight = this.watermark.material.uniforms.uToLight.value;
+        if (Math.hypot(local.x, local.y) > 1e-3) {
+          toLight.set(local.x, local.y).normalize();
+        }
+      }
     }
     stageRim.value.lerp(this.rimTarget, reducedMotion.matches ? 1 : Math.min(delta * 3, 1));
     if (this.tintTarget) {

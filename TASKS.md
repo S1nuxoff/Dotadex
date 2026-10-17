@@ -28,7 +28,6 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 - [ ] **V-03 Operators by how often they are used.** Take the top of `npm run particles:coverage` (e.g. `C_OP_RotateVector`).
 - [ ] **V-04 Every way control points are driven.** Only the `.vpcf`'s first configuration now; add hitboxes, `CUSTOMORIGIN`, CPs from `items_game` (P-04, P-07).
 - [ ] **V-05 Renderers skipped now.** Refraction (`m_bRefract`), bloom-only renderers, lights from particles (`RenderDeferredLight`).
-- [ ] **V-06 Check Sakura after P-01.** Without its snapshot the petals and glow are huge (radius 18.75 and 47 against 2.8 and 3.65 with it).
 
 ## Models and other
 
@@ -45,6 +44,7 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 ## Archive
 
 ### 2026-10-17
+- [x] **V-06 Sakura checked after P-01.** Flowers, falling petals and ground flowers in place; blade glow pink and close to the game after the color fix.
 - [x] **Particle colors turned linear (`m_bGammaCorrectVertexColors`, default true).** Colors were used as given (gamma space): every particle came out lighter and whiter than the game's. 497 renderers write `false`, none `true`, so the default is on.
 - [x] **P-01 Snapshots (`.vsnap`) in the dataset.** 3105 files at `particles/<path>.vsnap.json`, uploaded; exporter and `particles-state.json` pushed, the workflow keeps them current. Commits `a510272`, `cbb4c21` (dota2-model-tracker).
 - [x] **Sakura petals never spawned.** A noise input as a system's emission rate gave 0 (`inputs.js`). Commit `492e1dc`.

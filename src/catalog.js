@@ -143,6 +143,20 @@ export function personaOf(slot) {
   return Number(slot?.match(/_persona_(\d+)$/)?.[1] ?? 0);
 }
 
+// Slots whose items are another unit, not something the hero wears: an ability's or ultimate's
+// form (Lycan's wolf, Dragon Knight's dragon, Lone Druid's true form), a summon (Visage's familiar,
+// Witch Doctor's ward). Put on the hero's skeleton they stretch over it, so they are shown alone
+export function wornOnHero(slot) {
+  return !/^(ability|shapeshift|summon)/.test(slot ?? "");
+}
+
+// The slots dressed on a hero: those of its defaults and of what is chosen, of the persona shown
+function dressedSlots(hero, outfit, persona) {
+  return new Set(
+    [...hero.defaults.map((entry) => entry.slot), ...Object.keys(outfit.slots)].filter((slot) => personaOf(slot) === persona && wornOnHero(slot))
+  );
+}
+
 // The slots of a hero, from its default items and its cosmetics:
 // [{ slot, defaultItem, count }] in the game's order, those of the persona shown
 export function heroSlots(catalog, heroId, persona = 0) {
@@ -182,7 +196,7 @@ export function outfitFor(catalog, route) {
   }
   const item = catalog.itemsById[route.id];
   const style = route.style ?? 0;
-  if (item.hero && catalog.heroesById[item.hero] && !route.alone) {
+  if (item.hero && catalog.heroesById[item.hero] && !route.alone && wornOnHero(item.slot)) {
     return { hero: item.hero, slots: { [item.slot]: { id: item.id, style } }, focus: item.id, style, persona: personaOf(item.slot) };
   }
   return { hero: null, slots: {}, focus: item.id, style, variant: route.variant ?? 0 };
@@ -210,10 +224,7 @@ export function outfitUrls(catalog, outfit) {
   if (outfit.bare) {
     return urls;
   }
-  const slots = new Set(
-    [...hero.defaults.map((entry) => entry.slot), ...Object.keys(outfit.slots)].filter((slot) => personaOf(slot) === persona)
-  );
-  for (const slot of slots) {
+  for (const slot of dressedSlots(hero, outfit, persona)) {
     const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
     if (chosen) {
       urls.push(...itemUrls(catalog, chosen, outfit.slots[slot].style));
@@ -242,8 +253,7 @@ export function outfitParticles(catalog, outfit) {
   const persona = outfit.persona && hero.personas?.[outfit.persona - 1] ? outfit.persona : 0;
   const worn = [];
   if (!outfit.bare) {
-    const slots = new Set([...hero.defaults.map((entry) => entry.slot), ...Object.keys(outfit.slots)].filter((slot) => personaOf(slot) === persona));
-    for (const slot of slots) {
+    for (const slot of dressedSlots(hero, outfit, persona)) {
       const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
       if (chosen) {
         worn.push({ item: chosen, models: itemUrls(catalog, chosen, outfit.slots[slot].style) });

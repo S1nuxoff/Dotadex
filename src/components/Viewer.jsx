@@ -15,7 +15,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { Stage, T_POSE } from "../viewer/stage.js";
-import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName } from "../catalog.js";
+import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName, wornOnHero } from "../catalog.js";
 import { IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
 import { playSound, soundsBase } from "./Voice.jsx";
 import { ATTRIBUTES, abilityIcon, useGameData } from "../gamedata.js";
@@ -511,7 +511,7 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
           />
         )}
 
-        {item?.hero && catalog.heroesById[item.hero] && (
+        {item?.hero && catalog.heroesById[item.hero] && wornOnHero(item.slot) && (
           <Toggle
             label="Show the item"
             value={!outfit.hero ? "alone" : "hero"}

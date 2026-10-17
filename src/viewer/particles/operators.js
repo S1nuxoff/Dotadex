@@ -549,10 +549,19 @@ DEFS.C_INIT_RingWave = (def) => {
   const perOrbit = compileFloat(def.m_flParticlesPerOrbit, -1);
   const even = Boolean(def.m_bEvenDistribution);
   const xyOnly = def.m_bXYVelocityOnly ?? true;
+  // The ring's plane turned in the control point's space, in degrees: pitch about y, yaw about
+  // z, roll about x (a ring standing upright round a fan)
+  const pitch = compileFloat(def.m_flPitch, 0);
+  const yaw = compileFloat(def.m_flYaw, 0);
+  const roll = compileFloat(def.m_flRoll, 0);
+  const turned = def.m_flPitch !== undefined || def.m_flYaw !== undefined || def.m_flRoll !== undefined;
+  const turn = new THREE.Quaternion();
+  const euler = new THREE.Euler();
   let n = 0;
   return {
     init(system, start, end) {
       const cp = system.controlPoint(point);
+      if (turned) turn.setFromEuler(euler.set(roll(system, -1) * deg, pitch(system, -1) * deg, yaw(system, -1) * deg, "ZYX"));
       const p = system.float(0);
       const q = system.float(2);
       for (let i = start; i < end; i++) {
@@ -560,6 +569,7 @@ DEFS.C_INIT_RingWave = (def) => {
         const angle = even && orbit > 0 ? ((n++ % orbit) / orbit) * Math.PI * 2 : Math.random() * Math.PI * 2;
         const r = radius(system, i) + (Math.random() - 0.5) * thickness(system, i);
         v1.set(Math.cos(angle), Math.sin(angle), 0);
+        if (turned) v1.applyQuaternion(turn);
         v2.copy(v1).multiplyScalar(r).applyQuaternion(cp.quaternion).add(cp.position);
         for (let k = 0; k < 3; k++) p[i * 3 + k] = q[i * 3 + k] = v2.getComponent(k);
         const speed = lerp(speedMin(system, i), speedMax(system, i), Math.random());
@@ -1935,7 +1945,42 @@ DEFS.C_OP_StopAfterCPDuration = (def) => {
 };
 
 // Control points that stand still here, so their speed is nothing
-DEFS.C_OP_RemapSpeedtoCP = () => ({});
+// A control point's speed into another's value (a trail shown only when a weapon swings fast)
+DEFS.C_OP_RemapSpeedtoCP = (def) => {
+  const input = def.m_nInControlPointNumber ?? 0;
+  const output = def.m_nOutControlPointNumber ?? 1;
+  const component = def.m_nField ?? 0;
+  const [inMin, inMax, outMin, outMax] = [def.m_flInputMin ?? 0, def.m_flInputMax ?? 1, def.m_flOutputMin ?? 0, def.m_flOutputMax ?? 1];
+  return {
+    update(system) {
+      const value = remap(system.controlPoint(input).speed ?? 0, inMin, inMax, outMin, outMax);
+      system.ownControlPoint(output).value.setComponent(component, value);
+    },
+  };
+};
+
+// A component of a control point's value into a field, through a range: only a value something
+// in the effect sets (the game's code sets the others, and they are nothing here)
+DEFS.C_OP_RemapCPtoScalar = (def) => {
+  const input = def.m_nCPInput ?? 0;
+  const component = def.m_nField ?? 0;
+  const field = def.m_nFieldOutput ?? 3;
+  const [inMin, inMax, outMin, outMax] = [def.m_flInputMin ?? 0, def.m_flInputMax ?? 1, def.m_flOutputMin ?? 0, def.m_flOutputMax ?? 1];
+  const set = setter(def);
+  return {
+    update(system) {
+      const point = system.controlPoint(input);
+      if (!point.set) return;
+      const value = remap(point.value.getComponent(component), inMin, inMax, outMin, outMax);
+      const data = system.float(field);
+      const initial = system.initialFloat(field);
+      for (let i = 0; i < system.count; i++) {
+        if (VECTOR_FIELDS.has(field)) writeFloat(system, field, i, value);
+        else data[i] = set(data[i], initial[i], value);
+      }
+    },
+  };
+};
 DEFS.C_OP_SetControlPointRotation = () => ({});
 
 // Every class this file and the renderers handle

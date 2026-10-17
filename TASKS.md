@@ -11,13 +11,12 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 
 ## Particles: data (export, `dota2-model-tracker/particles.js`)
 
-- [ ] **P-02 Textures from the `core` VPK.** 28 textures live in `game/core/pak01_dir.vpk`; the exporter reads only `dota`. 641 of 3428 effects (19%) use one: common flares and glows (`particle_flare_004_mod`, `light_glow_01`, `beam_laser_soft_01`…). A renderer without its texture draws nothing. Biggest win for the effort.
 - [ ] **P-03 Snapshot swaps by cosmetics (`particle_snapshot` in `items_game`).** 231 items replace the default weapon's snapshot with their own (`asset` → `modifier`). Needs: export the items' snapshots (no `.vpcf` refers to them, so P-01 missed them), the swaps in the catalog (`scripts/build-catalog.mjs`), the swap applied on the site.
 - [ ] **P-04 Control point values from items (`particle_control_point`).** 34 items set a CP, often a color (Doom's Molten Fracture: CP26 = `1.0 0.9 0.7`). Into the catalog, set on the site.
 - [ ] **P-05 Particle materials (`.vmat`).** 236 effects (7%): models with an override material (`m_hOverrideMaterial`, 130), ground projections (`RenderProjected`, 158), `RenderCables`, `RenderBlobs`. Export the material's parameters and textures.
 - [ ] **P-06 Model hitboxes.** Used by `CreateOnModel` (329), `LockToBone` (237), `MoveToHitbox` (41), `SetHitboxToModel`/`Closest`; we use random vertices instead. Read them from the model data next to the attachments (`readAttachments`).
 - [ ] **P-07 `attribute_controlled_attached_particles`.** 828 entries in `items_game`: which attachments an effect's CPs follow. Needed for unusual courier/ward effects.
-- [ ] **P-08 9 `dota` textures that fail to convert.** Smoke `smoke3b`, `vistasmokev1(_gray)` and the status-effect `colorwarp_*`. Retried every run; find out why `buildTexture` gives nothing.
+- [ ] **P-08 Status-effect color warps (`colorwarp_*`, 6 textures).** Volume textures (z slices) for `RenderStatusEffect`; do them with the status effects (A-02).
 - [ ] **P-09 "What's missing" report in the export.** Count the resources effects refer to (textures, models, snapshots, materials) that the dataset lacks, next to `coverage.json`, so gaps show up by themselves.
 - [ ] **P-10 Animations of particle models** (`m_ActivityName`, 58; `m_sequenceName`).
 
@@ -44,6 +43,8 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 ## Archive
 
 ### 2026-10-17
+- [x] **P-02 Textures from the `core` VPK.** Both sources read `game/core/pak01_dir.vpk` after `game/dota`'s, as the game does; the 28 textures (used by 641 of 3428 effects) uploaded. Commits `9a72086`, state after (dota2-model-tracker).
+- [x] **Smoke sheets packed `rgb+a`** (`smoke3b`, `vistasmokev1(_gray)`, part of P-08): `.mks` sequences named `sequence-rgb`/`sequence-a` are read. Commit `9a72086`.
 - [x] **V-06 Sakura checked after P-01.** Flowers, falling petals and ground flowers in place; blade glow pink and close to the game after the color fix.
 - [x] **Particle colors turned linear (`m_bGammaCorrectVertexColors`, default true).** Colors were used as given (gamma space): every particle came out lighter and whiter than the game's. 497 renderers write `false`, none `true`, so the default is on.
 - [x] **P-01 Snapshots (`.vsnap`) in the dataset.** 3105 files at `particles/<path>.vsnap.json`, uploaded; exporter and `particles-state.json` pushed, the workflow keeps them current. Commits `a510272`, `cbb4c21` (dota2-model-tracker).

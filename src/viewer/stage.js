@@ -11,6 +11,7 @@ import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
+import { createWatermark } from "./watermark.js";
 import { ParticleManager } from "./particles/manager.js";
 import { playLoaded, playWhenReady, preloadSound } from "./soundPlayer.js";
 import { playUiSound } from "../uiSounds.js";
@@ -1059,6 +1060,8 @@ export class Stage {
       this.pedestalUrl = pedestalUrl;
       if (this.pedestal) {
         this.scene.remove(this.pedestal);
+        // The pedestal is kept loaded and may come back: it gets its mark again then
+        this.watermark?.removeFromParent();
         this.pedestal = null;
       }
       if (pedestalUrl) {
@@ -1102,6 +1105,7 @@ export class Stage {
               }
             });
             this.scene.add(this.pedestal);
+            this.carveWatermark(this.pedestal, radius);
             this.updateShowcase();
           },
           () => {}
@@ -1114,6 +1118,25 @@ export class Stage {
     if (changed && this.group) {
       this.frameModel();
     }
+  }
+
+  // The site's mark carved into the pedestal's top under the hero, turning with the pedestal
+  async carveWatermark(pedestal, radius) {
+    const mark = await createWatermark(pedestalFog);
+    if (!mark || this.pedestal !== pedestal) {
+      return;
+    }
+    // The top where the hero stands, found straight down through the center
+    pedestal.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(pedestal);
+    const ray = new THREE.Raycaster(new THREE.Vector3(0, box.max.y + 1, 0), new THREE.Vector3(0, -1, 0));
+    const hit = ray.intersectObject(pedestal, true)[0];
+    const top = pedestal.worldToLocal(new THREE.Vector3(0, hit ? hit.point.y : box.max.y, 0));
+    mark.position.copy(top);
+    mark.scale.setScalar((radius * 0.9) / mark.userData.aspect / pedestal.scale.x);
+    this.watermark?.removeFromParent();
+    this.watermark = mark;
+    pedestal.add(mark);
   }
 
   // The pedestal and its smoke on their own; behind a model in a scene of the game, only the

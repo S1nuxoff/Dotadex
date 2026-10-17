@@ -2274,6 +2274,139 @@ DEFS.C_OP_RemapControlPointDirectionToVector = (def) => {
   };
 };
 
+// A field set to the way from a particle to a control point, turned m_flOffsetRot degrees
+// round m_vecOffsetAxis, of length one (m_bNormalize) times m_flScale
+DEFS.C_OP_RemapDirectionToCPToVector = (def) => {
+  const cp = def.m_nCP ?? 0;
+  const field = def.m_nFieldOutput ?? 21;
+  const scale = def.m_flScale ?? 1;
+  const normalize = Boolean(def.m_bNormalize);
+  const axis = new THREE.Vector3(...arr(def.m_vecOffsetAxis, [0, 0, 1]));
+  const turn = def.m_flOffsetRot ? new THREE.Quaternion().setFromAxisAngle(axis.lengthSq() ? axis.normalize() : axis.set(0, 0, 1), def.m_flOffsetRot * deg) : null;
+  return {
+    update(system) {
+      if (!VECTOR_FIELDS.has(field)) return;
+      const target = system.controlPoint(cp).position;
+      const p = system.float(0);
+      const data = system.float(field);
+      for (let i = 0; i < system.count; i++) {
+        v1.set(target.x - p[i * 3], target.y - p[i * 3 + 1], target.z - p[i * 3 + 2]);
+        if (turn) v1.applyQuaternion(turn);
+        if (normalize) v1.normalize();
+        v1.multiplyScalar(scale);
+        data[i * 3] = v1.x;
+        data[i * 3 + 1] = v1.y;
+        data[i * 3 + 2] = v1.z;
+      }
+    },
+  };
+};
+
+// A vector field (the normal unless m_nFieldOutput) turned each second by a rate between
+// m_flRotRateMin and m_flRotRateMax degrees round an axis between m_vecRotAxisMin and
+// m_vecRotAxisMax, both picked once for each particle; times m_flScale, of length one when
+// m_bNormalize
+DEFS.C_OP_RotateVector = (def) => {
+  const field = def.m_nFieldOutput ?? 21;
+  const axisMin = arr(def.m_vecRotAxisMin, [0, 0, 1]);
+  const axisMax = arr(def.m_vecRotAxisMax, [0, 0, 1]);
+  const rateMin = def.m_flRotRateMin ?? 180;
+  const rateMax = def.m_flRotRateMax ?? 180;
+  const scale = compileFloat(def.m_flScale, 1);
+  const normalize = Boolean(def.m_bNormalize);
+  const turn = new THREE.Quaternion();
+  return {
+    update(system, dt) {
+      if (!VECTOR_FIELDS.has(field)) return;
+      const data = system.float(field);
+      for (let i = 0; i < system.count; i++) {
+        const id = system.ids[i];
+        v2.set(lerp(axisMin[0], axisMax[0], (id * 0.618034) % 1), lerp(axisMin[1], axisMax[1], (id * 0.754878) % 1), lerp(axisMin[2], axisMax[2], (id * 0.569840) % 1));
+        if (v2.lengthSq() < 1e-12) continue;
+        const rate = lerp(rateMin, rateMax, (id * 0.414214) % 1) * scale(system, i);
+        turn.setFromAxisAngle(v2.normalize(), rate * deg * dt);
+        v1.set(data[i * 3], data[i * 3 + 1], data[i * 3 + 2]).applyQuaternion(turn);
+        if (normalize) v1.normalize();
+        data[i * 3] = v1.x;
+        data[i * 3 + 1] = v1.y;
+        data[i * 3 + 2] = v1.z;
+      }
+    },
+  };
+};
+
+// A field set from a control point, each axis remapped from m_vInputMin..m_vInputMax to
+// m_vOutputMin..m_vOutputMax. A color is read from a control point's value: one the effect
+// sets itself; the ones the game sets in code (a gem's or a player's tint, 15, 60) nothing sets
+// here, so then the colors stay as authored, as with no tint
+DEFS.C_OP_RemapCPtoVector = (def) => {
+  const cp = def.m_nCPInput ?? 0;
+  const field = def.m_nFieldOutput ?? 0;
+  const inMin = arr(def.m_vInputMin, [0, 0, 0]);
+  const inMax = arr(def.m_vInputMax, [0, 0, 0]);
+  const outMin = arr(def.m_vOutputMin, [0, 0, 0]);
+  const outMax = arr(def.m_vOutputMax, [0, 0, 0]);
+  const set = setter(def);
+  const color = field === 6;
+  return {
+    update(system) {
+      if (!VECTOR_FIELDS.has(field)) return;
+      const point = system.controlPoint(cp);
+      if (color && !point.set) return;
+      const from = color ? point.value : point.position;
+      for (let k = 0; k < 3; k++) out3[k] = remap(from.getComponent(k), inMin[k], inMax[k], outMin[k], outMax[k]);
+      const data = system.float(field);
+      const initial = system.initialFloat(field);
+      const position = field === 0 || field === 2;
+      for (let i = 0; i < system.count; i++) {
+        for (let k = 0; k < 3; k++) data[i * 3 + k] = position ? out3[k] : set(data[i * 3 + k], initial[i * 3 + k], out3[k]);
+      }
+    },
+  };
+};
+
+// How far a particle is from m_nStartCP towards m_nEndCP, as a share of the way between them
+// (its distance from the start, or along the line when not m_bRadialCheck), remapped from
+// m_flInputMin..m_flInputMax to m_flOutputMin..m_flOutputMax into a field; particles outside
+// the input range left as they are (m_bActiveRange). Nothing while the two points are one
+DEFS.C_OP_PercentageBetweenCPs = (def) => {
+  const field = def.m_nFieldOutput ?? 3;
+  const inMin = compileFloat(def.m_flInputMin, 0);
+  const inMax = compileFloat(def.m_flInputMax, 1);
+  const outMin = compileFloat(def.m_flOutputMin, 0);
+  const outMax = compileFloat(def.m_flOutputMax, 1);
+  const startCP = def.m_nStartCP ?? 0;
+  const endCP = def.m_nEndCP ?? 1;
+  const radial = def.m_bRadialCheck !== false;
+  const active = Boolean(def.m_bActiveRange);
+  const set = setter(def);
+  const scale = Boolean(def.m_bScaleInitialRange);
+  return {
+    update(system) {
+      const a = system.controlPoint(startCP).position;
+      const b = system.controlPoint(endCP).position;
+      v2.subVectors(b, a);
+      const total = v2.length();
+      if (total < 1e-3) return;
+      v2.divideScalar(total);
+      const p = system.float(0);
+      const data = system.float(field);
+      const initial = system.initialFloat(field);
+      const vector = VECTOR_FIELDS.has(field);
+      for (let i = 0; i < system.count; i++) {
+        v1.set(p[i * 3] - a.x, p[i * 3 + 1] - a.y, p[i * 3 + 2] - a.z);
+        const share = (radial ? v1.length() : v1.dot(v2)) / total;
+        const lo = inMin(system, i);
+        const hi = inMax(system, i);
+        if (active && (share < lo || share > hi)) continue;
+        const value = remap(share, lo, hi, outMin(system, i), outMax(system, i));
+        const base = vector ? initial[i * 3] : initial[i];
+        writeFloat(system, field, i, scale ? base * value : set(vector ? data[i * 3] : data[i], base, value));
+      }
+    },
+  };
+};
+
 // The hue shift a prismatic gem gives the effect, put in control point m_nOutputCP (62, where
 // renderers read it): the turn from m_DefaultHSVColor to the gem's color when the game marks
 // a gem; no gem is worn here, so it is none

@@ -595,12 +595,10 @@ function onModel() {
   };
 }
 DEFS.C_INIT_CreateOnModel = onModel;
-DEFS.C_INIT_InitFromCPSnapshot = onModel;
 
 // On the points of the snapshot at the control point (where the artist put them on the model),
 // in their order or at random; on the model's surface when there is no snapshot
-DEFS.C_INIT_InitSkinnedPositionFromCPSnapshot = (def) => {
-  const point = def.m_nSnapshotControlPointNumber ?? 0;
+const fromSnapshot = (def, point) => {
   const randomly = Boolean(def.m_bRandom);
   const increment = def.m_flIncrement ?? 1;
   const setRadius = Boolean(def.m_bSetRadius);
@@ -634,6 +632,10 @@ DEFS.C_INIT_InitSkinnedPositionFromCPSnapshot = (def) => {
     },
   };
 };
+DEFS.C_INIT_InitSkinnedPositionFromCPSnapshot = (def) => fromSnapshot(def, def.m_nSnapshotControlPointNumber ?? 0);
+// The same, when it reads the snapshot's positions (it may read another of its streams instead,
+// a color or a radius, which is not done here: on the model's surface then)
+DEFS.C_INIT_InitFromCPSnapshot = (def) => ((def.m_nAttributeToRead ?? 0) === 0 ? fromSnapshot(def, def.m_nControlPointNumber ?? 0) : onModel());
 DEFS.C_INIT_CreateOnModelAtHeight = onModel;
 
 DEFS.C_INIT_CreateFromParentParticles = (def) => {

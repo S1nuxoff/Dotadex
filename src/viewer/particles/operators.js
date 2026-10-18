@@ -699,14 +699,18 @@ const snapshotInSpace = (def, point, space) => {
       const snapshot = system.snapshot(point);
       const positions = snapshot && system.host.snapshotData?.(snapshot)?.position;
       if (!positions?.length) return;
-      const cp = system.controlPoint(space);
+      // A space nothing sets is the world's origin: the points stay as the file gives them, and
+      // MovementRigidAttachToCP carries them to the weapon (Ember Spirit's sword fire, CP 4;
+      // it was put at the effect's own CP 0, which moved the fire off the blade a second time)
+      const cp = system.controlPointIfSet(space);
       const p = system.float(0);
       const q = system.float(2);
       for (let i = start; i < end; i++) {
         const k = randomly ? Math.floor(Math.random() * positions.length) : Math.floor(next) % positions.length;
         if (!randomly) next += increment;
         const [x = 0, y = 0, z = 0] = positions[k];
-        v1.set(x, y, z).applyQuaternion(cp.quaternion).add(cp.position);
+        v1.set(x, y, z);
+        if (cp) v1.applyQuaternion(cp.quaternion).add(cp.position);
         for (let c = 0; c < 3; c++) p[i * 3 + c] = q[i * 3 + c] = v1.getComponent(c);
       }
     },

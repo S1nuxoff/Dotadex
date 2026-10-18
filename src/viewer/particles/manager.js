@@ -321,6 +321,8 @@ export class ParticleManager {
         if (!placed.has(path)) placed.set(path, manager.snapshotPoints(path, meshes));
         return placed.get(path);
       },
+      // Whether the effect's configuration puts a control point somewhere
+      drives: (index) => driven.has(index),
       // A snapshot's streams as the file gives them, or null
       snapshotData: (path) => snapshots.get(swapped(path)) ?? null,
       surface: {

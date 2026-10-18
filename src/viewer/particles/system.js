@@ -140,6 +140,19 @@ export class ParticleSystem {
     return this.parent ? this.parent.controlPoint(index) : this.host.controlPoint(index);
   }
 
+  // A control point a system or the effect's configuration puts somewhere, or null for one
+  // nothing sets (the game's stand at the world's origin)
+  controlPointIfSet(index) {
+    const own = this.points.get(index);
+    if (own?.set) {
+      return own;
+    }
+    if (this.parent) {
+      return this.parent.controlPointIfSet(index);
+    }
+    return this.host.drives?.(index) === false ? null : this.host.controlPoint(index);
+  }
+
   // The snapshot (points the artist placed on the model) at a control point: the system's own,
   // or the one a parent put there, which its children read
   snapshot(index) {

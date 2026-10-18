@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { materialPrograms, runProgram } from "./materialPrograms.js";
 
 // Dota's hero.vfx shader, after its compiled pixel shader. The textures and parameters come from the
 // material's vmat data that Source2Viewer keeps in the glTF extras:
@@ -43,6 +44,12 @@ const fragmentShader = /* glsl */ `
   #include <lights_pars_begin>
   #include <shadowmap_pars_fragment>
   uniform sampler2D tColor;
+  uniform mat3 uBaseUv;
+  uniform mat3 uNormalUv;
+  uniform mat3 uAlphaUv;
+  uniform mat3 uDetailUv;
+  uniform mat3 uDetail2Uv;
+  uniform float uSeparateAlpha;
   uniform float uOpaque;
   uniform float uFresnelAlpha;
   uniform sampler2D tNormal;
@@ -55,7 +62,6 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D tDetail2;
   uniform float uDetail2Mode;
   uniform float uDetail2Factor;
-  uniform vec2 uDetail2Scale;
   uniform vec3 uDetailTint;
   uniform vec3 uDetail2Tint;
 
@@ -67,7 +73,6 @@ const fragmentShader = /* glsl */ `
   uniform float uHasCubeMap;
   uniform float uDetailMode;
   uniform float uDetailFactor;
-  uniform vec2 uDetailScale;
   uniform float uAlphaTest;
   uniform float uSelfIllum;
   uniform float uSelfIllumToFull;
@@ -125,17 +130,21 @@ const fragmentShader = /* glsl */ `
   }
 
   void main() {
-    vec4 color = texture2D(tColor, vUv);
+    // Each layer's texture coordinates, moved, scaled and turned as the material says
+    vec2 uv = (uBaseUv * vec3(vUv, 1.0)).xy;
+    vec4 color = texture2D(tColor, uv);
+    if (uSeparateAlpha > 0.5) color.a = texture2D(tColor, (uAlphaUv * vec3(vUv, 1.0)).xy).a;
     if (uAlphaTest > 0.0 && color.a < uAlphaTest) discard;
 
-    vec4 masks1 = uHasMasks1 > 0.5 ? texture2D(tMasks1, vUv) : vec4(0.0);
-    vec4 masks2 = uHasMasks2 > 0.5 ? texture2D(tMasks2, vUv) : vec4(0.0);
+    vec4 masks1 = uHasMasks1 > 0.5 ? texture2D(tMasks1, uv) : vec4(0.0);
+    vec4 masks2 = uHasMasks2 > 0.5 ? texture2D(tMasks2, uv) : vec4(0.0);
 
     vec3 n = normalize(vViewNormal);
     if (!gl_FrontFacing) n = -n;
     if (uHasNormal > 0.5) {
-      vec3 mapN = texture2D(tNormal, vUv).xyz * 2.0 - 1.0;
-      n = perturbNormal(n, -vViewPosition, vUv, mapN);
+      vec2 normalUv = (uNormalUv * vec3(vUv, 1.0)).xy;
+      vec3 mapN = texture2D(tNormal, normalUv).xyz * 2.0 - 1.0;
+      n = perturbNormal(n, -vViewPosition, normalUv, mapN);
     }
     vec3 worldN = normalize(vWorldNormal);
     vec3 v = normalize(vViewPosition);
@@ -146,7 +155,7 @@ const fragmentShader = /* glsl */ `
     float selfIllum = max(masks1.a * uSelfIllum, uSelfIllumToFull);
     float detailMask = uHasMasks1 > 0.5 ? max(masks1.r, uDetailToFull) : 1.0;
     if (uDetailMode > 0.5) {
-      vec3 detail = texture2D(tDetail, vUv * uDetailScale).rgb * uDetailTint;
+      vec3 detail = texture2D(tDetail, (uDetailUv * vec3(vUv, 1.0)).xy).rgb * uDetailTint;
       float amount = detailMask * uDetailFactor;
       if (uDetailMode > 2.5) {
         albedo *= mix(vec3(1.0), detail * 2.0, amount);
@@ -157,7 +166,7 @@ const fragmentShader = /* glsl */ `
     }
     if (uDetail2Mode > 0.5) {
       float amount = detailMask * uDetail2Factor;
-      albedo += texture2D(tDetail2, vUv * uDetail2Scale).rgb * uDetail2Tint * amount;
+      albedo += texture2D(tDetail2, (uDetail2Uv * vec3(vUv, 1.0)).xy).rgb * uDetail2Tint * amount;
       if (uDetail2Mode > 1.5) selfIllum = max(selfIllum, amount);
     }
 
@@ -289,11 +298,38 @@ function vector(values, fallback) {
   return new THREE.Color(color[0], color[1], color[2]);
 }
 
+// Each texture layer's offset, scale and rotation (degrees) in the vmat. The normal map and the
+// color's alpha follow the base layer unless F_SEPARATE_NORMAL_TRANSFORM / _ALPHA_ say otherwise.
+const UV_LAYERS = {
+  uBaseUv: ["g_vTexCoordOffset", "g_vTexCoordScale", "g_flTexCoordRotation"],
+  uNormalUv: ["g_vNormalTexCoordOffset", "g_vNormalTexCoordScale", "g_flNormalTexCoordRotation"],
+  uAlphaUv: ["g_vAlphaTexCoordOffset", "g_vAlphaTexCoordScale", "g_flAlphaTexCoordRotation"],
+  uDetailUv: ["g_vDetailTexCoordOffset", "g_vDetailTexCoordScale", "g_flDetailTexCoordRotation"],
+  uDetail2Uv: ["g_vDetail2TexCoordOffset", "g_vDetail2TexCoordScale", "g_flDetail2TexCoordRotation"],
+};
+const UV_PARAMS = new Set(Object.values(UV_LAYERS).flat());
+
+// A parameter's numbers, a float as one; null where the vmat gives none
+function paramValue(vmat, name) {
+  const value = vmat.VectorParams?.[name] ?? vmat.FloatParams?.[name] ?? vmat.FloatParams?.[name.replace(/^g_v/, "g_fl")];
+  const values = (Array.isArray(value) ? value : [value]).filter(Number.isFinite);
+  return values.length ? values : null;
+}
+
+function setUvLayer(matrix, get, [offset, scale, rotation]) {
+  const o = get(offset) ?? [0];
+  const s = get(scale) ?? [1];
+  const angle = ((get(rotation)?.[0] ?? 0) * Math.PI) / 180;
+  matrix.setUvTransform(o[0], o[1] ?? o[0], s[0] || 1, (s[1] ?? s[0]) || 1, angle, 0, 0);
+}
+
 // textures: { g_tColor: Texture, ... } matched by the vmat texture names
 export function createDotaMaterial(original, vmat, textures) {
   const int = vmat.IntParams ?? {};
   const float = vmat.FloatParams ?? {};
   const vec = vmat.VectorParams ?? {};
+  // Parameters the game works out every frame (M-04), by the vmat's path
+  const programs = materialPrograms(vmat.Name);
   const pick = (name) => textures[name] ?? null;
   const white = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
   white.needsUpdate = true;
@@ -322,19 +358,14 @@ export function createDotaMaterial(original, vmat, textures) {
       uHasCubeMap: { value: int.F_SPECULAR_CUBE_MAP && pick("g_tCubeMap") ? 1 : 0 },
       tDetail: { value: pick("g_tDetail") },
       tDetail2: { value: pick("g_tDetail2") },
-      uDetail2Mode: { value: pick("g_tDetail2") && (float.g_flDetail2BlendFactor ?? 1) > 0 ? (int.F_DETAIL_2 ?? 0) : 0 },
+      uDetail2Mode: { value: pick("g_tDetail2") && ((float.g_flDetail2BlendFactor ?? 1) > 0 || programs?.g_flDetail2BlendFactor) ? (int.F_DETAIL_2 ?? 0) : 0 },
       uDetail2Factor: { value: float.g_flDetail2BlendFactor ?? 1 },
-      uDetail2Scale: { value: new THREE.Vector2(vec.g_vDetail2TexCoordScale?.[0] || 1, vec.g_vDetail2TexCoordScale?.[1] || 1) },
       uDetailTint: { value: vector(vec.g_vDetail1ColorTint, [1, 1, 1]) },
       uDetail2Tint: { value: vector(vec.g_vDetail2ColorTint, [1, 1, 1]) },
       uDetailMode: { value: pick("g_tDetail") ? (int.F_DETAIL ?? 0) : 0 },
       uDetailFactor: { value: float.g_flDetailBlendFactor ?? 1 },
-      uDetailScale: {
-        value: new THREE.Vector2(
-          vec.g_vDetailTexCoordScale?.[0] ?? float.g_flDetailTexCoordScale ?? 1,
-          vec.g_vDetailTexCoordScale?.[1] ?? float.g_flDetailTexCoordScale ?? 1
-        ),
-      },
+      ...Object.fromEntries(Object.keys(UV_LAYERS).map((name) => [name, { value: new THREE.Matrix3() }])),
+      uSeparateAlpha: { value: int.F_SEPARATE_ALPHA_TRANSFORM ? 1 : 0 },
       uAlphaTest: { value: int.F_ALPHA_TEST ? 0.5 : 0 },
       // The flag is often not set on materials whose mask still glows in the game
       uSelfIllum: { value: pick("g_tMasks1") || float.g_flSelfIllumBlendToFull ? 1 : 0 },
@@ -377,11 +408,46 @@ export function createDotaMaterial(original, vmat, textures) {
     side: int.F_RENDER_BACKFACES ? THREE.DoubleSide : THREE.FrontSide,
   });
   material.name = original.name;
-  material.userData.glow = createGlowMaterial(vmat, textures, material.uniforms.tColor.value, material.side);
-  // A material fully cloaked is not seen in the game, only what its effects draw (Io's body)
-  if (int.F_ENABLE_CLOAK && (float.g_flMaterialCloakFactor ?? 0) >= 0.99) {
-    material.visible = false;
-    if (material.userData.glow) material.userData.glow.visible = false;
+  const glow = createGlowMaterial(vmat, textures, material.uniforms, material.side, Boolean(programs?.g_flBloomScale));
+  material.userData.glow = glow;
+  const u = material.uniforms;
+
+  // The parameters' values: the vmat's own, or what a program gives at this moment
+  const values = new Map();
+  const get = (name) => values.get(name) ?? paramValue(vmat, name);
+  const animatesUv = Object.keys(programs ?? {}).some((name) => UV_PARAMS.has(name));
+  const refresh = (initial) => {
+    if (initial || animatesUv) {
+      for (const [name, layer] of Object.entries(UV_LAYERS)) setUvLayer(u[name].value, get, layer);
+      if (!int.F_SEPARATE_NORMAL_TRANSFORM) u.uNormalUv.value.copy(u.uBaseUv.value);
+    }
+    if (!programs && !initial) return;
+    u.uDetailFactor.value = get("g_flDetailBlendFactor")?.[0] ?? 1;
+    u.uDetail2Factor.value = get("g_flDetail2BlendFactor")?.[0] ?? 1;
+    u.uOverbright.value = get("g_flOverbrightFactor")?.[0] ?? 1;
+    const rim = colorParam(get("g_vRimLightColor"));
+    if (rim) u.uRimLightColor.value.setRGB(rim[0], rim[1], rim[2]);
+    // The game's own reference only where it changes over time; fixed ones keep the half
+    if (int.F_ALPHA_TEST && programs?.g_flAlphaTestReference) u.uAlphaTest.value = get("g_flAlphaTestReference")?.[0] ?? 0.5;
+    if (glow) {
+      const tint = colorParam(get("g_vBloomColor")) ?? [1, 1, 1];
+      glow.uniforms.uGlow.value.setRGB(tint[0], tint[1], tint[2]).multiplyScalar(Math.max(get("g_flBloomScale")?.[0] ?? 0, 0));
+    }
+    // A material fully cloaked is not seen in the game, only what its effects draw (Io's body)
+    const cloaked = Boolean(int.F_ENABLE_CLOAK) && (get("g_flMaterialCloakFactor")?.[0] ?? 0) >= 0.99;
+    material.visible = !cloaked;
+    if (glow) glow.visible = !cloaked;
+  };
+  refresh(true);
+  // Called every frame with the time in seconds
+  if (programs) {
+    material.userData.animate = (time) => {
+      for (const [name, program] of Object.entries(programs)) {
+        const value = runProgram(program, time);
+        if (value) values.set(name, value);
+      }
+      refresh(false);
+    };
   }
   return material;
 }
@@ -389,39 +455,48 @@ export function createDotaMaterial(original, vmat, textures) {
 // The halo the game puts around a material's glowing parts, in the material's own bloom
 // color and strength (g_vBloomColor, g_flBloomScale), drawn into a separate glow pass.
 // null for materials without one.
-function createGlowMaterial(vmat, textures, color, side) {
+// Shares the main material's texture coordinates and alpha test, which may change every frame.
+function createGlowMaterial(vmat, textures, main, side, animated) {
   const float = vmat.FloatParams ?? {};
   const scale = float.g_flBloomScale ?? 0;
   const masks1 = textures.g_tMasks1;
-  if (scale <= 0 || (!masks1 && !float.g_flSelfIllumBlendToFull)) {
+  if ((scale <= 0 && !animated) || (!masks1 && !float.g_flSelfIllumBlendToFull)) {
     return null;
   }
-  const tint = colorParam(vmat.VectorParams?.g_vBloomColor) ?? [1, 1, 1];
   return new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader: /* glsl */ `
       uniform sampler2D tColor;
       uniform sampler2D tMasks1;
+      uniform mat3 uBaseUv;
+      uniform mat3 uAlphaUv;
+      uniform float uSeparateAlpha;
       uniform float uHasMasks1;
       uniform float uToFull;
       uniform float uAlphaTest;
       uniform vec3 uGlow;
       varying vec2 vUv;
       void main() {
-        vec4 color = texture2D(tColor, vUv);
+        vec2 uv = (uBaseUv * vec3(vUv, 1.0)).xy;
+        vec4 color = texture2D(tColor, uv);
+        if (uSeparateAlpha > 0.5) color.a = texture2D(tColor, (uAlphaUv * vec3(vUv, 1.0)).xy).a;
         if (uAlphaTest > 0.0 && color.a < uAlphaTest) discard;
-        float mask = uHasMasks1 > 0.5 ? texture2D(tMasks1, vUv).a : 0.0;
+        float mask = uHasMasks1 > 0.5 ? texture2D(tMasks1, uv).a : 0.0;
         // The surface's own color, tinted by the material's bloom color
         gl_FragColor = vec4(color.rgb * uGlow * mix(mask, 1.0, uToFull), 1.0);
       }
     `,
     uniforms: {
-      tColor: { value: color },
+      tColor: main.tColor,
+      uBaseUv: main.uBaseUv,
+      uAlphaUv: main.uAlphaUv,
+      uSeparateAlpha: main.uSeparateAlpha,
+      uAlphaTest: main.uAlphaTest,
       tMasks1: { value: masks1 ?? null },
       uHasMasks1: { value: masks1 ? 1 : 0 },
       uToFull: { value: float.g_flSelfIllumBlendToFull ?? 0 },
-      uAlphaTest: { value: vmat.IntParams?.F_ALPHA_TEST ? 0.5 : 0 },
-      uGlow: { value: new THREE.Color(tint[0], tint[1], tint[2]).multiplyScalar(scale) },
+      // Set by the main material from g_vBloomColor and g_flBloomScale
+      uGlow: { value: new THREE.Color() },
     },
     side,
   });

@@ -10,6 +10,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { FullScreenQuad, Pass } from "three/addons/postprocessing/Pass.js";
 import { colorParam, createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
+import { loadMaterialPrograms } from "./materialPrograms.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
 import { createWatermark } from "./watermark.js";
@@ -668,6 +669,8 @@ export class Stage {
         )
       ),
       Promise.all(entries.map(({ url, skin }) => (skin ? loadSkin(url, skin) : null))),
+      // Materials whose parameters change over time, needed before the materials are made
+      loadMaterialPrograms(entries[0].url.slice(0, entries[0].url.indexOf("/models/") + 1)),
     ]);
     if (request !== this.request) {
       return null;
@@ -1564,6 +1567,9 @@ export class Stage {
     }
 
     this.effects.update(delta);
+    // Materials the game moves every frame: scrolling details, pulsing glows
+    const time = this.timer.getElapsed();
+    this.group?.traverse((node) => node.isMesh && node.material?.userData.animate?.(time));
     this.flash = Math.max(0, (this.flash ?? 0) - delta * 1.6);
     // Never left hanging if a load fails
     if (this.veilTarget === 1 && this.group && performance.now() - (this.veilSince ?? 0) > 6000) {

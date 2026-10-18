@@ -21,19 +21,18 @@ import * as THREE from "three";
 // boxes, wind (m_Effects), each node's collision masks, per-node local force.
 
 const SOURCE_TO_METRES = 0.0254;
-// Steps of at most this long (seconds)
+// The game moves its cloth in fixed steps (the client's physics substeps; settling a new model's
+// cloth uses steps of 1/60 s), and its pulls depend on the step's length
 const STEP = 1 / 60;
+// At most this many steps a frame: a long stall is skipped, not caught up with
 const MAX_STEPS = 8;
 // Rods and collisions solved this many times a step
 const ITERATIONS = 4;
 // A node this far from its place in the animation (inches) means the solver lost it: start over
 const LOST = 400;
-// Picked by measuring 81 models in Node (dota2-model-tracker/temp/m06/wobble.mjs: how much the
-// bones move with the hero standing, how far they swing on a fast turn, how soon they settle),
-// the cloth swinging too much on the site with the first guesses (damping of at least 1/s,
-// frames of 1/30 s). leastDamping: per second, every node; relative: damped against the
-// animation's own movement; frameRate: of the older models' per-frame shares
-export const tuning = { leastDamping: 8, relative: true, frameRate: 60 };
+// m_nDynamicNodeFlags: damped by flPointDamping; pulled to the animation as a goal (see advance)
+const POINT_DAMPING = 0x100;
+const GOAL = 0x80;
 
 // Source's model space (x ahead, y left, z up, inches) to the glTF's (y up, metres)
 const fromSource = (x, y, z, out = new THREE.Vector3()) => out.set(y, z, x).multiplyScalar(SOURCE_TO_METRES);
@@ -212,19 +211,12 @@ export class Cloth {
 
     const integrator = fe.m_NodeIntegrator ?? [];
     const gravityScale = fe.m_flDefaultGravityScale ?? 1;
-    // Two kinds of models: newer ones give the pull towards the animation per second (Void Spirit 15,
-    // Crystal Maiden 30, Juggernaut 6: 30 times a painted strength), older ones (most, every value
-    // at most 1) a share per frame, the force being the painted strength cubed (0.125 = 0.5³).
-    // Taken per second, an older model's pull would be far too weak and its cloth would only hang
-    const moving = [...this.moving.keys()].filter((i) => this.moving[i]);
-    const perFrame = moving.every((i) => (integrator[i]?.flAnimationVertexAttraction ?? 0) <= 1 && (integrator[i]?.flAnimationForceAttraction ?? 0) <= 1);
-    const FRAME_RATE = tuning.frameRate;
-    this.damping = Float64Array.from({ length: n }, (_, i) => Math.max(integrator[i]?.flPointDamping ?? 0, tuning.leastDamping));
-    this.force = Float64Array.from({ length: n }, (_, i) => (integrator[i]?.flAnimationForceAttraction ?? 0) * (perFrame ? FRAME_RATE * FRAME_RATE : 1));
-    this.pull = Float64Array.from({ length: n }, (_, i) => {
-      const pull = integrator[i]?.flAnimationVertexAttraction ?? 0;
-      return perFrame ? -FRAME_RATE * Math.log(1 - Math.min(pull, 0.99)) : pull;
-    });
+    const flags = fe.m_nDynamicNodeFlags ?? 0;
+    this.pointDamping = Boolean(flags & POINT_DAMPING);
+    this.goal = Boolean(flags & GOAL);
+    this.damping = Float64Array.from({ length: n }, (_, i) => integrator[i]?.flPointDamping ?? 0);
+    this.force = Float64Array.from({ length: n }, (_, i) => integrator[i]?.flAnimationForceAttraction ?? 0);
+    this.pull = Float64Array.from({ length: n }, (_, i) => integrator[i]?.flAnimationVertexAttraction ?? 0);
     this.gravity = Float64Array.from({ length: n }, (_, i) => (integrator[i]?.flGravity ?? 360) * gravityScale);
     this.localForce = THREE.MathUtils.clamp(fe.m_flLocalForce ?? 1, 0, 1);
 
@@ -347,9 +339,10 @@ export class Cloth {
     this.target = new Float64Array(n * 3);
     this.targetBefore = new Float64Array(n * 3);
     this.step = new Float64Array(n * 3);
-    this.stepBefore = new Float64Array(n * 3);
+    this.shown = new Float64Array(n * 3);
     this.started = false;
-    this.lastStep = STEP;
+    // Time not yet stepped (seconds)
+    this.pending = 0;
     this.groupBefore = new THREE.Matrix4();
     this.capture();
   }
@@ -432,17 +425,19 @@ export class Cloth {
     }
     this.groupBefore.copy(groupWorld);
 
-    const steps = Math.min(MAX_STEPS, Math.max(1, Math.ceil(dt / STEP - 1e-6)));
-    const h = dt / steps;
-    if (h > 0) {
+    // Whole steps of the time passed; the animation's places for each by when it falls in the frame
+    const before = this.pending;
+    this.pending += Math.max(dt, 0);
+    const steps = Math.min(MAX_STEPS, Math.floor(this.pending / STEP));
+    this.pending = steps === MAX_STEPS ? 0 : this.pending - steps * STEP;
+    if (steps) {
       this.placeShapes();
       for (let s = 1; s <= steps; s++) {
-        const share = s / steps;
-        this.stepBefore.set(step);
+        const share = dt > 0 ? THREE.MathUtils.clamp((s * STEP - before) / dt, 0, 1) : 1;
         for (let k = 0; k < n * 3; k++) {
           step[k] = targetBefore[k] + (target[k] - targetBefore[k]) * share;
         }
-        this.advance(h, unit);
+        this.advance(STEP, unit);
       }
     }
     targetBefore.set(target);
@@ -450,11 +445,15 @@ export class Cloth {
     // Lost (a jump the cloth cannot follow, or numbers gone wrong): back to the animation's pose
     const lost = LOST * unit;
     for (let i = 0; i < n * 3; i++) {
-      if (!(Math.abs(x[i] - target[i]) < lost)) {
-        x.set(target);
-        previous.set(target);
+      if (!(Math.abs(x[i] - step[i]) < lost)) {
+        x.set(step);
+        previous.set(step);
         break;
       }
+    }
+    // Between steps the cloth keeps how far it was from the animation at the last one
+    for (let k = 0; k < n * 3; k++) {
+      this.shown[k] = x[k] - step[k] + target[k];
     }
     this.pose(view);
   }
@@ -475,11 +474,11 @@ export class Cloth {
     }
   }
 
+  // One step of the game's solver (vphysics2.dll, read from its code: the stages its profiler
+  // names Predict, AddAnimationAttraction, Relax, AddGoalAttraction)
   advance(h, unit) {
-    const { n, moving, x, previous, last, step, stepBefore, damping, force, pull, gravity } = this;
+    const { n, moving, x, previous, last, step, damping, force, pull, gravity } = this;
     last.set(x);
-    const ratio = h / this.lastStep;
-    this.lastStep = h;
     for (let i = 0; i < n; i++) {
       const k = i * 3;
       if (!moving[i]) {
@@ -488,22 +487,28 @@ export class Cloth {
         x[k + 2] = step[k + 2];
         continue;
       }
-      const keep = Math.exp(-damping[i] * h);
-      const toward = 1 - Math.exp(-pull[i] * h);
+      // Predict: on with its speed (damped only in models that ask for it), gravity down
+      const keep = this.pointDamping ? Math.max(0, 1 - h * damping[i]) : 1;
       for (let c = 0; c < 3; c++) {
         const position = x[k + c];
-        // Damped towards the animation's own movement, not towards rest: following the body
-        // is not slowed down, only swinging about it
-        const carried = tuning.relative ? step[k + c] - stepBefore[k + c] : 0;
-        const velocity = carried + ((position - previous[k + c]) * ratio - carried) * keep;
-        let acceleration = force[i] * (step[k + c] - position);
+        let next = position + (position - previous[k + c]) * keep;
         if (c === 1) {
-          acceleration -= gravity[i] * unit;
+          next -= gravity[i] * unit * h * h;
         }
-        let next = position + velocity + acceleration * h * h;
-        next += (step[k + c] - next) * toward;
         previous[k + c] = position;
         x[k + c] = next;
+      }
+      // AddAnimationAttraction (models without goals): drawn towards the animation by a share of
+      // the way (flAnimationVertexAttraction per second) and pushed by a force (twice
+      // flAnimationForceAttraction per second), the previous place moved so the draw adds little speed
+      if (!this.goal) {
+        const share = Math.min(1, pull[i] * h);
+        const push = 2 * force[i] * h;
+        for (let c = 0; c < 3; c++) {
+          const towards = step[k + c] - x[k + c];
+          x[k + c] += (share + push) * towards;
+          previous[k + c] += share * (1 - share) * towards;
+        }
       }
     }
     // Nodes carried by another's movement (both places, so it adds no speed)
@@ -528,6 +533,27 @@ export class Cloth {
       this.solveRods(unit);
       this.solveStrays(unit);
       this.collide(unit);
+    }
+    // AddGoalAttraction (models with goals, most): each step a share of the way to the animation
+    // (flAnimationForceAttraction is the goal's strength), then its speed cut by a share
+    // (flAnimationVertexAttraction is the goal's damping); a full goal holds the node there
+    if (this.goal) {
+      for (let i = 0; i < n; i++) {
+        if (!moving[i]) {
+          continue;
+        }
+        const strength = THREE.MathUtils.clamp(force[i], 0, 1);
+        const keep = 1 - THREE.MathUtils.clamp(pull[i], 0, 1);
+        for (let c = 0; c < 3; c++) {
+          const k = i * 3 + c;
+          if (strength >= 0.9999) {
+            x[k] = previous[k] = step[k];
+            continue;
+          }
+          x[k] = step[k] + (1 - strength) * (x[k] - step[k]);
+          previous[k] = x[k] - (x[k] - previous[k]) * keep;
+        }
+      }
     }
   }
 
@@ -594,7 +620,7 @@ export class Cloth {
 
   // Turns and moves the cloth's bones by what the cloth did on top of the animation
   pose(view) {
-    const { x, target } = this;
+    const { shown: x, target } = this;
     const from = new THREE.Vector3();
     const to = new THREE.Vector3();
     const rotation = new THREE.Quaternion();

@@ -15,6 +15,7 @@ import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
 import { createWatermark } from "./watermark.js";
 import { ParticleManager } from "./particles/manager.js";
+import { Cloth, loadCloth } from "./cloth.js";
 import { SCENE_DEPTH } from "./particles/render.js";
 import { playLoaded, playWhenReady, preloadSound } from "./soundPlayer.js";
 import { playUiSound } from "../uiSounds.js";
@@ -653,7 +654,7 @@ export class Stage {
       const [url, skin] = entry.split("#skin=");
       return { url, skin: Number(skin) || 0 };
     });
-    const [gltfs, skins, sequences] = await Promise.all([
+    const [gltfs, skins, sequences, cloths] = await Promise.all([
       Promise.all(
         entries.map(({ url }) =>
           loadModel(url, (event) => {
@@ -664,6 +665,8 @@ export class Stage {
       ),
       Promise.all(entries.map(({ url, skin }) => (skin ? loadSkin(url, skin) : null))),
       Promise.all(entries.map(({ url }) => loadSequences(url))),
+      // The cloth, hair and beards each model moves on its own
+      Promise.all(entries.map(({ url }) => loadCloth(url))),
       // Materials whose parameters change over time, needed before the materials are made
       loadMaterialPrograms(entries[0].url.slice(0, entries[0].url.indexOf("/models/") + 1)),
     ]);
@@ -679,18 +682,22 @@ export class Stage {
     });
 
     const group = new THREE.Group();
+    // The cloth of the models shown (not of a hero base a body-replacing model hides)
+    const shownCloth = [];
     const root = cloneSkinned(gltfs[rootIndex].scene);
     this.applyMaterials(root, gltfs[rootIndex].userData.textures, skins[rootIndex]);
     // Each mesh knows the model it came from, for effects that rise from one model's surface
     const tag = (object, url) => object.traverse((node) => node.isMesh && (node.userData.model = url.split("#")[0]));
     tag(root, entries[rootIndex].url);
     group.add(root);
+    shownCloth.push(cloths[rootIndex]);
 
     gltfs.forEach((gltf, index) => {
       // A hero base is hidden when a body-replacing model took over
       if (index === rootIndex || (index === 0 && rootIndex !== 0 && gltf.animations.length > 10)) {
         return;
       }
+      shownCloth.push(cloths[index]);
       const part = cloneSkinned(gltf.scene);
       this.applyMaterials(part, gltf.userData.textures, skins[index]);
       tag(part, entries[index].url);
@@ -707,6 +714,17 @@ export class Stage {
     }
     this.sequences = sequences[rootIndex];
     this.replace(group, gltfs[rootIndex].animations);
+    this.cloths = [];
+    for (const fe of shownCloth) {
+      try {
+        const cloth = fe && new Cloth(fe, group);
+        if (cloth && !cloth.empty) {
+          this.cloths.push(cloth);
+        }
+      } catch (error) {
+        console.warn("Cloth not set up", error);
+      }
+    }
     this.modelUrls = entries.map((entry) => entry.url);
     this.particles?.setModel(group, this.modelUrls);
     if (this.veilTarget === 1) {
@@ -852,6 +870,10 @@ export class Stage {
           node.scale.copy(rest.scale);
         }
       });
+      // The cloth's bones start from the pose too, not from the animation's last frame
+      for (const cloth of this.cloths ?? []) {
+        cloth.capture();
+      }
       // Weapons are put in the hand only by animations and drop to the ground without one:
       // a part that fell from where it was to near the floor is hidden until the next animation
       this.group?.updateMatrixWorld(true);
@@ -1581,9 +1603,31 @@ export class Stage {
     }
   }
 
+  // Cloth, hair and beards on top of the animation. With the camera going round the hero (the
+  // free camera, or any stage but a hero's page) the cloth moves as if the hero were turned
+  // instead, as the game turns its heroes under a fixed camera
+  updateCloth(delta) {
+    if (!this.cloths?.length || !this.group) {
+      return;
+    }
+    this.group.updateMatrixWorld(true);
+    let view = null;
+    if (!this.turnLocked) {
+      const angle = Math.atan2(this.camera.position.x - this.controls.target.x, this.camera.position.z - this.controls.target.z);
+      view = (this.clothView ??= new THREE.Matrix4()).makeRotationY(-angle);
+    }
+    for (const cloth of this.cloths) {
+      cloth.update(reducedMotion.matches ? 0 : delta, view);
+    }
+  }
+
   frame() {
     this.timer.update();
     const delta = Math.min(this.timer.getDelta(), 0.1);
+    // The cloth's bones back as the animation left them, before it moves them again
+    for (const cloth of this.cloths ?? []) {
+      cloth.restore();
+    }
     if (this.mixer && !this.paused) {
       this.mixer.update(delta * this.speed);
       this.playAnimationSounds();
@@ -1683,6 +1727,7 @@ export class Stage {
     }
 
     this.controls.update();
+    this.updateCloth(delta);
     this.particles?.update(delta, this.camera);
     // While developing, ?opaque draws the scene on black instead of see-through
     if (import.meta.env.DEV && window.location.search.includes("opaque") && !this.scene.background) {

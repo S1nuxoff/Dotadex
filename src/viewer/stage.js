@@ -659,7 +659,11 @@ export class Stage {
     const particlePass = new RenderPass(this.particleScene, this.camera);
     particlePass.clear = false;
     this.composer.addPass(particlePass);
-    this.composer.addPass(new ParticleGlowPass(this.particleScene, this.camera));
+    // Off: the game's particles have next to no halo (Ember Spirit's fire), their brightness is in
+    // their textures and layers; kept for V-13 in case some effects need it
+    this.particleGlow = new ParticleGlowPass(this.particleScene, this.camera);
+    this.particleGlow.enabled = false;
+    this.composer.addPass(this.particleGlow);
     // The materials' own halos (see createGlowMaterial): the model drawn again with only its
     // glow, everything else black so it still hides what is behind it, then blurred
     this.glowComposer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));

@@ -463,8 +463,12 @@ class ParticleGlowPass extends Pass {
     // The bloom leaves its halo alone in its first target before putting it over its input
     this.bloom.render(renderer, null, this.target);
     this.add.material.uniforms.tGlow.value = this.bloom.renderTargetsHorizontal[0].texture;
+    // Without clearing the frame first, which the renderer does on its own
+    const autoClear = renderer.autoClear;
+    renderer.autoClear = false;
     renderer.setRenderTarget(readBuffer);
     this.add.render(renderer);
+    renderer.autoClear = autoClear;
     renderer.setClearColor(clearColor, clearAlpha);
   }
 

@@ -265,8 +265,6 @@ export const SCENE_DEPTH = {
   uSceneDepth: { value: null },
   uHasSceneDepth: { value: 0 },
   uSceneSize: { value: new THREE.Vector2(1, 1) },
-  // 1 while the particles are drawn again for their glow, alone: what the model hides is left out
-  uGlowPass: { value: 0 },
 };
 
 // The renderer's own color over the particles' (m_vecColorScale), put together with it as
@@ -423,7 +421,6 @@ const FRAGMENT = /* glsl */ `
   uniform sampler2D uSceneDepth;
   uniform float uHasSceneDepth;
   uniform vec2 uSceneSize;
-  uniform float uGlowPass;
   uniform vec3 uFeather;
   uniform float uCameraNear;
   uniform float uCameraFar;
@@ -477,12 +474,10 @@ const FRAGMENT = /* glsl */ `
     float alpha = texel.a * vColor.a;
     // Feathered: fading out where the scene behind is nearer than m_flFeatheringMaxDist, gone
     // within m_flFeatheringMinDist (x on, y min, z max, in the scene's units)
-    if ((uFeather.x > 0.5 || uGlowPass > 0.5) && uHasSceneDepth > 0.5) {
+    if (uFeather.x > 0.5 && uHasSceneDepth > 0.5) {
       float behind = texture2D(uSceneDepth, gl_FragCoord.xy / uSceneSize).r;
       float own = -perspectiveDepthToViewZ(gl_FragCoord.z, uCameraNear, uCameraFar);
-      if (uFeather.x > 0.5) alpha *= clamp((behind - own - uFeather.y) / max(uFeather.z - uFeather.y, 1e-4), 0.0, 1.0);
-      // The glow pass has no depth of its own: the model's is read from the frame's
-      if (uGlowPass > 0.5 && own > behind + 0.02) discard;
+      alpha *= clamp((behind - own - uFeather.y) / max(uFeather.z - uFeather.y, 1e-4), 0.0, 1.0);
     }
     if (uMod > 0.5) {
       // Mid grey where the particle is see-through, so it leaves what is behind as it is
@@ -492,7 +487,7 @@ const FRAGMENT = /* glsl */ `
       return;
     }
     vec4 color = vec4(texel.rgb * tint * uOverbright * uHalf, alpha);
-    // Kept finite; what is brighter than white glows (the particles' own glow pass in the stage)
+    // Kept finite
     if (any(isnan(color)) || color.a < 0.002) discard;
     vec3 rgb = clamp(color.rgb, 0.0, 16.0);
     float a = clamp(color.a, 0.0, 1.0);

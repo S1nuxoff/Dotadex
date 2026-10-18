@@ -237,8 +237,8 @@ const fragmentShader = /* glsl */ `
     vec3 rim = rimMask * uRimLightColor * uRimLightScale * uFillColor * max(worldN.y, 0.0) * fresnel.r;
     outColor = outColor * uIllumination + rim * mix(vec3(1.0), uStageRim * 2.0, 0.15);
 
-    // Self-illuminated parts show their color as it is, a little brighter for the glow pass
-    outColor = mix(outColor, albedo * 1.2, clamp(selfIllum, 0.0, 1.0)) * uOverbright;
+    // Self-illuminated parts show their color as it is (their halo is the glow pass's)
+    outColor = mix(outColor, albedo, clamp(selfIllum, 0.0, 1.0)) * uOverbright;
     // An opaque material covers the page behind the scene fully; the color's alpha holds masks
     // g_flFresnelModulatesAlpha: a see-through shell shows towards its outline only, where the
     // surface turns away from the eye (a rim light laid over a model, as the prismatic sets')
@@ -431,7 +431,9 @@ export function createDotaMaterial(original, vmat, textures) {
     if (int.F_ALPHA_TEST && programs?.g_flAlphaTestReference) u.uAlphaTest.value = get("g_flAlphaTestReference")?.[0] ?? 0.5;
     if (glow) {
       const tint = colorParam(get("g_vBloomColor")) ?? [1, 1, 1];
-      glow.uniforms.uGlow.value.setRGB(tint[0], tint[1], tint[2]).multiplyScalar(Math.max(get("g_flBloomScale")?.[0] ?? 0, 0));
+      glow.uniforms.uBloomColor.value.setRGB(tint[0], tint[1], tint[2]);
+      glow.uniforms.uBloomScale.value = Math.max(get("g_flBloomScale")?.[0] ?? 0, 0);
+      glow.uniforms.uBloomShift.value = get("g_flBloomShift")?.[0] ?? 0;
     }
     // A material fully cloaked is not seen in the game, only what its effects draw (Io's body)
     const cloaked = Boolean(int.F_ENABLE_CLOAK) && (get("g_flMaterialCloakFactor")?.[0] ?? 0) >= 0.99;
@@ -452,15 +454,19 @@ export function createDotaMaterial(original, vmat, textures) {
   return material;
 }
 
-// The halo the game puts around a material's glowing parts, in the material's own bloom
-// color and strength (g_vBloomColor, g_flBloomScale), drawn into a separate glow pass.
+// The halo the game puts around a material's glowing parts, drawn into a separate glow pass as
+// the game writes its bloom buffer (hero.vfx's deferred mode, read from its compiled code): how
+// much glows is Masks1 A (and the alpha of an additive self-illuminating detail) times
+// g_flBloomScale; the halo's color is the surface's own, moved towards g_vBloomColor by that
+// amount times g_flBloomShift (M-05; 0 on most materials, so the color alone).
 // null for materials without one.
-// Shares the main material's texture coordinates and alpha test, which may change every frame.
+// Shares the main material's texture coordinates, detail and alpha test, which may change every frame.
 function createGlowMaterial(vmat, textures, main, side, animated) {
   const float = vmat.FloatParams ?? {};
   const scale = float.g_flBloomScale ?? 0;
   const masks1 = textures.g_tMasks1;
-  if ((scale <= 0 && !animated) || (!masks1 && !float.g_flSelfIllumBlendToFull)) {
+  const detailGlows = main.uDetailMode.value === 2;
+  if ((scale <= 0 && !animated) || (!masks1 && !float.g_flSelfIllumBlendToFull && !detailGlows)) {
     return null;
   }
   return new THREE.ShaderMaterial({
@@ -468,35 +474,62 @@ function createGlowMaterial(vmat, textures, main, side, animated) {
     fragmentShader: /* glsl */ `
       uniform sampler2D tColor;
       uniform sampler2D tMasks1;
+      uniform sampler2D tDetail;
       uniform mat3 uBaseUv;
       uniform mat3 uAlphaUv;
+      uniform mat3 uDetailUv;
       uniform float uSeparateAlpha;
       uniform float uHasMasks1;
       uniform float uToFull;
+      uniform float uDetailToFull;
+      uniform float uDetailMode;
+      uniform float uDetailFactor;
+      uniform vec3 uDetailTint;
       uniform float uAlphaTest;
-      uniform vec3 uGlow;
+      uniform float uIllumination;
+      uniform vec3 uBloomColor;
+      uniform float uBloomScale;
+      uniform float uBloomShift;
       varying vec2 vUv;
       void main() {
         vec2 uv = (uBaseUv * vec3(vUv, 1.0)).xy;
         vec4 color = texture2D(tColor, uv);
         if (uSeparateAlpha > 0.5) color.a = texture2D(tColor, (uAlphaUv * vec3(vUv, 1.0)).xy).a;
         if (uAlphaTest > 0.0 && color.a < uAlphaTest) discard;
-        float mask = uHasMasks1 > 0.5 ? texture2D(tMasks1, uv).a : 0.0;
-        // The surface's own color, tinted by the material's bloom color
-        gl_FragColor = vec4(color.rgb * uGlow * mix(mask, 1.0, uToFull), 1.0);
+        vec4 masks1 = uHasMasks1 > 0.5 ? texture2D(tMasks1, uv) : vec4(0.0);
+        float glow = max(masks1.a, uToFull);
+        vec3 albedo = color.rgb;
+        if (uDetailMode > 1.5 && uDetailMode < 2.5) {
+          vec4 detail = texture2D(tDetail, (uDetailUv * vec3(vUv, 1.0)).xy);
+          float amount = (uHasMasks1 > 0.5 ? max(masks1.r, uDetailToFull) : 1.0) * uDetailFactor;
+          albedo += detail.rgb * uDetailTint * amount;
+          glow += detail.a * amount;
+        }
+        glow *= uBloomScale;
+        vec3 halo = mix(albedo, uBloomColor, glow * uBloomShift) * uIllumination;
+        gl_FragColor = vec4(max(halo * glow, 0.0), 1.0);
       }
     `,
     uniforms: {
       tColor: main.tColor,
       uBaseUv: main.uBaseUv,
       uAlphaUv: main.uAlphaUv,
+      uDetailUv: main.uDetailUv,
       uSeparateAlpha: main.uSeparateAlpha,
       uAlphaTest: main.uAlphaTest,
+      tDetail: main.tDetail,
+      uDetailMode: main.uDetailMode,
+      uDetailFactor: main.uDetailFactor,
+      uDetailTint: main.uDetailTint,
+      uDetailToFull: main.uDetailToFull,
+      uIllumination: main.uIllumination,
       tMasks1: { value: masks1 ?? null },
       uHasMasks1: { value: masks1 ? 1 : 0 },
       uToFull: { value: float.g_flSelfIllumBlendToFull ?? 0 },
-      // Set by the main material from g_vBloomColor and g_flBloomScale
-      uGlow: { value: new THREE.Color() },
+      // Set by the main material, the values may change every frame
+      uBloomColor: { value: new THREE.Color(1, 1, 1) },
+      uBloomScale: { value: 0 },
+      uBloomShift: { value: 0 },
     },
     side,
   });

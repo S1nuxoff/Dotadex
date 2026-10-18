@@ -408,6 +408,12 @@ export function createDotaMaterial(original, vmat, textures) {
     side: int.F_RENDER_BACKFACES ? THREE.DoubleSide : THREE.FrontSide,
   });
   material.name = original.name;
+  // While developing, ?nospec drops the key light's highlight and ?noenv the cube map's reflection
+  if (import.meta.env.DEV) {
+    const search = window.location.search;
+    if (search.includes("nospec")) material.uniforms.uSpecularScale.value = 0;
+    if (search.includes("noenv")) material.uniforms.uCubeMapScale.value = 0;
+  }
   const glow = createGlowMaterial(vmat, textures, material.uniforms, material.side, Boolean(programs?.g_flBloomScale));
   material.userData.glow = glow;
   const u = material.uniforms;

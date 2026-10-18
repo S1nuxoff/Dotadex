@@ -1038,11 +1038,15 @@ export class Stage {
       const { light, ambient } = this.portrait;
       const color = (values, scale) => new THREE.Color(...(values ?? [1, 1, 1]).map((value) => value * scale));
       const strength = THREE.MathUtils.clamp(light.scale ?? 1, 1, 2.5);
+      // While developing, ?key=<times> and ?amb=<times> scale the key light and the ambient (V-13)
+      const search = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null;
+      const keyTimes = Number(search?.get("key") ?? 1);
+      const ambientTimes = Number(search?.get("amb") ?? 1);
       const look = {
-        key: color(light.color, 1.1 * strength),
-        fill: color(ambient.color, (ambient.scale ?? 1) * 0.12),
-        sky: color(ambient.color, (ambient.scale ?? 1) * 0.1),
-        ground: color(ambient.color, (ambient.scale ?? 1) * 0.05),
+        key: color(light.color, 1.1 * strength * keyTimes),
+        fill: color(ambient.color, (ambient.scale ?? 1) * 0.12 * ambientTimes),
+        sky: color(ambient.color, (ambient.scale ?? 1) * 0.1 * ambientTimes),
+        ground: color(ambient.color, (ambient.scale ?? 1) * 0.05 * ambientTimes),
       };
       setDotaLighting(look);
       this.portraitDir = sourceToScene(light.position).normalize();

@@ -268,10 +268,12 @@ const studio = {
   groundColor: stage.groundColor.clone(),
 };
 
-// The light of a scene of the game instead of the studio, or null for the studio again.
-// keyDir is in view space, so a scene's light is turned with the camera every frame.
 // The second light's strength for the diffuse; the rim takes its color alone
 const fillScale = { value: 1 };
+const studioFillDir = stage.fillDir.clone();
+
+// The light of a scene of the game instead of the studio, or null for the studio again.
+// keyDir and fillDir are in view space, so a scene's lights are turned with the camera every frame.
 
 export function setDotaLighting(light) {
   stage.keyColor.copy(light?.key ?? studio.keyColor);
@@ -282,10 +284,17 @@ export function setDotaLighting(light) {
   if (!light) {
     stage.keyDir.copy(studioKeyDir);
   }
+  if (!light?.fillFollows) {
+    stage.fillDir.copy(studioFillDir);
+  }
 }
 
 export function setDotaKeyDir(viewDir) {
   stage.keyDir.copy(viewDir);
+}
+
+export function setDotaFillDir(viewDir) {
+  stage.fillDir.copy(viewDir);
 }
 
 

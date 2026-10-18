@@ -9,7 +9,7 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { FullScreenQuad, Pass } from "three/addons/postprocessing/Pass.js";
-import { colorParam, createDotaMaterial, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
+import { colorParam, createDotaMaterial, setDotaFillDir, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
 import { loadMaterialPrograms } from "./materialPrograms.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
@@ -1034,7 +1034,15 @@ export class Stage {
         fillScale: (ambient.scale ?? 1) * ambientTimes,
         sky: color(ambient.color, (ambient.scale ?? 1) * 0.1 * ambientTimes),
         ground: color(ambient.color, (ambient.scale ?? 1) * 0.05 * ambientTimes),
+        fillFollows: Boolean(ambient.direction),
       };
+      // The second light from PortraitAmbientDirection: angles the light points along, as the key
+      // light's (whose position lies the other way), so it comes from the opposite side
+      this.portraitFillDir = null;
+      if (ambient.direction?.length === 3) {
+        const [pitch, yaw] = ambient.direction.map(THREE.MathUtils.degToRad);
+        this.portraitFillDir = sourceToScene([Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)]).normalize().negate();
+      }
       setDotaLighting(look);
       this.portraitDir = sourceToScene(light.position).normalize();
       this.portraitSun.color.copy(look.key);
@@ -1617,6 +1625,7 @@ export class Stage {
       setDotaKeyDir(this.sunDir.clone().transformDirection(this.camera.matrixWorldInverse));
     } else if (this.portraitLit) {
       setDotaKeyDir(this.portraitDir.clone().transformDirection(this.camera.matrixWorldInverse));
+      if (this.portraitFillDir) setDotaFillDir(this.portraitFillDir.clone().transformDirection(this.camera.matrixWorldInverse));
     }
     // The pedestal's fog lies beyond the hero as the camera looks
     if (this.pedestal?.visible) {

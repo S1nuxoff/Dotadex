@@ -9,8 +9,8 @@ import * as THREE from "three";
 // the animation; the rest move (gravity, damping, a pull back towards where the animation puts
 // them), kept together by rods (a least and a most distance between two nodes) and pushed out of
 // the body's capsules and spheres. Nodes from m_nFirstPositionDrivenNode on are bones the moving
-// nodes turn and carry: by the best fit of a group of nodes (m_FitMatrices) or by the axes four
-// nodes span (m_NodeBases). Moving nodes that are bones themselves are put where they are and
+// nodes turn and carry: by the best fit of a group of nodes (m_FitMatrices, or the four of
+// m_NodeBases). Moving nodes that are bones themselves are put where they are and
 // turned towards the next node.
 //
 // Everything is worked out as a change from where the animation has the nodes and bones, so the
@@ -28,6 +28,12 @@ const MAX_STEPS = 8;
 const ITERATIONS = 4;
 // A node this far from its place in the animation (inches) means the solver lost it: start over
 const LOST = 400;
+// Picked by measuring 81 models in Node (dota2-model-tracker/temp/m06/wobble.mjs: how much the
+// bones move with the hero standing, how far they swing on a fast turn, how soon they settle),
+// the cloth swinging too much on the site with the first guesses (damping of at least 1/s,
+// frames of 1/30 s). leastDamping: per second, every node; relative: damped against the
+// animation's own movement; frameRate: of the older models' per-frame shares
+export const tuning = { leastDamping: 8, relative: true, frameRate: 60 };
 
 // Source's model space (x ahead, y left, z up, inches) to the glTF's (y up, metres)
 const fromSource = (x, y, z, out = new THREE.Vector3()) => out.set(y, z, x).multiplyScalar(SOURCE_TO_METRES);
@@ -129,16 +135,6 @@ const v2 = new THREE.Vector3();
 const v3 = new THREE.Vector3();
 const m1 = new THREE.Matrix4();
 const m2 = new THREE.Matrix4();
-const basis = new THREE.Matrix4();
-
-// The rotation of the axes two directions span (the first the x axis, the second in the x-y plane)
-function axesOf(ax, ay, az, bx, by, bz, out) {
-  v1.set(ax, ay, az).normalize();
-  v3.set(bx, by, bz).cross(v1).negate().normalize();
-  v2.crossVectors(v3, v1);
-  basis.makeBasis(v1, v2, v3);
-  return out.setFromRotationMatrix(basis);
-}
 
 export class Cloth {
   // fe: the model's FeModel; group: the shown model, its bones by name (any letter case) and
@@ -217,15 +213,13 @@ export class Cloth {
     const integrator = fe.m_NodeIntegrator ?? [];
     const gravityScale = fe.m_flDefaultGravityScale ?? 1;
     // Two kinds of models: newer ones give the pull towards the animation per second (Void Spirit 15,
-    // Crystal Maiden 30, Juggernaut 6), older ones (most, every value at most 1) a share per frame
-    // of 1/30 s, the force being the painted strength cubed (0.125 = 0.5³). Taken as such, an older
-    // model's pull would be some thirty times too weak and its cloth would only hang
+    // Crystal Maiden 30, Juggernaut 6: 30 times a painted strength), older ones (most, every value
+    // at most 1) a share per frame, the force being the painted strength cubed (0.125 = 0.5³).
+    // Taken per second, an older model's pull would be far too weak and its cloth would only hang
     const moving = [...this.moving.keys()].filter((i) => this.moving[i]);
     const perFrame = moving.every((i) => (integrator[i]?.flAnimationVertexAttraction ?? 0) <= 1 && (integrator[i]?.flAnimationForceAttraction ?? 0) <= 1);
-    const FRAME_RATE = 30;
-    // Damping of at least this (per second): with none at all (most models) a swing never ends
-    const LEAST_DAMPING = 1;
-    this.damping = Float64Array.from({ length: n }, (_, i) => Math.max(integrator[i]?.flPointDamping ?? 0, LEAST_DAMPING));
+    const FRAME_RATE = tuning.frameRate;
+    this.damping = Float64Array.from({ length: n }, (_, i) => Math.max(integrator[i]?.flPointDamping ?? 0, tuning.leastDamping));
     this.force = Float64Array.from({ length: n }, (_, i) => (integrator[i]?.flAnimationForceAttraction ?? 0) * (perFrame ? FRAME_RATE * FRAME_RATE : 1));
     this.pull = Float64Array.from({ length: n }, (_, i) => {
       const pull = integrator[i]?.flAnimationVertexAttraction ?? 0;
@@ -273,7 +267,7 @@ export class Cloth {
     });
 
     // The bones the cloth turns and carries, parents first. Each is turned by one of: the best fit
-    // of a group of nodes (m_FitMatrices), the axes four nodes span (m_NodeBases), towards the
+    // of a group of nodes (m_FitMatrices, or the four of m_NodeBases), towards the
     // next node (a bone that moves itself), the best fit of the nodes hanging off it; and moved
     // with its anchor nodes
     this.driven = [];
@@ -311,8 +305,12 @@ export class Cloth {
         driven.fit = fits.get(i);
         driven.anchor = driven.fit;
       } else if (bases.has(i)) {
-        driven.base = bases.get(i);
-        driven.anchor = held || this.moving[i] ? [[i, 1]] : reverse.has(i) ? [[reverse.get(i), 1]] : hangers.has(i) ? even(hangers.get(i)) : even(driven.base);
+        // The axes the four nodes span would be the game's way, but on small parts the nodes lie
+        // an inch or two apart and the axes flip about with the least movement: the best fit of
+        // the same four turns the bone alike and holds still
+        const corners = [...new Set(bases.get(i))];
+        driven.fit = even(corners);
+        driven.anchor = held || this.moving[i] ? [[i, 1]] : reverse.has(i) ? [[reverse.get(i), 1]] : hangers.has(i) ? even(hangers.get(i)) : driven.fit;
       } else if (this.moving[i]) {
         // Turned towards a child bone that is a node too, or on from its parent node
         const child = bone.children.find((node) => nodeOfBone.has(node));
@@ -349,6 +347,7 @@ export class Cloth {
     this.target = new Float64Array(n * 3);
     this.targetBefore = new Float64Array(n * 3);
     this.step = new Float64Array(n * 3);
+    this.stepBefore = new Float64Array(n * 3);
     this.started = false;
     this.lastStep = STEP;
     this.groupBefore = new THREE.Matrix4();
@@ -413,6 +412,7 @@ export class Cloth {
       x.set(target);
       previous.set(target);
       targetBefore.set(target);
+      step.set(target);
       this.groupBefore.copy(groupWorld);
       this.started = true;
     }
@@ -438,6 +438,7 @@ export class Cloth {
       this.placeShapes();
       for (let s = 1; s <= steps; s++) {
         const share = s / steps;
+        this.stepBefore.set(step);
         for (let k = 0; k < n * 3; k++) {
           step[k] = targetBefore[k] + (target[k] - targetBefore[k]) * share;
         }
@@ -475,7 +476,7 @@ export class Cloth {
   }
 
   advance(h, unit) {
-    const { n, moving, x, previous, last, step, damping, force, pull, gravity } = this;
+    const { n, moving, x, previous, last, step, stepBefore, damping, force, pull, gravity } = this;
     last.set(x);
     const ratio = h / this.lastStep;
     this.lastStep = h;
@@ -487,11 +488,14 @@ export class Cloth {
         x[k + 2] = step[k + 2];
         continue;
       }
-      const keep = Math.exp(-damping[i] * h) * ratio;
+      const keep = Math.exp(-damping[i] * h);
       const toward = 1 - Math.exp(-pull[i] * h);
       for (let c = 0; c < 3; c++) {
         const position = x[k + c];
-        const velocity = (position - previous[k + c]) * keep;
+        // Damped towards the animation's own movement, not towards rest: following the body
+        // is not slowed down, only swinging about it
+        const carried = tuning.relative ? step[k + c] - stepBefore[k + c] : 0;
+        const velocity = carried + ((position - previous[k + c]) * ratio - carried) * keep;
         let acceleration = force[i] * (step[k + c] - position);
         if (c === 1) {
           acceleration -= gravity[i] * unit;
@@ -622,10 +626,6 @@ export class Cloth {
           covariance[8] += w * pz * qz;
         }
         rotation.copy(extractRotation(covariance, driven.rotation));
-      } else if (driven.base) {
-        const [x0, x1, y0, y1] = driven.base;
-        const axes = (p) => axesOf(p[x1 * 3] - p[x0 * 3], p[x1 * 3 + 1] - p[x0 * 3 + 1], p[x1 * 3 + 2] - p[x0 * 3 + 2], p[y1 * 3] - p[y0 * 3], p[y1 * 3 + 1] - p[y0 * 3 + 1], p[y1 * 3 + 2] - p[y0 * 3 + 2], new THREE.Quaternion());
-        rotation.copy(axes(x)).multiply(axes(target).invert());
       } else if (driven.aim) {
         const [a, b] = driven.aim;
         v2.set(target[b * 3] - target[a * 3], target[b * 3 + 1] - target[a * 3 + 1], target[b * 3 + 2] - target[a * 3 + 2]);

@@ -415,6 +415,66 @@ const veilShader = {
 
 // The scene's depth as the distance from the camera, in a texture the particles read (they are
 // drawn against the frame's own depth, which they cannot read while drawing into it)
+// The particles drawn again alone (the model hides them by the frame's depth, SceneDepthPass),
+// what is brighter than white blurred into a halo and added over the frame
+class ParticleGlowPass extends Pass {
+  constructor(scene, camera) {
+    super();
+    this.needsSwap = false;
+    this.scene = scene;
+    this.camera = camera;
+    this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.8, 0.3, 1.0);
+    this.add = new FullScreenQuad(
+      new THREE.ShaderMaterial({
+        uniforms: { tGlow: { value: null } },
+        vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+        fragmentShader: `uniform sampler2D tGlow; varying vec2 vUv; void main() { gl_FragColor = vec4(texture2D(tGlow, vUv).rgb, 0.0); }`,
+        depthTest: false,
+        depthWrite: false,
+        // Added to the colors, the frame's alpha kept (the page shows through round the model)
+        blending: THREE.CustomBlending,
+        blendEquation: THREE.AddEquation,
+        blendSrc: THREE.OneFactor,
+        blendDst: THREE.OneFactor,
+        blendSrcAlpha: THREE.ZeroFactor,
+        blendDstAlpha: THREE.OneFactor,
+      })
+    );
+  }
+
+  setSize(width, height) {
+    this.target.setSize(width, height);
+    this.bloom.setSize(width, height);
+  }
+
+  render(renderer, writeBuffer, readBuffer) {
+    if (!this.scene.children.some((child) => child.visible) || !SCENE_DEPTH.uHasSceneDepth.value) {
+      return;
+    }
+    const clearColor = renderer.getClearColor(new THREE.Color());
+    const clearAlpha = renderer.getClearAlpha();
+    renderer.setRenderTarget(this.target);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear();
+    SCENE_DEPTH.uGlowPass.value = 1;
+    renderer.render(this.scene, this.camera);
+    SCENE_DEPTH.uGlowPass.value = 0;
+    // The bloom leaves its halo alone in its first target before putting it over its input
+    this.bloom.render(renderer, null, this.target);
+    this.add.material.uniforms.tGlow.value = this.bloom.renderTargetsHorizontal[0].texture;
+    renderer.setRenderTarget(readBuffer);
+    this.add.render(renderer);
+    renderer.setClearColor(clearColor, clearAlpha);
+  }
+
+  dispose() {
+    this.target.dispose();
+    this.bloom.dispose();
+    this.add.dispose();
+  }
+}
+
 class SceneDepthPass extends Pass {
   constructor(camera) {
     super();
@@ -567,13 +627,15 @@ export class Stage {
       blendDstAlpha: THREE.OneFactor,
     });
     this.composer.addPass(this.bloom);
-    // The particles after the bloom, over the frame and against its depth: their glow is in
-    // their textures, and the bloom made each bright one a halo far larger than the game's
+    // The particles after the bloom, over the frame and against its depth: the frame's bloom
+    // made each bright one a halo far larger than the game's. They glow in a pass of their own,
+    // only where they are brighter than white (overbright, additive layers piled up).
     this.particleScene = new THREE.Scene();
     this.composer.addPass(new SceneDepthPass(this.camera));
     const particlePass = new RenderPass(this.particleScene, this.camera);
     particlePass.clear = false;
     this.composer.addPass(particlePass);
+    this.composer.addPass(new ParticleGlowPass(this.particleScene, this.camera));
     // The materials' own halos (see createGlowMaterial): the model drawn again with only its
     // glow, everything else black so it still hides what is behind it, then blurred
     this.glowComposer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));

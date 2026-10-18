@@ -142,6 +142,26 @@ function loadVariantTexture(url, color) {
   return variantTextures.get(url);
 }
 
+// A model's sequences with their activities ({ name: { looping, activities: [activity, ...modifiers] } }),
+// next to the model; null where there is none
+const sequenceFiles = new Map();
+function loadSequences(modelUrl) {
+  const url = modelUrl.replace(/\.glb$/, ".sequences.json");
+  if (!sequenceFiles.has(url)) {
+    sequenceFiles.set(url, fetch(url).then((res) => (res.ok ? res.json() : null)).catch(() => null));
+  }
+  return sequenceFiles.get(url);
+}
+
+// The sequence the game picks for an activity with exactly these modifiers, among the model's clips
+function sequenceFor(sequences, names, activity, modifiers = []) {
+  const want = [...modifiers].sort().join(",");
+  return names.find((name) => {
+    const [act, ...mods] = sequences?.[name]?.activities ?? [];
+    return act === activity && mods.sort().join(",") === want;
+  });
+}
+
 // { "<material name>": { vmat, textures: { g_tColor: Texture, ... } } } for skin N of a model
 async function loadSkin(modelUrl, skin) {
   const url = modelUrl.replace(/\.glb$/, ".skins.json");
@@ -725,7 +745,7 @@ export class Stage {
       const [url, skin] = entry.split("#skin=");
       return { url, skin: Number(skin) || 0 };
     });
-    const [gltfs, skins] = await Promise.all([
+    const [gltfs, skins, sequences] = await Promise.all([
       Promise.all(
         entries.map(({ url }) =>
           loadModel(url, (event) => {
@@ -735,6 +755,7 @@ export class Stage {
         )
       ),
       Promise.all(entries.map(({ url, skin }) => (skin ? loadSkin(url, skin) : null))),
+      Promise.all(entries.map(({ url }) => loadSequences(url))),
       // Materials whose parameters change over time, needed before the materials are made
       loadMaterialPrograms(entries[0].url.slice(0, entries[0].url.indexOf("/models/") + 1)),
     ]);
@@ -776,6 +797,7 @@ export class Stage {
         return null;
       }
     }
+    this.sequences = sequences[rootIndex];
     this.replace(group, gltfs[rootIndex].animations);
     this.modelUrls = entries.map((entry) => entry.url);
     this.particles?.setModel(group, this.modelUrls);
@@ -857,12 +879,22 @@ export class Stage {
     }
     this.current = null;
 
-    const idle = Object.keys(this.actions).find((name) => /^idle$|_idle$|^idle_anim$/i.test(name))
-      ?? Object.keys(this.actions).find((name) => /idle/i.test(name))
-      ?? Object.keys(this.actions)[0];
+    // As the game's hero preview: the loadout stance (ACT_DOTA_LOADOUT, or the idle made for the
+    // loadout, or the plain idle), come into with the loadout's spawn. By the sequences' activities;
+    // by the clips' names for models without them (a name like run_to_idle was taken for idle)
+    const names = Object.keys(this.actions).sort((a, b) => a.startsWith("@") - b.startsWith("@"));
+    const seq = this.sequences;
+    const idle = sequenceFor(seq, names, "ACT_DOTA_LOADOUT")
+      ?? sequenceFor(seq, names, "ACT_DOTA_IDLE", ["loadout"])
+      ?? sequenceFor(seq, names, "ACT_DOTA_IDLE")
+      ?? names.find((name) => /^idle$|^idle_anim$/i.test(name))
+      ?? names.find((name) => /idle/i.test(name) && !/_to_|to_idle|transition/i.test(name))
+      ?? names[0];
     this.idleName = idle;
     // Heroes come in with their spawn animation, as in the game, then settle into idle
-    const spawn = Object.keys(this.actions).find((name) => /spawn/i.test(name) && !/respawn|loadout/i.test(name));
+    const spawn = sequenceFor(seq, names, "ACT_DOTA_SPAWN", ["loadout"])
+      ?? sequenceFor(seq, names, "ACT_DOTA_SPAWN")
+      ?? (seq ? undefined : names.find((name) => /spawn/i.test(name) && !/respawn|loadout/i.test(name)));
     // The frame and the ground are set from the idle pose: a spawn starts mid-leap or crouched.
     // The first model of a stage is framed at once, with no flight in from the starting camera.
     if (idle) {

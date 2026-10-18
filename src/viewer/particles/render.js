@@ -217,14 +217,24 @@ function blendingOf(def, material) {
   material.uniforms.uHalf.value = /HALF_BLEND/.test(name) ? 0.5 : 1;
 }
 
-// The frame of a particle's sequence at its age, as a uv rectangle of the sheet
-function frameOf(sheet, sequenceIndex, age, normalizedAge, def, out, offset) {
+function frameRect(sheet, frame, out, offset) {
+  out[offset] = frame[0] / sheet.width;
+  out[offset + 1] = 1 - (frame[1] + frame[3]) / sheet.height;
+  out[offset + 2] = frame[2] / sheet.width;
+  out[offset + 3] = frame[3] / sheet.height;
+}
+
+// The frame of a particle's sequence at its age, as a uv rectangle of the sheet; with next and
+// blend, the frame after it and how far the sequence is towards it: the game blends the two
+// unless the renderer says not to (m_bBlendFramesSeq0), which keeps a fire smooth at 24 frames
+function frameOf(sheet, sequenceIndex, age, normalizedAge, def, out, offset, next, blend, blendIndex) {
   const sequences = sheet?.sequences;
   if (!sequences?.length) {
     out[offset] = 0;
     out[offset + 1] = 0;
     out[offset + 2] = 1;
     out[offset + 3] = 1;
+    if (blend) blend[blendIndex] = 0;
     return;
   }
   const sequence = sequences[Math.abs(Math.floor(sequenceIndex)) % sequences.length];
@@ -239,11 +249,13 @@ function frameOf(sheet, sequenceIndex, age, normalizedAge, def, out, offset) {
     cycle = age * rate;
   }
   const looped = sequence.loop === false ? Math.min(cycle, 0.9999) : cycle - Math.floor(cycle);
-  const frame = frames[Math.min(Math.floor(looped * frames.length), frames.length - 1)];
-  out[offset] = frame[0] / sheet.width;
-  out[offset + 1] = 1 - (frame[1] + frame[3]) / sheet.height;
-  out[offset + 2] = frame[2] / sheet.width;
-  out[offset + 3] = frame[3] / sheet.height;
+  const at = looped * frames.length;
+  const index = Math.min(Math.floor(at), frames.length - 1);
+  frameRect(sheet, frames[index], out, offset);
+  if (!next) return;
+  const after = sequence.loop === false ? Math.min(index + 1, frames.length - 1) : (index + 1) % frames.length;
+  frameRect(sheet, frames[after], next, offset);
+  blend[blendIndex] = def.m_bBlendFramesSeq0 === false || after === index ? 0 : at - index;
 }
 
 // The scene's depth for depth feathering (soft edges where a particle meets the model or the
@@ -302,6 +314,8 @@ const SPRITE_VERTEX = /* glsl */ `
   attribute vec3 iPosition;
   attribute vec4 iColor;
   attribute vec4 iFrame;
+  attribute vec4 iFrameNext;
+  attribute float iFrameBlend;
   attribute vec2 iSizeRoll;
   attribute vec3 iNormal;
   attribute vec3 iVelocity;
@@ -311,6 +325,8 @@ const SPRITE_VERTEX = /* glsl */ `
   uniform vec4 uTexTransform;
   uniform vec4 uTail;
   varying vec2 vUv;
+  varying vec2 vUvNext;
+  varying float vFrameBlend;
   varying vec2 vLocal;
   varying vec4 vColor;
   ${DEPTH_BIAS}
@@ -324,6 +340,8 @@ const SPRITE_VERTEX = /* glsl */ `
     vec3 center = iPosition + safeNormalize(cameraPosition - iPosition) * uCameraBias;
     // The texture's own scale and offset (a scale of -1 turns it round), within the frame
     vUv = iFrame.xy + (uv * uTexTransform.xy + uTexTransform.zw) * iFrame.zw;
+    vUvNext = iFrameNext.xy + (uv * uTexTransform.xy + uTexTransform.zw) * iFrameNext.zw;
+    vFrameBlend = iFrameBlend;
     vLocal = uv;
     vColor = iColor;
     // A trail's color and alpha scaled towards its tail (uv.y 0), full at its head
@@ -410,6 +428,8 @@ const FRAGMENT = /* glsl */ `
   uniform float uCameraNear;
   uniform float uCameraFar;
   varying vec2 vUv;
+  varying vec2 vUvNext;
+  varying float vFrameBlend;
   varying vec2 vLocal;
   varying vec4 vColor;
   // A layer's value put over the one before it, as uLayerBlend says, by uLayerAmount
@@ -437,6 +457,7 @@ const FRAGMENT = /* glsl */ `
     vec3 shown = colorScaled(vColor.rgb);
     vec3 tint = uGammaColor > 0.5 ? pow(max(shown, 0.0), vec3(2.2)) : shown;
     vec4 texel = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0);
+    if (uHasMap > 0.5 && vFrameBlend > 0.0) texel = mix(texel, texture2D(uMap, vUvNext), vFrameBlend);
     float bright = max(texel.r, max(texel.g, texel.b));
     if (uAlphaFromColor > 0.5) texel.a *= bright;
     if (uAlphaChannel > 0.5) texel.a = uAlphaChannel < 1.5 ? texel.r : uAlphaChannel < 2.5 ? texel.g : texel.b;
@@ -590,6 +611,8 @@ function quads(def, system, trail) {
   const position = attribute("iPosition", 3);
   const color = attribute("iColor", 4);
   const frame = attribute("iFrame", 4);
+  const frameNext = attribute("iFrameNext", 4);
+  const frameBlend = attribute("iFrameBlend", 1);
   const sizeRoll = attribute("iSizeRoll", 2);
   const normal = attribute("iNormal", 3);
   const velocity = attribute("iVelocity", 3);
@@ -680,9 +703,9 @@ function quads(def, system, trail) {
           velocity.array[j + 1] = vy * k;
           velocity.array[j + 2] = vz * k;
         }
-        frameOf(sheet, sequenceOverride >= 0 ? sequenceOverride : seq[i], system.age - creation[i], system.normalizedAge(i), def, frame.array, i * 4);
+        frameOf(sheet, sequenceOverride >= 0 ? sequenceOverride : seq[i], system.age - creation[i], system.normalizedAge(i), def, frame.array, i * 4, frameNext.array, frameBlend.array, i);
       }
-      for (const value of [position, color, frame, sizeRoll, normal, velocity]) {
+      for (const value of [position, color, frame, frameNext, frameBlend, sizeRoll, normal, velocity]) {
         value.addUpdateRange(0, n * value.itemSize);
         value.needsUpdate = true;
       }
@@ -698,11 +721,15 @@ const ROPE_VERTEX = /* glsl */ `
   attribute vec4 color;
   uniform vec4 uTexTransform;
   varying vec2 vUv;
+  varying vec2 vUvNext;
+  varying float vFrameBlend;
   varying vec2 vLocal;
   varying vec4 vColor;
   ${DEPTH_BIAS}
   void main() {
     vUv = uv * uTexTransform.xy + uTexTransform.zw;
+    vUvNext = vUv;
+    vFrameBlend = 0.0;
     vLocal = uv;
     vColor = color;
     gl_Position = depthBiased(projectionMatrix * modelViewMatrix * vec4(position, 1.0));

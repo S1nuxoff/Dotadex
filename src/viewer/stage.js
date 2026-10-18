@@ -600,23 +600,6 @@ export class Stage {
     this.glowMix.uniforms.tGlow.value = this.glowComposer.renderTarget2.texture;
     this.glowMix.enabled = false;
     this.composer.addPass(this.glowMix);
-    // The game grades its frame: colors come out richer than the plain render.
-    // Saturation around the luminance, then a little contrast around mid gray (in linear light)
-    this.grade = new ShaderPass({
-      uniforms: { tDiffuse: { value: null }, uSaturation: { value: 1.3 }, uContrast: { value: 1.08 } },
-      vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform sampler2D tDiffuse; uniform float uSaturation; uniform float uContrast; varying vec2 vUv;
-        void main() {
-          vec4 base = texture2D(tDiffuse, vUv);
-          float luma = dot(base.rgb, vec3(0.2126, 0.7152, 0.0722));
-          vec3 color = max(mix(vec3(luma), base.rgb, uSaturation), 0.0);
-          color = max(0.18 * pow(color / 0.18, vec3(uContrast)), 0.0);
-          gl_FragColor = vec4(color, base.a);
-        }`,
-    });
-    // While developing, ?nograde leaves the frame as rendered (V-13: the game's post-processing has no such grade)
-    this.grade.enabled = !(import.meta.env.DEV && window.location.search.includes("nograde"));
-    this.composer.addPass(this.grade);
     this.composer.addPass(new OutputPass());
 
     this.resizeObserver = new ResizeObserver(() => this.resize());

@@ -102,7 +102,7 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uFillColor;
   uniform vec3 uSkyColor;
   uniform vec3 uGroundColor;
-  uniform vec3 uStageRim;
+  uniform float uFillScale;
 
   varying vec2 vUv;
   varying vec3 vViewNormal;
@@ -197,7 +197,7 @@ const fragmentShader = /* glsl */ `
     vec3 warped = uHasDiffuseWarp > 0.5 ? texture2D(tDiffuseWarp, vec2(halfLambert, warpMask)).rgb : vec3(halfLambert);
     vec3 diffuseLight = mix(vec3(halfLambert), warped, uWarpSelectsRow > 0.5 ? 1.0 : warpMask) * uKeyColor;
     // A second light that fills from another side, then the sky and the ground
-    diffuseLight += clamp(dot(n, uFillDir), 0.0, 1.0) * uFillColor * uAmbientScale;
+    diffuseLight += clamp(dot(n, uFillDir), 0.0, 1.0) * uFillColor * uFillScale * uAmbientScale;
     diffuseLight += mix(uGroundColor, uSkyColor, worldN.y * 0.5 + 0.5) * uAmbientScale;
     // Lamps on the stage: fires and the like light the side of the model turned to them
     #if NUM_POINT_LIGHTS > 0
@@ -233,9 +233,10 @@ const fragmentShader = /* glsl */ `
     vec3 metalColor = env * uMaskCubeByMetal + specular;
     vec3 outColor = mix(lit, metalColor, metal);
 
-    // Rim from above, in the rim color and the fill light's color
+    // Rim from above, in the rim color and the second light's color (without its strength, as
+    // the game's vertex shader gives it)
     vec3 rim = rimMask * uRimLightColor * uRimLightScale * uFillColor * max(worldN.y, 0.0) * fresnel.r;
-    outColor = outColor * uIllumination + rim * mix(vec3(1.0), uStageRim * 2.0, 0.15);
+    outColor = outColor * uIllumination + rim;
 
     // Self-illuminated parts show their color as it is (their halo is the glow pass's)
     outColor = mix(outColor, albedo, clamp(selfIllum, 0.0, 1.0)) * uOverbright;
@@ -269,8 +270,12 @@ const studio = {
 
 // The light of a scene of the game instead of the studio, or null for the studio again.
 // keyDir is in view space, so a scene's light is turned with the camera every frame.
+// The second light's strength for the diffuse; the rim takes its color alone
+const fillScale = { value: 1 };
+
 export function setDotaLighting(light) {
   stage.keyColor.copy(light?.key ?? studio.keyColor);
+  fillScale.value = light?.fillScale ?? 1;
   stage.fillColor.copy(light?.fill ?? studio.fillColor);
   stage.skyColor.copy(light?.sky ?? studio.skyColor);
   stage.groundColor.copy(light?.ground ?? studio.groundColor);
@@ -398,7 +403,7 @@ export function createDotaMaterial(original, vmat, textures) {
       uFillColor: { value: stage.fillColor },
       uSkyColor: { value: stage.skyColor },
       uGroundColor: { value: stage.groundColor },
-      uStageRim: stageRim,
+      uFillScale: fillScale,
       uOpaque: { value: translucent ? 0 : 1 },
       uFresnelAlpha: { value: Math.min(Math.max(float.g_flFresnelModulatesAlpha ?? 0, 0), 1) },
     },

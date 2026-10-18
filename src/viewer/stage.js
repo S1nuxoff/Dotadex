@@ -614,6 +614,8 @@ export class Stage {
           gl_FragColor = vec4(color, base.a);
         }`,
     });
+    // While developing, ?nograde leaves the frame as rendered (V-13: the game's post-processing has no such grade)
+    this.grade.enabled = !(import.meta.env.DEV && window.location.search.includes("nograde"));
     this.composer.addPass(this.grade);
     this.composer.addPass(new OutputPass());
 
@@ -1037,14 +1039,16 @@ export class Stage {
     if (on) {
       const { light, ambient } = this.portrait;
       const color = (values, scale) => new THREE.Color(...(values ?? [1, 1, 1]).map((value) => value * scale));
-      const strength = THREE.MathUtils.clamp(light.scale ?? 1, 1, 2.5);
-      // While developing, ?key=<times> and ?amb=<times> scale the key light and the ambient (V-13)
+      // As the game hands them to hero.vfx: the key light in its color times its scale; the second
+      // light in the ambient color, its scale for the diffuse only (the rim takes the color alone).
+      // While developing, ?key=<times> and ?amb=<times> scale them (V-13)
       const search = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null;
       const keyTimes = Number(search?.get("key") ?? 1);
       const ambientTimes = Number(search?.get("amb") ?? 1);
       const look = {
-        key: color(light.color, 1.1 * strength * keyTimes),
-        fill: color(ambient.color, (ambient.scale ?? 1) * 0.12 * ambientTimes),
+        key: color(light.color, (light.scale ?? 1) * keyTimes),
+        fill: color(ambient.color, 1),
+        fillScale: (ambient.scale ?? 1) * ambientTimes,
         sky: color(ambient.color, (ambient.scale ?? 1) * 0.1 * ambientTimes),
         ground: color(ambient.color, (ambient.scale ?? 1) * 0.05 * ambientTimes),
       };

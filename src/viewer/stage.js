@@ -1405,6 +1405,9 @@ export class Stage {
       this.controls.minDistance = across * 0.3;
       this.controls.maxDistance = across * 3;
       this.group.position.y = 0;
+      // Where the game's camera looks from, round the hero: the free camera turns the light by
+      // how far it has gone round from there
+      this.portraitAzimuth = Math.atan2(position.x - target.x, position.z - target.z);
       if (immediate || reducedMotion.matches || !this.framedOnce) {
         this.tween = null;
         this.controls.target.copy(target);
@@ -1624,8 +1627,17 @@ export class Stage {
     if (this.sceneLook) {
       setDotaKeyDir(this.sunDir.clone().transformDirection(this.camera.matrixWorldInverse));
     } else if (this.portraitLit) {
-      setDotaKeyDir(this.portraitDir.clone().transformDirection(this.camera.matrixWorldInverse));
-      if (this.portraitFillDir) setDotaFillDir(this.portraitFillDir.clone().transformDirection(this.camera.matrixWorldInverse));
+      // In the game the camera stays and the hero turns; the free camera goes round the hero
+      // instead, so the lights go round with it and the hero is lit as the game shows it
+      const turn = new THREE.Quaternion();
+      if (this.freeCamera && this.portraitAzimuth !== undefined) {
+        const angle = Math.atan2(this.camera.position.x - this.controls.target.x, this.camera.position.z - this.controls.target.z) - this.portraitAzimuth;
+        turn.setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+      }
+      const keyDir = this.portraitDir.clone().applyQuaternion(turn);
+      setDotaKeyDir(keyDir.clone().transformDirection(this.camera.matrixWorldInverse));
+      if (this.portraitFillDir) setDotaFillDir(this.portraitFillDir.clone().applyQuaternion(turn).transformDirection(this.camera.matrixWorldInverse));
+      this.portraitSun.position.copy(keyDir).multiplyScalar(15).add(this.portraitSun.target.position);
     }
     // The pedestal's fog lies beyond the hero as the camera looks
     if (this.pedestal?.visible) {

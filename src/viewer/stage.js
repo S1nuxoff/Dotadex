@@ -79,8 +79,10 @@ function fogBehind(material) {
     const end = shader.fragmentShader.lastIndexOf("}");
     shader.fragmentShader =
       shader.fragmentShader.slice(0, end) +
-      "  gl_FragColor.a *= 1.0 - smoothstep(uFogNear, uFogFar, dot(vFogPosition.xz, uFogDirection));\n" +
-      "  gl_FragColor.a *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vFogPosition.xz));\n" +
+      "  float pedestalShown = (1.0 - smoothstep(uFogNear, uFogFar, dot(vFogPosition.xz, uFogDirection))) * (1.0 - smoothstep(uFogInner, uFogOuter, length(vFogPosition.xz)));\n" +
+      "  gl_FragColor.a *= pedestalShown;\n" +
+      // Mostly faded, it keeps no depth: the ground fog behind it shows there, as in the game
+      "  if (pedestalShown < 0.5) discard;\n" +
       shader.fragmentShader.slice(end);
   };
   material.needsUpdate = true;

@@ -255,12 +255,17 @@ function withinSphere(def, inputs) {
         randomInSphere(v1);
         if (v1.lengthSq() < 1e-8) v1.set(0, 0, 1);
         v1.normalize();
+        // As particles.dll does (0x18013ba4d..0x18013bb1f): a random direction, made positive
+        // where m_vecDistanceBiasAbs says, times m_vecDistanceBias, then normalized again, so a
+        // flattened sphere (bias 1 1 0) spreads over the whole disk instead of gathering in
+        // its middle
         for (let k = 0; k < 3; k++) {
-          let c = v1.getComponent(k) * distanceBias[k];
+          let c = v1.getComponent(k);
           if (absBias[k]) c = Math.abs(c);
-          v1.setComponent(k, c);
+          v1.setComponent(k, c * distanceBias[k]);
         }
-        const direction = v1.lengthSq() > 0 ? v1.clone().normalize() : v1.set(0, 0, 0).clone();
+        if (v1.lengthSq() > 1e-12) v1.normalize();
+        const direction = v1.clone();
         const radius = lerp(radiusMin(system, i), radiusMax(system, i), Math.random());
         v2.copy(v1).multiplyScalar(radius).applyQuaternion(cp.quaternion).add(cp.position);
         p[i * 3] = q[i * 3] = v2.x;
@@ -1670,6 +1675,39 @@ DEFS.C_OP_DistanceToCP = (def) => {
         const value = remap(distance, inMin(system, i), inMax(system, i), outMin(system, i), outMax(system, i));
         const base = vector ? initial[i * 3] : initial[i];
         writeFloat(system, field, i, scale ? base * value : set(vector ? data[i * 3] : data[i], base, value));
+      }
+    },
+  };
+};
+
+// The distance between two points (vector inputs: control points, a particle's own vectors),
+// from m_flInputMin..Max to m_flOutputMin..Max, into a field. The loadout pedestal's soft fog
+// measures its two rim attachments (attachment_distance_a and _b) with it, and pushes itself out
+// from the middle by that (AttractToControlPoint with a negative force on the field)
+DEFS.C_OP_DistanceBetweenVecs = (def) => {
+  const field = def.m_nFieldOutput ?? 3;
+  const first = compileVector(def.m_vecPoint1, [0, 0, 0]);
+  const second = compileVector(def.m_vecPoint2, [0, 0, 0]);
+  const inMin = compileFloat(def.m_flInputMin, 0);
+  const inMax = compileFloat(def.m_flInputMax, 1);
+  const outMin = compileFloat(def.m_flOutputMin, 0);
+  const outMax = compileFloat(def.m_flOutputMax, 1);
+  const perSecond = Boolean(def.m_bDeltaTime);
+  const set = setter(def);
+  const a = [0, 0, 0];
+  const b = [0, 0, 0];
+  return {
+    update(system, dt) {
+      const data = system.float(field);
+      const initial = system.initialFloat(field);
+      const vector = VECTOR_FIELDS.has(field);
+      for (let i = 0; i < system.count; i++) {
+        first(system, i, a);
+        second(system, i, b);
+        let distance = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+        if (perSecond && dt > 0) distance /= dt;
+        const value = remap(distance, inMin(system, i), inMax(system, i), outMin(system, i), outMax(system, i));
+        writeFloat(system, field, i, set(vector ? data[i * 3] : data[i], vector ? initial[i * 3] : initial[i], value));
       }
     },
   };

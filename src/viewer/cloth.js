@@ -17,8 +17,11 @@ import * as THREE from "three";
 // bones' own axes (the game's and the glTF's differ) never matter: a bone is turned and moved by
 // what the cloth did on top of the animation.
 //
+// Wind: the model's wind effects (m_Effects), started by its animations' events (the tracker puts
+// them in the file as `events`), blow as the game's do (see Wind).
+//
 // Not done: triangles and quads (cloth stiffness on surfaces, 39 models), twists and hinges,
-// boxes, wind (m_Effects), each node's collision masks, per-node local force.
+// boxes, stiffening effects, each node's collision masks, per-node local force.
 
 const SOURCE_TO_METRES = 0.0254;
 // The game moves its cloth in fixed steps (the client's physics substeps; settling a new model's
@@ -134,6 +137,126 @@ const v2 = new THREE.Vector3();
 const v3 = new THREE.Vector3();
 const m1 = new THREE.Matrix4();
 const m2 = new THREE.Matrix4();
+const m3 = new THREE.Matrix4();
+const v4 = new THREE.Vector3();
+const v5 = new THREE.Vector3();
+
+// m_Effects' type of wind (ClothEffectWind; 3 is stiffening)
+const WIND = 1;
+// Source's axes to the glTF's, as a turn
+const SOURCE_AXES = new THREE.Matrix3().set(0, 1, 0, 0, 0, 1, 1, 0, 0);
+const random = (low, high) => low + Math.random() * (high - low);
+
+// A wind effect as the game blows it (vphysics2.dll, CSoftbodyEffectWind): a steady wind
+// (Strength, inches per second, in the model's space or its Node's, faded in and out over the
+// event's peak, tail and end) and up to eight vortices: random planes cut into cells of 32 of
+// their units, each cell turning the air one way or the other, carried along by the wind, each
+// vortex fading in and out over a random time and made anew. Each moving node is pushed towards
+// the air's speed across it (across its cloth's surface, or across its rod), by at most all of the
+// difference: min(1, |difference per step in inches| × AirToCloth) of it, AirToCloth weighted by
+// the effect's vertex map where it names one.
+class Wind {
+  // kind: the effect as Cloth keeps it ({ effect, take, node, rest })
+  constructor(kind, [peak, tail, end]) {
+    this.kind = kind;
+    this.name = kind.effect.sName;
+    this.params = kind.effect.m_Params;
+    // The effect's space to the cloth's, set each frame
+    this.turn = new THREE.Matrix3();
+    this.time = 0;
+    this.peak = peak;
+    this.tail = tail;
+    this.end = end;
+    // Without an end it lasts until stopped (or the animation changes)
+    this.weight = end > 0 && peak > 0 ? 0 : 1;
+    this.vortices = (this.params.Vortices ?? [])
+      .filter(({ MaxSpeed, MaxCell }) => MaxSpeed > 0 && MaxCell > 0)
+      .slice(0, 8)
+      .map((vortex) => this.renew({ maxSpeed: vortex.MaxSpeed, maxCell: vortex.MaxCell, choppiness: vortex.Choppiness ?? 1 }));
+    // This step's steady wind, inches per second in the cloth's space
+    this.air = new THREE.Vector3();
+  }
+
+  // A vortex made anew: a random plane and place, size, speed and lifetime
+  renew(vortex) {
+    // A random rotation (Shoemake): its x and y axes span the plane
+    const u1 = Math.random();
+    const u2 = Math.random() * Math.PI * 2;
+    const u3 = Math.random() * Math.PI * 2;
+    const q = new THREE.Quaternion(Math.sqrt(1 - u1) * Math.sin(u2), Math.sqrt(1 - u1) * Math.cos(u2), Math.sqrt(u1) * Math.sin(u3), Math.sqrt(u1) * Math.cos(u3));
+    const size = random(1 / 3, 1) * vortex.maxCell;
+    const scale = size / 32;
+    vortex.a = new THREE.Vector3(1, 0, 0).applyQuaternion(q).divideScalar(scale);
+    vortex.b = new THREE.Vector3(0, 1, 0).applyQuaternion(q).divideScalar(scale);
+    const offset = new THREE.Vector3(random(-size, size), random(-size, size), random(-size, size));
+    vortex.sa = vortex.a.dot(offset);
+    vortex.sb = vortex.b.dot(offset);
+    vortex.amplitude = 0;
+    vortex.rate = random(vortex.choppiness / 3, vortex.choppiness);
+    vortex.fade = vortex.rate < 1e-7 ? 0 : Math.min(vortex.rate * 0.25, 0.08);
+    vortex.phase = vortex.rate < 1e-7 ? 0 : -1 - vortex.fade;
+    vortex.peak = random(1 / 3, 1) * vortex.maxSpeed * scale * 2;
+    return vortex;
+  }
+
+  // On by h seconds; false once it has ended
+  advance(h) {
+    if (this.end > 0) {
+      this.time += h;
+      if (this.time <= this.peak) {
+        this.weight = this.time / this.peak;
+      } else if (this.time <= this.tail) {
+        this.weight = 1;
+      } else if (this.time < this.end) {
+        this.weight = (this.end - this.time) / (this.end - this.tail);
+      } else {
+        return false;
+      }
+    }
+    const [x, y, z] = this.params.Strength ?? [0, 0, 0];
+    this.air.set(x, y, z).multiplyScalar(this.weight).applyMatrix3(this.turn);
+    for (const vortex of this.vortices) {
+      vortex.phase += h * vortex.rate;
+      const phase = Math.abs(vortex.phase);
+      if (phase <= 1) {
+        vortex.amplitude = vortex.peak;
+      } else if (phase < 1 + vortex.fade) {
+        vortex.amplitude = ((1 + vortex.fade - phase) / vortex.fade) ** 2 * vortex.peak;
+      } else {
+        this.renew(vortex);
+      }
+      // The vortices go with the wind
+      vortex.sa += vortex.a.dot(this.air) * h;
+      vortex.sb += vortex.b.dot(this.air) * h;
+    }
+    return true;
+  }
+
+  // The air's speed at a point (inches, inches per second)
+  at(px, py, pz, out) {
+    out.copy(this.air);
+    for (const { a, b, sa, sb, amplitude } of this.vortices) {
+      let u = a.x * px + a.y * py + a.z * pz - sa;
+      let w = b.x * px + b.y * py + b.z * pz - sb;
+      const cu = Math.trunc(u) & ~31;
+      const cw = Math.trunc(w) & ~31;
+      u -= cu + 16;
+      w -= cw + 16;
+      const s = amplitude / Math.max(2, u * u + w * w);
+      u *= s;
+      w *= s;
+      if ((cu ^ cw) & 32) {
+        u = -u;
+      } else {
+        w = -w;
+      }
+      out.x += a.x * u + b.x * w;
+      out.y += a.y * u + b.y * w;
+      out.z += a.z * u + b.z * w;
+    }
+    return out;
+  }
+}
 
 export class Cloth {
   // fe: the model's FeModel; group: the shown model, its bones by name (any letter case) and
@@ -333,6 +456,45 @@ export class Cloth {
       driven.change = new THREE.Matrix4();
     }
 
+    // Wind effects by name, with how strongly the air takes each node: AirToCloth, weighted by the
+    // effect's vertex map where it names one (the map's values, out of 255, for its nodes from
+    // the first moving one on, read from the map's start as the game does)
+    this.events = fe.events ?? {};
+    this.staticCount = staticCount;
+    this.windBases = (fe.m_DynNodeWindBases ?? []).map(({ nNodeX0, nNodeX1, nNodeY0, nNodeY1 }) =>
+      [nNodeX0, nNodeX1, nNodeY0, nNodeY1].every((c) => c < n) ? [nNodeX0, nNodeX1, nNodeY0, nNodeY1] : null
+    );
+    this.windKinds = new Map();
+    const maps = fe.m_VertexMaps ?? [];
+    const mapValues = fe.m_VertexMapValues ?? [];
+    for (const effect of fe.m_Effects ?? []) {
+      const params = effect.m_Params ?? {};
+      const still = (params.Strength ?? [0, 0, 0]).every((c) => !c) && !params.Vortices?.length;
+      if (effect.nType !== WIND || !(params.AirToCloth > 0) || still) {
+        continue;
+      }
+      const take = new Float64Array(n);
+      const map = params.VertexMap ? maps.find(({ nNameHash }) => nNameHash === params.VertexMap >>> 0) : null;
+      if (map) {
+        let first = map.nVertexBase ?? 0;
+        let count = map.nVertexCount ?? 0;
+        if (first < staticCount) {
+          count = Math.max(0, count - (staticCount - first));
+          first = staticCount;
+        }
+        for (let j = 0; j < count && first + j < n; j++) {
+          take[first + j] = ((mapValues[(map.nMapOffset ?? 0) + j] ?? 0) / 255) * params.AirToCloth;
+        }
+      } else {
+        take.fill(params.AirToCloth, staticCount);
+      }
+      // Strength in a node's space: that node's turn in the pose the cloth was made in
+      const node = params.Node >= 0 && params.Node < n && pose[params.Node] ? params.Node : -1;
+      const rest = node >= 0 ? new THREE.Matrix3().setFromMatrix4(m3.makeRotationFromQuaternion(new THREE.Quaternion(...pose[node].slice(4, 8)))) : null;
+      this.windKinds.set(effect.sName, { effect, take, node, rest });
+    }
+    this.winds = [];
+
     this.x = new Float64Array(n * 3);
     this.previous = new Float64Array(n * 3);
     this.last = new Float64Array(n * 3);
@@ -375,6 +537,24 @@ export class Cloth {
     this.started = false;
   }
 
+  // An effect an animation's event starts (operation 0, or 1 with no end) or stops (2); one of the
+  // same name already blowing is replaced
+  startEffect(name, envelope, operation) {
+    const kind = this.windKinds.get(name);
+    if (!kind) {
+      return;
+    }
+    this.winds = this.winds.filter((wind) => wind.name !== name);
+    if (operation !== 2) {
+      this.winds.push(new Wind(kind, envelope));
+    }
+  }
+
+  // Effects with no end belong to the animation that started them: stopped when it changes
+  endHeldEffects() {
+    this.winds = this.winds.filter((wind) => wind.end > 0);
+  }
+
   // Moves the cloth on by dt seconds and turns and moves its bones. The bones' world matrices must
   // be those of the animation (restore() before the animation, then updateMatrixWorld). `view`, a
   // rotation of the world, is the frame the cloth moves in: the free camera going round the hero
@@ -397,6 +577,21 @@ export class Cloth {
     }
     for (const driven of this.driven) {
       driven.world.copy(driven.bone.matrixWorld);
+    }
+    // Each wind's space (the model's, or its node's as the animation turns it) to the cloth's,
+    // inches to inches
+    for (const wind of this.winds) {
+      const { node, rest } = wind.kind;
+      const frame = node >= 0 ? this.anchors[node].frame : -1;
+      if (frame >= 0) {
+        m3.multiplyMatrices(this.frames[frame].world, this.frames[frame].inverseRest);
+      } else {
+        m3.copy(groupWorld);
+      }
+      wind.turn.setFromMatrix4(m3).multiplyScalar(SOURCE_TO_METRES / unit).multiply(SOURCE_AXES);
+      if (rest) {
+        wind.turn.multiply(rest);
+      }
     }
     this.targets(this.target, groupWorld);
 
@@ -478,6 +673,9 @@ export class Cloth {
   // names Predict, AddAnimationAttraction, Relax, AddGoalAttraction)
   advance(h, unit) {
     const { n, moving, x, previous, last, step, damping, force, pull, gravity } = this;
+    if (this.winds.length) {
+      this.blow(h, unit);
+    }
     last.set(x);
     for (let i = 0; i < n; i++) {
       const k = i * 3;
@@ -553,6 +751,52 @@ export class Cloth {
           x[k] = step[k] + (1 - strength) * (x[k] - step[k]);
           previous[k] = x[k] - (x[k] - previous[k]) * keep;
         }
+      }
+    }
+  }
+
+  // The winds on by a step, each pushing the nodes it takes: their speed (the previous place moved)
+  // towards the air's, across the node's cloth (the normal of the two edges m_DynNodeWindBases
+  // names) or across its rod (when both edges are one)
+  blow(h, unit) {
+    const { n, moving, x, previous, staticCount, windBases } = this;
+    this.winds = this.winds.filter((wind) => wind.advance(h));
+    const air = v1;
+    const push = v2;
+    for (const wind of this.winds) {
+      const { take } = wind.kind;
+      for (let i = staticCount; i < n; i++) {
+        if (!moving[i] || !(take[i] > 0)) {
+          continue;
+        }
+        const k = i * 3;
+        wind.at(x[k] / unit, x[k + 1] / unit, x[k + 2] / unit, air);
+        // The air's movement over the step less the node's own, in inches
+        push.set(air.x * h - (x[k] - previous[k]) / unit, air.y * h - (x[k + 1] - previous[k + 1]) / unit, air.z * h - (x[k + 2] - previous[k + 2]) / unit);
+        const base = windBases[i - staticCount];
+        if (base) {
+          const [x0, x1, y0, y1] = base;
+          const edge = v4.set(x[x1 * 3] - x[x0 * 3], x[x1 * 3 + 1] - x[x0 * 3 + 1], x[x1 * 3 + 2] - x[x0 * 3 + 2]);
+          if (y0 === y1) {
+            if (edge.lengthSq() > 1e-12) {
+              edge.normalize();
+              push.addScaledVector(edge, -edge.dot(push));
+            }
+            push.multiplyScalar(Math.min(1, push.length() * take[i]));
+          } else {
+            const normal = v5.set(x[y1 * 3] - x[y0 * 3], x[y1 * 3 + 1] - x[y0 * 3 + 1], x[y1 * 3 + 2] - x[y0 * 3 + 2]).cross(edge);
+            if (normal.lengthSq() > 1e-12) {
+              normal.normalize();
+            }
+            const across = normal.dot(push);
+            push.copy(normal).multiplyScalar(Math.min(1, Math.abs(across) * take[i]) * across);
+          }
+        } else {
+          push.multiplyScalar(Math.min(1, push.length() * take[i]));
+        }
+        previous[k] -= push.x * unit;
+        previous[k + 1] -= push.y * unit;
+        previous[k + 2] -= push.z * unit;
       }
     }
   }

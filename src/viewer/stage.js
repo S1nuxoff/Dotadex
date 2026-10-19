@@ -734,6 +734,8 @@ export class Stage {
     this.sequences = sequences[rootIndex];
     this.replace(group, gltfs[rootIndex].animations);
     this.cloths = [];
+    // The new cloth's effects start with the animation playing now
+    this.clothClip = null;
     for (const fe of shownCloth) {
       try {
         const cloth = fe && new Cloth(fe, group);
@@ -1660,6 +1662,7 @@ export class Stage {
     if (this.mixer && !this.paused) {
       this.mixer.update(delta * this.speed);
       this.playAnimationSounds();
+      this.startClothEffects();
     }
 
     this.effects.update(delta);
@@ -1929,6 +1932,34 @@ export class Stage {
       const crossed = now >= last ? at > last && at <= now : at > last || at <= now;
       if (crossed) {
         this.playEvent(name, 0);
+      }
+    }
+  }
+
+  // The cloth effects (wind) the current animation starts between the last frame's point and this
+  // one's, as the game's AE_CL_CLOTH_EFFECT events do; from the start when the animation changed.
+  // Each shown model's events reach every shown cloth, which knows its effects by name.
+  startClothEffects() {
+    if (!this.cloths?.length || !this.current) {
+      return;
+    }
+    const clip = this.current.getClip();
+    const now = this.cycle();
+    const changed = clip !== this.clothClip;
+    const last = changed ? -1 : this.clothCycle;
+    this.clothClip = clip;
+    this.clothCycle = now;
+    if (changed) {
+      this.cloths.forEach((cloth) => cloth.endHeldEffects());
+    }
+    const started = new Set();
+    for (const source of this.cloths) {
+      for (const [at, name, peak, tail, end, operation] of source.events[clip.name] ?? []) {
+        const crossed = now >= last ? at > last && at <= now : at > last || at <= now;
+        if (crossed && !started.has(`${at} ${name}`)) {
+          started.add(`${at} ${name}`);
+          this.cloths.forEach((cloth) => cloth.startEffect(name, [peak, tail, end], operation));
+        }
       }
     }
   }

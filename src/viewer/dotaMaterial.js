@@ -57,7 +57,7 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D tMasks2;
   uniform sampler2D tDiffuseWarp;
   uniform sampler2D tFresnelWarp;
-  uniform sampler2D tCubeMap;
+  uniform samplerCube tCubeMap;
   uniform sampler2D tDetail;
   uniform sampler2D tDetail2;
   uniform float uDetail2Mode;
@@ -141,11 +141,6 @@ const fragmentShader = /* glsl */ `
     float det = max(dot(T, T), dot(B, B));
     float scale = det == 0.0 ? 0.0 : inversesqrt(det);
     return normalize(T * (mapN.x * scale) + B * (mapN.y * scale) + n * mapN.z);
-  }
-
-  // A soft round light of the studio: 1 inside an angle of size radians around dir, fading out
-  float softbox(vec3 r, vec3 dir, float size) {
-    return smoothstep(cos(size), cos(size * 0.35), dot(r, normalize(dir)));
   }
 
   void main() {
@@ -235,15 +230,10 @@ const fragmentShader = /* glsl */ `
     float phong = pow(max(clamp(dot(r, uKeyDir), 0.0, 1.0), 0.001), max(exponent, 1.0)) * clamp(nl, 0.0, 1.0) * shadow;
     vec3 env = vec3(0.0);
     if (uHasCubeMap > 0.5) {
-      // The cube map comes as a single face; read it like a matcap by the reflection
-      env = texture2D(tCubeMap, r.xy * vec2(0.5, -0.5) + 0.5).rgb;
-      // Some cube maps come out black; a soft studio stands in for those
-      if (dot(env, vec3(1.0)) < 0.01) {
-        env = mix(vec3(0.02, 0.025, 0.03), vec3(0.08, 0.09, 0.1), smoothstep(-0.6, 0.2, r.y));
-        env += vec3(1.0, 0.97, 0.92) * softbox(r, vec3(-0.5, 0.55, 0.65), 0.55) * 0.8;
-        env += vec3(0.8, 0.88, 1.0) * softbox(r, vec3(0.95, 0.15, 0.25), 0.3) * 0.4;
-      }
-      env *= uCubeMapScale;
+      // Read by the reflection in the world, in the game's axes (the scene's x, y, z are the
+      // game's y, z, x), as hero.vfx samples its texturecube
+      vec3 rw = inverseTransformDirection(r, viewMatrix);
+      env = textureCube(tCubeMap, vec3(rw.z, rw.x, rw.y)).rgb * uCubeMapScale;
     }
     vec3 specular = (phong * uKeyColor * uSpecularScale + env * (1.0 - uMaskCubeByMetal)) * specMask;
     specular *= mix(albedo, uSpecularColor, tintMask) * max(fresnel.b, metal);
@@ -342,6 +332,58 @@ export function setDotaFillDir(viewDir) {
 }
 
 
+// The cube maps materials reflect, all six faces: cubemaps/index.json maps a texture's file name
+// to a strip of its faces in the texture's order (rt lf bk ft up dn: +X -X +Y -Y +Z -Z in the
+// game's axes). The glTF holds only one face. Loaded once; each cube made once from its strip.
+let cubeIndex = {};
+let cubeLoading = null;
+const cubeTextures = new Map();
+export function loadCubeMaps(root) {
+  cubeLoading ??= fetch(`${root}cubemaps/index.json`)
+    .then((res) => (res.ok ? res.json() : {}))
+    .catch(() => ({}))
+    .then((json) => {
+      cubeIndex = json;
+      cubeRoot = root;
+    });
+  return cubeLoading;
+}
+let cubeRoot = "";
+function cubeTexture(name) {
+  // By the texture's file name (a skin's materials give a path: its last part, as a .vtex)
+  const key = name?.split("/").pop().toLowerCase().replace(/\.(png|jpg|webp)$/, ".vtex");
+  const path = key && cubeIndex[key];
+  if (!path) {
+    return null;
+  }
+  if (!cubeTextures.has(path)) {
+    cubeTextures.set(
+      path,
+      new Promise((resolve) => {
+        const image = new Image();
+        image.crossOrigin = "anonymous";
+        image.onload = () => {
+          const size = image.height;
+          const faces = Array.from({ length: 6 }, (_, i) => {
+            const canvas = document.createElement("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            canvas.getContext("2d").drawImage(image, i * size, 0, size, size, 0, 0, size, size);
+            return canvas;
+          });
+          const texture = new THREE.CubeTexture(faces);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.needsUpdate = true;
+          resolve(texture);
+        };
+        image.onerror = () => resolve(null);
+        image.src = cubeRoot + path;
+      })
+    );
+  }
+  return cubeTextures.get(path);
+}
+
 // Shared so a rarity change recolors every material at once
 export const stageRim = { value: new THREE.Color("#c9a45c") };
 
@@ -406,14 +448,15 @@ export function createDotaMaterial(original, vmat, textures) {
       tMasks2: { value: pick("g_tMasks2") },
       tDiffuseWarp: { value: pick("g_tDiffuseWarp") },
       tFresnelWarp: { value: pick("g_tFresnelWarp") },
-      tCubeMap: { value: pick("g_tCubeMap") },
+      // The whole cube, once its faces are in (cubemaps/), else no reflection
+      tCubeMap: { value: null },
       uHasNormal: { value: pick("g_tNormal") ? 1 : 0 },
       // A mask the material has is used, whether or not its flag made it into the data
       uHasMasks1: { value: pick("g_tMasks1") ? 1 : 0 },
       uHasMasks2: { value: pick("g_tMasks2") ? 1 : 0 },
       uHasDiffuseWarp: { value: int.F_DIFFUSE_WARP && pick("g_tDiffuseWarp") ? 1 : 0 },
       uHasFresnelWarp: { value: pick("g_tFresnelWarp") ? 1 : 0 },
-      uHasCubeMap: { value: int.F_SPECULAR_CUBE_MAP && pick("g_tCubeMap") ? 1 : 0 },
+      uHasCubeMap: { value: 0 },
       tDetail: { value: pick("g_tDetail") },
       tDetail2: { value: pick("g_tDetail2") },
       uDetail2Mode: { value: pick("g_tDetail2") && ((float.g_flDetail2BlendFactor ?? 1) > 0 || programs?.g_flDetail2BlendFactor) ? (int.F_DETAIL_2 ?? 0) : 0 },
@@ -469,6 +512,14 @@ export function createDotaMaterial(original, vmat, textures) {
     side: int.F_RENDER_BACKFACES ? THREE.DoubleSide : THREE.FrontSide,
   });
   material.name = original.name;
+  if (int.F_SPECULAR_CUBE_MAP) {
+    cubeTexture(vmat.TextureParams?.g_tCubeMap)?.then((cube) => {
+      if (cube) {
+        material.uniforms.tCubeMap.value = cube;
+        material.uniforms.uHasCubeMap.value = 1;
+      }
+    });
+  }
   // While developing, ?nospec drops the key light's highlight, ?noenv the cube map's reflection
   // and ?norim the rim light
   if (import.meta.env.DEV) {

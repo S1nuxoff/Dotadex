@@ -9,7 +9,7 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { FullScreenQuad, Pass } from "three/addons/postprocessing/Pass.js";
-import { colorParam, createDotaMaterial, createLitSimpleMaterial, setDotaFillDir, setDotaKeyDir, setDotaLighting, setParticleLights, stageRim } from "./dotaMaterial.js";
+import { colorParam, createDotaMaterial, createLitSimpleMaterial, loadCubeMaps, setDotaFillDir, setDotaKeyDir, setDotaLighting, setParticleLights, stageRim } from "./dotaMaterial.js";
 import { loadMaterialPrograms } from "./materialPrograms.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
@@ -656,6 +656,8 @@ export class Stage {
       Promise.all(entries.map(({ url }) => loadCloth(url))),
       // Materials whose parameters change over time, needed before the materials are made
       loadMaterialPrograms(entries[0].url.slice(0, entries[0].url.indexOf("/models/") + 1)),
+      // The cube maps the materials reflect, before the materials are made
+      loadCubeMaps(entries[0].url.slice(0, entries[0].url.indexOf("/models/") + 1)),
     ]);
     if (request !== this.request) {
       return null;

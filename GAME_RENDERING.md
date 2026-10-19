@@ -115,6 +115,42 @@ deferred path (`rtGBufferAlbedo`, `rtGBufferNormalWs`, `rtGBufferLightingTerms`)
   (config `preview`), CP1 grey 0.5 set by the code. The god rays (`dota_hud_loadout_pedestal.vpcf`,
   colored by `GodraysFXColor`) and its `depthmaskfog` are not drawn on the site.
 
+## The hero page's map (`maps/ui/dota_hud_loadout_2022.vmap`, `PortraitBackgroundMap` of 168 heroes)
+
+A separate VPK (`game/dota/maps/ui/dota_hud_loadout_2022.vpk`). Its entities (`default_ents.vents_c`):
+- `worldspawn`: background map, sky `sky_day01_01`.
+- `point_camera` `[PR#]hero_camera` (parent `[PR#]loadout_camera_model`, attachment root): FOV 30.3,
+  ZNear 25, ZFar 1000, no fog, depth of field on: near blurry 200, near crisp 300, far crisp 400,
+  far blurry 900, tilt to ground 0.75 (an output sets `SetDOFFarBlurry`).
+- `info_particle_system` `[PR#]pedestal_fx` at the origin: `particles/ui/dota_hud_loadout_pedestal.vpcf`
+  (god rays: children `_godrays`, `_godrays_dust` → `_godrays_dust_particles`, `_godrays_front`;
+  all additive). No light entity, no fog entity.
+- Never started by anything (no map, no system, no client.dll string): `dota_hud_loadout_depthmaskfog`
+  and `dota_hud_loadout_pedestal_depthmaskfog(_shadow)` (dark blue 4 7 15 cloud sprites behind the
+  hero), `dota_hud_loadout_godrays_light` (a deferred light particle).
+
+## Deferred lighting
+
+- `deferred_global_light.vfx` (the sun pass): the same terms as global_lit_simple's forward shader,
+  from the G-buffer (albedo; lighting terms: R specular mask, G how much the surface shows its albedo
+  unlit, B how much the lights are desaturated towards their luminance 0.2125/0.7154/0.0721), then an
+  HSV step: saturation × `g_flSaturationScale`, value × `g_flIntensityScale` (render attributes set by
+  code, default 1). Its shadow sampler is BORDER with border 1: outside the sun's shadow frustum is lit.
+  So the global light has no cone even as a spot light.
+- The global light entity (C_GlobalLight) has `m_bSpotLight`, `m_SpotLightOrigin`, `m_SpotLightAngles`,
+  `m_flFOV`, `m_flNearZ`, `m_flLightScale`, `m_AmbientColor1..3`, `m_flAmbientScale1/2`,
+  `m_flGroundScale`, `m_flSunDistance`, clouds and FoW fields. Its shadow matrix is perspective in
+  the shaders (divide by w).
+- `deferred_local_light.vfx` (`env_deferred_light`: `spot_light_distance`, `spot_fov`, `start_falloff`,
+  `distance_falloff`; `D_SPOT`, `D_SHADOWS` …): a spot light discards everything outside its square
+  frustum and facing away; cone = smoothstep(saturate((1 − |2·uv − 1|) / cb0[2].z)), distance =
+  smoothstep(saturate((1 − d / range) / cb0[2].w)); out = albedo × N·L × color × intensity × shadow
+  (25-tap Poisson PCF) × (cone × distance)² × cb0[1].w.
+- `portrait_world_light` is a client entity class client.dll creates with `lightcolor`, `intensity`,
+  `latitude`, `longitude`, `spot_fov`, `additionalradius`, `hitboxsetname`, `boundsradiusmultiplier`,
+  as three lights `__head_light`, `__fill_light`, `__rim_light` (client.dll 0x182faa500…; which page
+  uses it not traced yet).
+
 ## Post-processing (V-13)
 
 - `deferred_post_process.vfx`: adds the bloom, then tone maps `x(15.8x+2.12)/(x(1.2x+5.92)+1.9)` with

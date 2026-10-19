@@ -59,6 +59,7 @@ export class ParticleManager {
     this.attachments = {};
     this.meshes = [];
     this.request = 0;
+    this.modelRequest = 0;
     this.surface = {
       sample: (position, normal) => this.sampleSurface(position, normal),
       position: (binding, target) => this.surfacePosition(binding, target),
@@ -230,7 +231,8 @@ export class ParticleManager {
 
   // The model the effects are on, and the models it is made of (for their attachments)
   async setModel(group, urls) {
-    const request = ++this.request;
+    // A counter of its own: effects set while the attachments load must not drop them
+    const request = ++this.modelRequest;
     this.model = group;
     this.bones = group ? bonesOf(group) : new Map();
     this.meshes = [];
@@ -249,7 +251,7 @@ export class ParticleManager {
         return attachmentCache.get(file);
       })
     );
-    if (request !== this.request) return;
+    if (request !== this.modelRequest) return;
     // The hero's own attachments first, what it wears adds its own
     this.attachments = Object.assign({}, ...lists.filter(Boolean).reverse());
     this.restart();

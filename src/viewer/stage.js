@@ -1936,10 +1936,11 @@ export class Stage {
         return;
       }
       const model = url.slice(base.length).replace(/\.glb$/, ".vmdl");
-      // The game's code gives the 2023 pedestal's ground fog its color in control point 1: the
-      // hero's GroundfogFXColor, else grey (client.dll 0x182edf5d0); without it the fog is black
+      // The game's code gives the 2023 pedestal's ground fog its color in control point 1
+      // (client.dll 0x182edf5d0); on the hero page always grey 0.5, the same for every hero (its
+      // other caller hands it a GroundfogFXColor, not the hero page's); without it the fog is black
       const tinted = model === "models/heroes/pedestal/loadout_pedestal_2023.vmdl";
-      const color = this.portrait?.groundfog ?? [0.5, 0.5, 0.5];
+      const color = [0.5, 0.5, 0.5];
       const effects = (all[model] ?? []).map((effect) =>
         tinted && effect.system === "particles/ui/dota_hud_loadout_pedestal_groundfog.vpcf" ? { ...effect, controlPoints: { 1: color } } : effect
       );

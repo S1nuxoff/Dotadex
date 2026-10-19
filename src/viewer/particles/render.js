@@ -321,6 +321,7 @@ const SPRITE_VERTEX = /* glsl */ `
   uniform vec4 uScreenSize;
   uniform float uCameraBias;
   uniform vec4 uTexTransform;
+  uniform float uTexRotation;
   uniform vec4 uTail;
   varying vec2 vUv;
   varying vec2 vUvNext;
@@ -336,9 +337,15 @@ const SPRITE_VERTEX = /* glsl */ `
   void main() {
     // Drawn a little towards the camera, so particles inside the model show, as the game does
     vec3 center = iPosition + safeNormalize(cameraPosition - iPosition) * uCameraBias;
-    // The texture's own scale and offset (a scale of -1 turns it round), within the frame
-    vUv = iFrame.xy + (uv * uTexTransform.xy + uTexTransform.zw) * iFrame.zw;
-    vUvNext = iFrameNext.xy + (uv * uTexTransform.xy + uTexTransform.zw) * iFrameNext.zw;
+    // The texture turned round its middle (m_flFinalTextureUVRotation), then its own scale and
+    // offset (a scale of -1 turns it round), within the frame
+    vec2 turned = uv;
+    if (uTexRotation != 0.0) {
+      float c = cos(uTexRotation), s = sin(uTexRotation);
+      turned = mat2(c, s, -s, c) * (uv - 0.5) + 0.5;
+    }
+    vUv = iFrame.xy + (turned * uTexTransform.xy + uTexTransform.zw) * iFrame.zw;
+    vUvNext = iFrameNext.xy + (turned * uTexTransform.xy + uTexTransform.zw) * iFrameNext.zw;
     vFrameBlend = iFrameBlend;
     vLocal = uv;
     vColor = iColor;
@@ -418,6 +425,7 @@ const FRAGMENT = /* glsl */ `
   uniform float uLayerAmount;
   uniform vec3 uColorScale;
   uniform int uColorBlend;
+  uniform float uDesaturation;
   uniform sampler2D uSceneDepth;
   uniform float uHasSceneDepth;
   uniform vec2 uSceneSize;
@@ -452,6 +460,8 @@ const FRAGMENT = /* glsl */ `
     // The particle's color as the file gives it is in gamma space, the renderer's color over it;
     // the game turns it linear unless the renderer says not to (m_bGammaCorrectVertexColors)
     vec3 shown = colorScaled(vColor.rgb);
+    // Turned towards grey by m_flDesaturation (the pedestal's dust, 0.8: nearly grey whatever its color)
+    shown = mix(shown, vec3(dot(shown, vec3(0.299, 0.587, 0.114))), uDesaturation);
     vec3 tint = uGammaColor > 0.5 ? pow(max(shown, 0.0), vec3(2.2)) : shown;
     vec4 texel = uHasMap > 0.5 ? texture2D(uMap, vUv) : vec4(1.0);
     if (uHasMap > 0.5 && vFrameBlend > 0.0) texel = mix(texel, texture2D(uMap, vUvNext), vFrameBlend);
@@ -529,6 +539,7 @@ function material(def, vertexShader, orientation) {
       uAlphaFromColor: { value: 0 },
       uWhite: { value: 0 },
       uOverbright: { value: num(def.m_flOverbrightFactor, 1) },
+      uDesaturation: { value: Math.min(Math.max(num(def.m_flDesaturation, 0), 0), 1) },
       uHalf: { value: 1 },
       uMod: { value: 0 },
       uPremultiply: { value: 0 },
@@ -556,6 +567,7 @@ function material(def, vertexShader, orientation) {
       ...SCENE_DEPTH,
       uOrientation: { value: orientation },
       uTexTransform: { value: textureTransformOf(def) },
+      uTexRotation: { value: (num(colorLayerOf(def)?.m_TextureControls?.m_flFinalTextureUVRotation, 0) * Math.PI) / 180 },
       uTail: { value: tailOf(def) },
       uCameraBias: { value: num(def.VisibilityInputs?.m_flCameraBias, 0) * UNIT },
       uScreenSize: {

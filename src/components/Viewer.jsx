@@ -198,7 +198,6 @@ function useHeroLine(catalog, heroId, language) {
   return { attribute, roles: (hero.Role ?? "").split(",").filter(Boolean) };
 }
 
-const MASK_HEIGHT = 100;
 // The mask the game sees a hero page's scene through; used only once it has loaded, as a mask
 // that fails to load would hide the whole scene
 function useSceneMask(base) {
@@ -213,10 +212,22 @@ function useSceneMask(base) {
     return undefined;
   }
   const url = `url(${src})`;
-  // The game's scene runs under the top bar to the screen's top; ours starts below it, so the mask
-  // is drawn a little shorter for its floor to fade where the game's does, the rest left dark
-  const size = `100% ${MASK_HEIGHT}%`;
-  return { maskImage: url, WebkitMaskImage: url, maskMode: "luminance", maskSize: size, WebkitMaskSize: size, maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat" };
+  // The game stretches it over #HeroSceneGroup: the whole screen's height, at most 1920 of its
+  // 1080-high layout wide, centred (the mask is the texture's alpha, the PNG's grey). Our canvas
+  // starts below the top bar and ends at the screen's bottom, so the mask is sized by the screen
+  // and set to the bottom, its top cut off as the bar covers it; past its sides the scene is hidden
+  const size = "min(100%, calc(100vh * 1920 / 1080)) 100vh";
+  return {
+    maskImage: url,
+    WebkitMaskImage: url,
+    maskMode: "luminance",
+    maskSize: size,
+    WebkitMaskSize: size,
+    maskPosition: "center bottom",
+    WebkitMaskPosition: "center bottom",
+    maskRepeat: "no-repeat",
+    WebkitMaskRepeat: "no-repeat",
+  };
 }
 
 export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, portrait = null, portraitShot = "default", particles = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {

@@ -1314,17 +1314,14 @@ export class Stage {
     if (!clientWidth || !clientHeight) {
       return;
     }
-    // Through the game's camera on a hero's page the picture is cut from the one the game draws its
-    // hero into: the panel #HeroSceneBody (dashboard_page_hero_new_v2 stylesheet), 1020 high, 60
-    // from the screen's top, as wide as the screen up to 1920, centred, in Panorama's units of a
-    // 1080-high screen; the hero stands where it stands in the game
+    // Through the game's camera on a hero's page the picture is cut from one the size of the
+    // window, as the game draws its hero over the whole screen, under its top bar too: the hero
+    // stands where it stands in the game (measured on game screenshots of Sniper: not the
+    // stylesheet's 1020-high #HeroSceneBody, whose hero would be 0.94 times as large)
     const whole = Boolean(this.portraitCamera());
-    const rect = whole ? this.canvas.parentElement.getBoundingClientRect() : { left: 0, top: 0 };
-    const unit = window.innerHeight / 1080;
-    const width = whole ? Math.min(window.innerWidth, 1920 * unit) : clientWidth;
-    const height = whole ? 1020 * unit : clientHeight;
-    const left = whole ? rect.left - (window.innerWidth - width) / 2 : 0;
-    const top = whole ? rect.top - 60 * unit : 0;
+    const { left, top } = whole ? this.canvas.parentElement.getBoundingClientRect() : { left: 0, top: 0 };
+    const width = whole ? Math.max(window.innerWidth, clientWidth) : clientWidth;
+    const height = whole ? Math.max(window.innerHeight, clientHeight) : clientHeight;
     this.camera.aspect = width / height;
     if (whole || this.frameShift) {
       this.camera.setViewOffset(width, height, left + clientWidth * this.frameShift, top, clientWidth, clientHeight);

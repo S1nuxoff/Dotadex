@@ -84,8 +84,9 @@ function loadBackgrounds(base) {
   return backgrounds;
 }
 
-// Panorama lays the game's screens out for a height of 1080 and scales them to the screen's
-const panorama = (px) => `calc(${px} * 100vh / 1080)`;
+// Panorama lays the game's screens out for a height of 1080 and scales them to the screen's:
+// a length of the game's layout (a number of its pixels) on this screen
+const panorama = (px) => `calc(100vh * ${px} / 1080)`;
 
 // The picture behind the hero as the game's hero page draws it (dashboard_page_hero_new_v2 and
 // hero_loadout_background_images stylesheets): over the whole screen, the hero's gradient with its
@@ -108,7 +109,7 @@ function Backdrop({ base, heroId }) {
           background: look?.from
             ? `linear-gradient(${look.from}, ${look.to})`
             : "linear-gradient(#1b1f2a, #0d0e12)",
-          filter: `blur(${panorama("6px")}) saturate(1.3)`,
+          filter: `blur(${panorama(6)}) saturate(1.3)`,
           transform: "scale(1.04)",
         }}
       >
@@ -116,11 +117,11 @@ function Backdrop({ base, heroId }) {
           <div
             className="absolute left-1/2 top-1/2 aspect-video max-h-full -translate-x-1/2 -translate-y-1/2"
             style={{
-              width: `min(100%, ${panorama("1920px")})`,
+              width: `min(100%, ${panorama(1920)})`,
               backgroundImage: `url(${base}${look.image})`,
               backgroundSize: "100% 100%",
               opacity: 0.3,
-              filter: `blur(${panorama("6px")}) saturate(0.4)`,
+              filter: `blur(${panorama(6)}) saturate(0.4)`,
               maskImage: maskUrl,
               WebkitMaskImage: maskUrl,
               maskSize: "100% 100%",

@@ -1065,7 +1065,63 @@ function models(def, system) {
   };
 }
 
+// The lights particles cast this frame (C_OP_RenderDeferredLight), gathered by the stage for its
+// materials: { x, y, z, radius } in the scene's metres, width the share of the radius the light
+// fades over, r, g, b linear and times the light's intensity. Emptied by the stage every frame.
+export const frameLights = [];
+const srgbToLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+
+// Each particle a point light, as particles.dll hands it to the renderer (0x1803155c5): at the
+// particle, radius = its radius × m_flRadiusScale, color = its color with m_vecColorScale as
+// m_nColorBlendType says, clamped and passed as bytes (taken as gamma, as Source's colors are),
+// intensity = alpha × the second alpha field × m_flAlphaScale. Defaults from the renderer's
+// constructor (0x18033c440): scales 1, m_flStartFalloff 0.25. deferred_local_light_cs lights
+// a surface by color × N·L × smoothstep(saturate((1 - d / radius) / (1 - start falloff)));
+// Valve's wiki: a start falloff of 1 is no falloff over the radius.
+// Not drawn: spot lights (m_flLightDistance, 2 renderers), projected textures (m_bUseTexture).
+function deferredLights(def, system) {
+  const radiusScale = num(def.m_flRadiusScale, 1);
+  const alphaScale = num(def.m_flAlphaScale, 1);
+  const start = Math.min(Math.max(num(def.m_flStartFalloff, 0.25), 0), 1);
+  const width = 1 - start;
+  const scale = def.m_vecColorScale ? compileVector(def.m_vecColorScale, [1, 1, 1]) : null;
+  const blend = COLOR_BLENDS[def.m_nColorBlendType] ?? 0;
+  const alpha2Field = typeof def.m_nAlpha2Field === "number" ? def.m_nAlpha2Field : 16;
+  const out = [1, 1, 1];
+  const mix = (c, s) => [c * s, c * s * 2, s, c + s, Math.min(c, s), Math.max(c, s)][blend];
+  return {
+    render(system) {
+      const n = system.count;
+      if (!n) return;
+      if (scale) scale(system, -1, out);
+      const p = system.float(0);
+      const tint = system.float(6);
+      const alpha = system.float(7);
+      const alpha2 = system.float(alpha2Field);
+      const radius = system.float(3);
+      for (let i = 0; i < n; i++) {
+        const size = Math.max(0, radius[i]) * radiusScale;
+        const intensity = Math.min(Math.max(alpha[i], 0), 1) * Math.min(Math.max(alpha2[i] ?? 1, 0), 1) * alphaScale;
+        if (!(size > 0) || !(intensity > 0)) continue;
+        const j = i * 3;
+        const channel = (k) => srgbToLinear(Math.min(Math.max(scale ? mix(tint[j + k] || 0, out[k]) : tint[j + k] || 0, 0), 1)) * intensity;
+        frameLights.push({
+          x: p[j + 1] * UNIT,
+          y: p[j + 2] * UNIT,
+          z: p[j] * UNIT,
+          radius: size * UNIT,
+          width,
+          r: channel(0),
+          g: channel(1),
+          b: channel(2),
+        });
+      }
+    },
+  };
+}
+
 export const RENDERERS = {
+  C_OP_RenderDeferredLight: (def, system) => deferredLights(def, system),
   C_OP_RenderSprites: (def, system) => (drawn(def) && kept("sprites", def) ? quads(def, system, false) : {}),
   C_OP_RenderTrails: (def, system) => (drawn(def) && kept("trails", def) ? quads(def, system, true) : {}),
   C_OP_RenderRopes: (def, system) => (drawn(def) && !offSnapshot(system) && kept("ropes", def) ? rope(def, system) : {}),

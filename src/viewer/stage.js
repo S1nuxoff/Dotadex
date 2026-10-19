@@ -9,14 +9,14 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { FullScreenQuad, Pass } from "three/addons/postprocessing/Pass.js";
-import { colorParam, createDotaMaterial, createLitSimpleMaterial, setDotaFillDir, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
+import { colorParam, createDotaMaterial, createLitSimpleMaterial, setDotaFillDir, setDotaKeyDir, setDotaLighting, setParticleLights, stageRim } from "./dotaMaterial.js";
 import { loadMaterialPrograms } from "./materialPrograms.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
 import { createWatermark } from "./watermark.js";
 import { ParticleManager } from "./particles/manager.js";
 import { Cloth, loadCloth } from "./cloth.js";
-import { SCENE_DEPTH } from "./particles/render.js";
+import { frameLights, SCENE_DEPTH } from "./particles/render.js";
 import { playLoaded, playWhenReady, preloadSound } from "./soundPlayer.js";
 import { playUiSound } from "../uiSounds.js";
 
@@ -1730,6 +1730,8 @@ export class Stage {
     this.updateCloth(delta);
     this.group?.updateMatrixWorld(true);
     this.hideParked();
+    // The lights the particles cast this frame, gathered as their renderers run
+    frameLights.length = 0;
     this.particles?.update(delta, this.camera);
     if (this.pedestalParticles) {
       this.pedestalParticles.group.visible = Boolean(this.pedestal?.visible);
@@ -1743,6 +1745,8 @@ export class Stage {
         manager.update(delta, this.camera);
       }
     }
+    this.camera.updateMatrixWorld();
+    setParticleLights(frameLights, this.camera);
     // While developing, ?opaque draws the scene on black instead of see-through
     if (import.meta.env.DEV && window.location.search.includes("opaque") && !this.scene.background) {
       this.scene.background = new THREE.Color(0x000000);

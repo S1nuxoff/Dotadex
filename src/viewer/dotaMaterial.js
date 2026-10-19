@@ -104,6 +104,25 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uGroundColor;
   uniform float uFillScale;
 
+  // Lights particles cast (C_OP_RenderDeferredLight), as deferred_local_light_cs adds them:
+  // color × N·L × smoothstep(saturate((1 - d / radius) / width)), diffuse only
+  #define MAX_PARTICLE_LIGHTS 32
+  uniform int uParticleLightCount;
+  uniform vec3 uParticleLightPos[MAX_PARTICLE_LIGHTS];
+  uniform vec3 uParticleLightColor[MAX_PARTICLE_LIGHTS];
+  uniform vec2 uParticleLightRange[MAX_PARTICLE_LIGHTS];
+  vec3 particleLights(vec3 n, vec3 pos) {
+    vec3 sum = vec3(0.0);
+    for (int i = 0; i < MAX_PARTICLE_LIGHTS; i++) {
+      if (i >= uParticleLightCount) break;
+      vec3 toLight = uParticleLightPos[i] - pos;
+      float d = length(toLight);
+      float t = clamp((1.0 - d / uParticleLightRange[i].x) * uParticleLightRange[i].y, 0.0, 1.0);
+      sum += uParticleLightColor[i] * (t * t * (3.0 - 2.0 * t)) * clamp(dot(n, toLight / max(d, 1e-5)), 0.0, 1.0);
+    }
+    return sum;
+  }
+
   varying vec2 vUv;
   varying vec3 vViewNormal;
   varying vec3 vViewPosition;
@@ -208,6 +227,7 @@ const fragmentShader = /* glsl */ `
         diffuseLight += pointLights[ i ].color * lampFalloff * clamp(dot(n, toLamp / lampDistance), 0.0, 1.0);
       }
     #endif
+    diffuseLight += particleLights(n, -vViewPosition);
 
     // Specular: Phong, sharpness from Masks2 A, plus the cube map unless metal masks it
     vec3 r = reflect(-v, n);
@@ -270,6 +290,30 @@ const studio = {
 
 // The second light's strength for the diffuse; the rim takes its color alone
 const fillScale = { value: 1 };
+
+// The particles' lights, shared by every material (view space, filled by setParticleLights)
+const MAX_PARTICLE_LIGHTS = 32;
+const particleLightUniforms = {
+  uParticleLightCount: { value: 0 },
+  uParticleLightPos: { value: Array.from({ length: MAX_PARTICLE_LIGHTS }, () => new THREE.Vector3()) },
+  uParticleLightColor: { value: Array.from({ length: MAX_PARTICLE_LIGHTS }, () => new THREE.Vector3()) },
+  uParticleLightRange: { value: Array.from({ length: MAX_PARTICLE_LIGHTS }, () => new THREE.Vector2(1, 1)) },
+};
+
+// This frame's particle lights (frameLights of the particle renderers) for the camera: the
+// strongest MAX_PARTICLE_LIGHTS of them, by color times radius
+export function setParticleLights(lights, camera) {
+  const chosen = lights.length > MAX_PARTICLE_LIGHTS
+    ? [...lights].sort((a, b) => (b.r + b.g + b.b) * b.radius - (a.r + a.g + a.b) * a.radius).slice(0, MAX_PARTICLE_LIGHTS)
+    : lights;
+  const view = camera.matrixWorldInverse;
+  chosen.forEach((light, i) => {
+    particleLightUniforms.uParticleLightPos.value[i].set(light.x, light.y, light.z).applyMatrix4(view);
+    particleLightUniforms.uParticleLightColor.value[i].set(light.r, light.g, light.b);
+    particleLightUniforms.uParticleLightRange.value[i].set(light.radius, light.width > 1e-4 ? 1 / light.width : 1e4);
+  });
+  particleLightUniforms.uParticleLightCount.value = chosen.length;
+}
 const studioFillDir = stage.fillDir.clone();
 
 // The light of a scene of the game instead of the studio, or null for the studio again.
@@ -415,6 +459,7 @@ export function createDotaMaterial(original, vmat, textures) {
       uSkyColor: { value: stage.skyColor },
       uGroundColor: { value: stage.groundColor },
       uFillScale: fillScale,
+      ...particleLightUniforms,
       uOpaque: { value: translucent ? 0 : 1 },
       uFresnelAlpha: { value: Math.min(Math.max(float.g_flFresnelModulatesAlpha ?? 0, 0), 1) },
     },
@@ -507,6 +552,25 @@ const litSimpleFragment = /* glsl */ `
   uniform vec3 uSkyColor;
   uniform vec3 uGroundColor;
 
+  // Lights particles cast (C_OP_RenderDeferredLight), as deferred_local_light_cs adds them:
+  // color × N·L × smoothstep(saturate((1 - d / radius) / width)), diffuse only
+  #define MAX_PARTICLE_LIGHTS 32
+  uniform int uParticleLightCount;
+  uniform vec3 uParticleLightPos[MAX_PARTICLE_LIGHTS];
+  uniform vec3 uParticleLightColor[MAX_PARTICLE_LIGHTS];
+  uniform vec2 uParticleLightRange[MAX_PARTICLE_LIGHTS];
+  vec3 particleLights(vec3 n, vec3 pos) {
+    vec3 sum = vec3(0.0);
+    for (int i = 0; i < MAX_PARTICLE_LIGHTS; i++) {
+      if (i >= uParticleLightCount) break;
+      vec3 toLight = uParticleLightPos[i] - pos;
+      float d = length(toLight);
+      float t = clamp((1.0 - d / uParticleLightRange[i].x) * uParticleLightRange[i].y, 0.0, 1.0);
+      sum += uParticleLightColor[i] * (t * t * (3.0 - 2.0 * t)) * clamp(dot(n, toLight / max(d, 1e-5)), 0.0, 1.0);
+    }
+    return sum;
+  }
+
   varying vec2 vUv;
   varying vec3 vViewNormal;
   varying vec3 vViewPosition;
@@ -552,6 +616,7 @@ const litSimpleFragment = /* glsl */ `
     vec3 light = key * uKeyColor;
     light += clamp(dot(n, uFillDir), 0.0, 1.0) * uFillColor * uFillScale;
     light += (1.0 - key) * mix(uGroundColor, uSkyColor, worldN.y * 0.5 + 0.5);
+    light += particleLights(n, -vViewPosition);
     gl_FragColor = vec4(light * albedo, 1.0);
     #include <colorspace_fragment>
   }
@@ -596,6 +661,7 @@ export function createLitSimpleMaterial(original, vmat, textures) {
       uSkyColor: { value: stage.skyColor },
       uGroundColor: { value: stage.groundColor },
       uFillScale: fillScale,
+      ...particleLightUniforms,
     },
     side: int.F_RENDER_BACKFACES ? THREE.DoubleSide : THREE.FrontSide,
   });

@@ -78,6 +78,9 @@ DEFS.C_OP_ContinuousEmitter = (def) => {
   const duration = compileFloat(def.m_flEmissionDuration, 0);
   const start = compileFloat(def.m_flStartTime, 0);
   const scale = def.m_flEmissionScale || 1;
+  // m_flScalePerParentParticle: the rate times the parent's live particles times it, in place of
+  // the emission scale (particles.dll 0x1801112d0; without a parent, times it alone)
+  const perParent = def.m_flScalePerParentParticle > 0 ? def.m_flScalePerParentParticle : 0;
   const fromKilled = Boolean(def.m_bInitFromKilledParentParticles);
   let carried = 0;
   return {
@@ -97,7 +100,8 @@ DEFS.C_OP_ContinuousEmitter = (def) => {
       if (system.age < from || (length > 0 && system.age > from + length)) {
         return;
       }
-      carried += Math.max(rate(system, -1), 0) * scale * dt;
+      const factor = perParent ? (system.parent ? system.parent.count : 1) * perParent : scale;
+      carried += Math.max(rate(system, -1), 0) * factor * dt;
       const n = Math.floor(carried);
       if (n > 0) {
         carried -= n;

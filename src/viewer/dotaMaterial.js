@@ -374,8 +374,10 @@ export function createDotaMaterial(original, vmat, textures) {
       tDetail2: { value: pick("g_tDetail2") },
       uDetail2Mode: { value: pick("g_tDetail2") && ((float.g_flDetail2BlendFactor ?? 1) > 0 || programs?.g_flDetail2BlendFactor) ? (int.F_DETAIL_2 ?? 0) : 0 },
       uDetail2Factor: { value: float.g_flDetail2BlendFactor ?? 1 },
-      uDetailTint: { value: vector(vec.g_vDetail1ColorTint, [1, 1, 1]) },
-      uDetail2Tint: { value: vector(vec.g_vDetail2ColorTint, [1, 1, 1]) },
+      // The detail tints and the bloom color go from gamma to linear in hero.vfx (SrgbGammaToLinear
+      // in their expressions); its specular color is taken as it is
+      uDetailTint: { value: linearColor(vec.g_vDetail1ColorTint, [1, 1, 1]) },
+      uDetail2Tint: { value: linearColor(vec.g_vDetail2ColorTint, [1, 1, 1]) },
       uDetailMode: { value: pick("g_tDetail") ? (int.F_DETAIL ?? 0) : 0 },
       uDetailFactor: { value: float.g_flDetailBlendFactor ?? 1 },
       ...Object.fromEntries(Object.keys(UV_LAYERS).map((name) => [name, { value: new THREE.Matrix3() }])),
@@ -451,7 +453,7 @@ export function createDotaMaterial(original, vmat, textures) {
     if (int.F_ALPHA_TEST && programs?.g_flAlphaTestReference) u.uAlphaTest.value = get("g_flAlphaTestReference")?.[0] ?? 0.5;
     if (glow) {
       const tint = colorParam(get("g_vBloomColor")) ?? [1, 1, 1];
-      glow.uniforms.uBloomColor.value.setRGB(tint[0], tint[1], tint[2]);
+      glow.uniforms.uBloomColor.value.setRGB(tint[0], tint[1], tint[2], THREE.SRGBColorSpace);
       glow.uniforms.uBloomScale.value = Math.max(get("g_flBloomScale")?.[0] ?? 0, 0);
       glow.uniforms.uBloomShift.value = get("g_flBloomShift")?.[0] ?? 0;
     }
@@ -471,6 +473,134 @@ export function createDotaMaterial(original, vmat, textures) {
       refresh(false);
     };
   }
+  return material;
+}
+
+// Dota's global_lit_simple.vfx (static props, the hero page's pedestal), after its compiled forward
+// pixel shader (S_MODE_FORWARD with S_SPECULAR and S_NORMAL_MAP; the game draws it in its deferred
+// mode, whose G-buffer holds the same albedo, specular mask and normal):
+//   albedo = color × g_vColorTint (the vmat's tint taken from gamma to linear by the shader's expression)
+//   key = the sun's shadow × saturate(N·L)
+//   light = key × key color + saturate(N·fill direction) × fill color × fill scale
+//         + (1 − key) × mix(ground, sky, N up ½ + ½)
+//   out = light × albedo
+// Its specular (PortraitSpecularDirection, 0 0 −1 on the hero page) is lit only by reflections
+// pointing down, which a camera above the pedestal never sees, so it is left out. Parts of the
+// global light the page does not give (its clouds texture, the fill's own shadowing) are 1.
+const litSimpleFragment = /* glsl */ `
+  #include <common>
+  #include <packing>
+  #include <lights_pars_begin>
+  #include <shadowmap_pars_fragment>
+  uniform sampler2D tColor;
+  uniform sampler2D tNormal;
+  uniform mat3 uBaseUv;
+  uniform float uHasNormal;
+  uniform float uBumpStrength;
+  uniform float uAlphaTest;
+  uniform vec3 uTint;
+  uniform vec3 uKeyDir;
+  uniform vec3 uKeyColor;
+  uniform vec3 uFillDir;
+  uniform vec3 uFillColor;
+  uniform float uFillScale;
+  uniform vec3 uSkyColor;
+  uniform vec3 uGroundColor;
+
+  varying vec2 vUv;
+  varying vec3 vViewNormal;
+  varying vec3 vViewPosition;
+  varying vec3 vWorldNormal;
+
+  vec3 perturbNormal(vec3 n, vec3 pos, vec2 uv, vec3 mapN) {
+    vec3 q0 = dFdx(pos);
+    vec3 q1 = dFdy(pos);
+    vec2 st0 = dFdx(uv);
+    vec2 st1 = dFdy(uv);
+    vec3 q1perp = cross(q1, n);
+    vec3 q0perp = cross(n, q0);
+    vec3 T = q1perp * st0.x + q0perp * st1.x;
+    vec3 B = q1perp * st0.y + q0perp * st1.y;
+    float det = max(dot(T, T), dot(B, B));
+    float scale = det == 0.0 ? 0.0 : inversesqrt(det);
+    return normalize(T * (mapN.x * scale) + B * (mapN.y * scale) + n * mapN.z);
+  }
+
+  void main() {
+    vec2 uv = (uBaseUv * vec3(vUv, 1.0)).xy;
+    vec4 color = texture2D(tColor, uv);
+    if (uAlphaTest > 0.0 && color.a < uAlphaTest) discard;
+    vec3 albedo = color.rgb * uTint;
+
+    vec3 n = normalize(vViewNormal);
+    if (!gl_FrontFacing) n = -n;
+    vec3 worldN = normalize(vWorldNormal);
+    if (!gl_FrontFacing) worldN = -worldN;
+    if (uHasNormal > 0.5) {
+      // g_flBumpStrength scales the map's slope, as the shader does before normalizing
+      vec3 mapN = texture2D(tNormal, uv).xyz * 2.0 - 1.0;
+      mapN.xy *= uBumpStrength;
+      n = perturbNormal(n, -vViewPosition, uv, normalize(mapN));
+    }
+
+    float shadow = 1.0;
+    #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+      DirectionalLightShadow sunShadow = directionalLightShadows[ 0 ];
+      shadow = getShadow( directionalShadowMap[ 0 ], sunShadow.shadowMapSize, sunShadow.shadowIntensity, sunShadow.shadowBias, sunShadow.shadowRadius, vDirectionalShadowCoord[ 0 ] );
+    #endif
+    float key = shadow * clamp(dot(n, uKeyDir), 0.0, 1.0);
+    vec3 light = key * uKeyColor;
+    light += clamp(dot(n, uFillDir), 0.0, 1.0) * uFillColor * uFillScale;
+    light += (1.0 - key) * mix(uGroundColor, uSkyColor, worldN.y * 0.5 + 0.5);
+    gl_FragColor = vec4(light * albedo, 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+// A vmat color the shader takes from gamma to linear (its expression SrgbGammaToLinear)
+function linearColor(values, fallback) {
+  return vector(values, fallback).convertSRGBToLinear();
+}
+
+// Features of global_lit_simple.vfx drawn here; a material with any other is left to the plain one
+const LIT_SIMPLE_FLAGS = new Set(["F_NORMAL_MAP", "F_SPECULAR", "F_ALPHA_TEST", "F_RENDER_BACKFACES", "F_DO_NOT_CAST_SHADOWS", "F_DO_NOT_REFLECT"]);
+
+// textures: { g_tColor: Texture, ... } matched by the vmat texture names; null if the material uses
+// features not drawn here
+export function createLitSimpleMaterial(original, vmat, textures) {
+  const int = vmat.IntParams ?? {};
+  const float = vmat.FloatParams ?? {};
+  if (Object.entries(int).some(([name, value]) => name.startsWith("F_") && value && !LIT_SIMPLE_FLAGS.has(name))) {
+    return null;
+  }
+  const white = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  white.needsUpdate = true;
+  const normal = int.F_NORMAL_MAP ? textures.g_tNormal ?? null : null;
+  const material = new THREE.ShaderMaterial({
+    lights: true,
+    vertexShader,
+    fragmentShader: litSimpleFragment,
+    uniforms: {
+      ...THREE.UniformsUtils.clone(THREE.UniformsLib.lights),
+      tColor: { value: textures.g_tColor ?? original.map ?? white },
+      tNormal: { value: normal },
+      uHasNormal: { value: normal ? 1 : 0 },
+      uBumpStrength: { value: float.g_flBumpStrength ?? 1 },
+      uAlphaTest: { value: int.F_ALPHA_TEST ? (float.g_flAlphaTestReference ?? 0.5) : 0 },
+      uBaseUv: { value: new THREE.Matrix3() },
+      uTint: { value: linearColor(vmat.VectorParams?.g_vColorTint, [1, 1, 1]) },
+      uKeyDir: { value: stage.keyDir },
+      uKeyColor: { value: stage.keyColor },
+      uFillDir: { value: stage.fillDir },
+      uFillColor: { value: stage.fillColor },
+      uSkyColor: { value: stage.skyColor },
+      uGroundColor: { value: stage.groundColor },
+      uFillScale: fillScale,
+    },
+    side: int.F_RENDER_BACKFACES ? THREE.DoubleSide : THREE.FrontSide,
+  });
+  material.name = original.name;
+  setUvLayer(material.uniforms.uBaseUv.value, (name) => paramValue(vmat, name), UV_LAYERS.uBaseUv);
   return material;
 }
 

@@ -9,7 +9,7 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { FullScreenQuad, Pass } from "three/addons/postprocessing/Pass.js";
-import { colorParam, createDotaMaterial, setDotaFillDir, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
+import { colorParam, createDotaMaterial, createLitSimpleMaterial, setDotaFillDir, setDotaKeyDir, setDotaLighting, stageRim } from "./dotaMaterial.js";
 import { loadMaterialPrograms } from "./materialPrograms.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
@@ -30,9 +30,6 @@ const SOURCE_TO_METRES = 0.0254;
 // Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
 const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
 
-// How much darker the pedestal is drawn
-const PEDESTAL_DARKNESS = 0.14;
-
 // The effects models start on their own, as the game's pedestal does its ground fog
 // (particles/model-effects.json: { "<model>.vmdl": [{ system, config }] }), loaded once
 let modelEffects = null;
@@ -43,49 +40,6 @@ const verticalFov = (fov) => THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THR
 
 // The height of the letters of the site's mark round the pedestal's edge, as a share of its radius
 const WATERMARK_BAND = 0.06;
-
-// The pedestal's far side sinks into the dark behind the hero, as the game's depth fog hides it:
-// fading with how far a point lies beyond the hero along the camera's view on the ground
-// and, being round, all round its rim too
-const pedestalFog = {
-  direction: { value: new THREE.Vector2(0, -1) },
-  near: { value: 0.5 },
-  far: { value: 4 },
-  inner: { value: 2 },
-  outer: { value: 5 },
-};
-const fogged = new WeakSet();
-function fogBehind(material) {
-  if (!material || fogged.has(material)) {
-    return;
-  }
-  fogged.add(material);
-  material.transparent = true;
-  const key = material.customProgramCacheKey.bind(material);
-  material.customProgramCacheKey = () => `${key()}|pedestal-fog`;
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uFogDirection = pedestalFog.direction;
-    shader.uniforms.uFogNear = pedestalFog.near;
-    shader.uniforms.uFogFar = pedestalFog.far;
-    shader.uniforms.uFogInner = pedestalFog.inner;
-    shader.uniforms.uFogOuter = pedestalFog.outer;
-    shader.vertexShader = shader.vertexShader
-      .replace("void main() {", "varying vec3 vFogPosition;\nvoid main() {")
-      .replace("#include <project_vertex>", "#include <project_vertex>\n  vFogPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;");
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "void main() {",
-      "varying vec3 vFogPosition;\nuniform vec2 uFogDirection;\nuniform float uFogNear;\nuniform float uFogFar;\nuniform float uFogInner;\nuniform float uFogOuter;\nvoid main() {"
-    );
-    const end = shader.fragmentShader.lastIndexOf("}");
-    shader.fragmentShader =
-      shader.fragmentShader.slice(0, end) +
-      "  gl_FragColor.a *= 1.0 - smoothstep(uFogNear, uFogFar, dot(vFogPosition.xz, uFogDirection));\n" +
-      "  gl_FragColor.a *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vFogPosition.xz));\n" +
-      shader.fragmentShader.slice(end);
-  };
-  material.needsUpdate = true;
-}
-
 
 // Starts downloading models ahead of time (the pointer resting on a hero in the list), so
 // they are ready, or nearly, when picked
@@ -197,7 +151,8 @@ async function loadSkin(modelUrl, skin) {
 
 function dotaMaterialFor(material, textures) {
   const vmat = material.userData?.vmat;
-  if (!vmat || vmat.ShaderName !== "hero.vfx") {
+  // hero.vfx, and global_lit_simple.vfx (the pedestal, static props)
+  if (!vmat || (vmat.ShaderName !== "hero.vfx" && vmat.ShaderName !== "global_lit_simple.vfx")) {
     return null;
   }
   // Found by name, or else from the glTF slots Source2Viewer put them in
@@ -211,7 +166,7 @@ function dotaMaterialFor(material, textures) {
       byParam[param] = texture;
     }
   }
-  return createDotaMaterial(material, vmat, byParam);
+  return vmat.ShaderName === "hero.vfx" ? createDotaMaterial(material, vmat, byParam) : createLitSimpleMaterial(material, vmat, byParam);
 }
 
 // The plain material with what the hero shader adds on top, the way the game's hero.vfx
@@ -1214,40 +1169,17 @@ export class Stage {
             if (this.pedestalUrl !== pedestalUrl) {
               return;
             }
-            // Shaded like the heroes and taking the hero's shadow; dark, in the tint its material
-            // gives (the page's mask fades its edge, as in the game)
-            // A copy of its own: the loaded model is kept for the next time it is shown, and taking
-            // its materials as they are would darken an already darkened pedestal again
+            // Shaded as the game does (global_lit_simple.vfx under the page's lights) and taking the
+            // hero's shadow; it fades into the dark by its own textures, as in the game
+            // A copy of its own: the loaded model is kept for the next time it is shown
             this.pedestal = gltf.scene.clone();
             this.pedestal.rotation.y = this.group?.rotation.y ?? 0;
-            this.pedestal.traverse((node) => {
-              const tint = node.isMesh && node.material?.userData?.vmat?.VectorParams?.g_vColorTint;
-              if (Array.isArray(tint)) {
-                node.userData.vmatTint = new THREE.Color(tint[0], tint[1], tint[2]);
-              }
-            });
             this.applyMaterials(this.pedestal, gltf.userData.textures);
             const size = new THREE.Box3().setFromObject(this.pedestal).getSize(new THREE.Vector3());
             const radius = Math.max(size.x, size.z) / 2;
-            pedestalFog.near.value = radius * 0.05;
-            pedestalFog.far.value = radius * 0.75;
-            pedestalFog.inner.value = radius * 0.3;
-            pedestalFog.outer.value = radius * 0.95;
             this.pedestal.traverse((node) => {
               if (node.isMesh) {
                 node.receiveShadow = true;
-                fogBehind(node.userData.dota);
-                fogBehind(node.userData.pbr);
-                // The game's pedestal material is near black (its tint is about 0.23)
-                const tint = node.userData.vmatTint;
-                for (const material of [node.userData.dota, node.userData.pbr]) {
-                  if (material?.color) {
-                    if (tint) {
-                      material.color.multiply(tint);
-                    }
-                    material.color.multiplyScalar(PEDESTAL_DARKNESS);
-                  }
-                }
               }
             });
             this.scene.add(this.pedestal);
@@ -1297,7 +1229,7 @@ export class Stage {
     }
     edges.sort((a, b) => a - b);
     const ring = (edges[8] || radius * 0.7) - radius * 0.02;
-    const mark = await createWatermark(pedestalFog, Math.min((radius * WATERMARK_BAND) / ring, 0.5));
+    const mark = await createWatermark(Math.min((radius * WATERMARK_BAND) / ring, 0.5));
     if (!mark || this.pedestal !== pedestal) {
       return;
     }
@@ -1745,11 +1677,7 @@ export class Stage {
       if (this.portraitFillDir) setDotaFillDir(this.portraitFillDir.clone().applyQuaternion(turn).transformDirection(this.camera.matrixWorldInverse));
       this.portraitSun.position.copy(keyDir).multiplyScalar(15).add(this.portraitSun.target.position);
     }
-    // The pedestal's fog lies beyond the hero as the camera looks
     if (this.pedestal?.visible) {
-      const view = new THREE.Vector3();
-      this.camera.getWorldDirection(view);
-      pedestalFog.direction.value.set(view.x, view.z).normalize();
       // The carved mark is shaded by the light that lights the hero: the game's, or the key from the camera
       if (this.watermark) {
         const light = this.portraitLit ? this.portraitDir.clone() : this.key.position.clone().transformDirection(this.camera.matrixWorld);

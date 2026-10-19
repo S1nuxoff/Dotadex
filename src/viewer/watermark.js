@@ -13,12 +13,10 @@ const WATERMARK = `${import.meta.env.BASE_URL}stage/watermark.png`;
 const carvingShader = {
   vertexShader: /* glsl */ `
     varying vec2 vPos;
-    varying vec3 vWorld;
     varying vec3 vRay;
     void main() {
       vPos = position.xy;
       vec4 world = modelMatrix * vec4(position, 1.0);
-      vWorld = world.xyz;
       // From the camera to this point, in the card's own space (its z is up out of the ground)
       vRay = position - (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz;
       gl_Position = projectionMatrix * viewMatrix * world;
@@ -39,13 +37,7 @@ const carvingShader = {
     // A soft glow from the bottom of the carving, in the hero's color
     uniform vec3 uGlowColor;
     uniform float uGlow;
-    uniform vec2 uFogDirection;
-    uniform float uFogNear;
-    uniform float uFogFar;
-    uniform float uFogInner;
-    uniform float uFogOuter;
     varying vec2 vPos;
-    varying vec3 vWorld;
     varying vec3 vRay;
 
     // Whether a point of the card lies in a letter: round the ring, a copy of the logo centered
@@ -122,18 +114,13 @@ const carvingShader = {
       // Darkened or lightened stone over the pedestal
       vec3 color = bright > 1.0 ? vec3(0.35, 0.32, 0.29) : vec3(0.0);
       float alpha = bright > 1.0 ? min((bright - 1.0) * 0.5, 0.4) : 1.0 - bright;
-      // Fading into the dark behind the hero with the pedestal itself
-      float fog = 1.0 - smoothstep(uFogNear, uFogFar, dot(vWorld.xz, uFogDirection));
-      fog *= 1.0 - smoothstep(uFogInner, uFogOuter, length(vWorld.xz));
-      float fade = smoothstep(0.01, 0.5, edge) * fog;
-      alpha *= fade;
+      alpha *= smoothstep(0.01, 0.5, edge);
       #ifdef GLOW_PASS
         // Drawn again in the stage's halo pass: only the light, which the pass blurs into a
         // halo and adds over the frame
-        // A light shines through the dark the stone sinks into: the fog takes only half of it.
         // Its core runs hot, toward white, the halo keeps the hero's color
         vec3 hot = mix(uGlowColor, vec3(1.0), 0.35);
-        gl_FragColor = vec4(hot * uGlow * glow * smoothstep(0.01, 0.5, edge) * mix(1.0, fog, 0.5), 1.0);
+        gl_FragColor = vec4(hot * uGlow * glow * smoothstep(0.01, 0.5, edge), 1.0);
       #else
         gl_FragColor = vec4(color, alpha);
       #endif
@@ -178,8 +165,8 @@ async function shapeTexture() {
 let shape = null;
 
 // A flat round card of the mark, its ring's outer edge at 1 and its letters band high (a share of
-// that); fog: the pedestal's fog uniforms
-export async function createWatermark(fog, band) {
+// that)
+export async function createWatermark(band) {
   shape ??= shapeTexture();
   const loaded = await shape;
   if (!loaded) {
@@ -204,11 +191,6 @@ export async function createWatermark(fog, band) {
         uDepth: { value: 70 },
         uGlowColor: stageTint,
         uGlow: { value: 1.1 },
-        uFogDirection: fog.direction,
-        uFogNear: fog.near,
-        uFogFar: fog.far,
-        uFogInner: fog.inner,
-        uFogOuter: fog.outer,
       },
     })
   );

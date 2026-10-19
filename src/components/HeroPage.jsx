@@ -84,57 +84,222 @@ function loadBackgrounds(base) {
   return backgrounds;
 }
 
-// Panorama lays the game's screens out for a height of 1080 and scales them to the screen's:
-// a length of the game's layout (a number of its pixels) on this screen
-const panorama = (px) => `calc(100vh * ${px} / 1080)`;
-
 // The picture behind the hero as the game's hero page draws it (dashboard_page_hero_new_v2 and
 // hero_loadout_background_images stylesheets): over the whole screen, the hero's gradient with its
 // backdrop picture (16:9, as high as the screen, at most 1920 wide) at 0.3 opacity, blurred 6 and
-// at 0.4 saturation, washed in its color, through the picture's mask; the whole blurred 6 again,
-// at 1.3 saturation, 1.04 times larger, its edges darkened (DarkEdges)
+// at 0.4 saturation, tinted by its wash color, through the picture's mask; DarkEdges over that; the
+// whole at 1.3 saturation, blurred 6 again, 1.04 times larger.
+// Panorama composites in linear color (its shaders take textures and blend layers in linear
+// space), which a browser's CSS cannot, so it is worked out here in a canvas, small, as everything
+// in it is blurred. Checked on game screenshots (Sniper, Disruptor): linear blending with the wash
+// multiplying (tinting) the picture matches the game where only the backdrop shows; the sRGB,
+// laid-over version was twice as far off.
+const BACKDROP_WIDTH = 480;
+const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const toSrgb = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.max(c, 0) ** (1 / 2.4) - 0.055);
+const LINEAR = Float32Array.from({ length: 256 }, (_, i) => toLinear(i / 255));
+// #rrggbb or #rrggbbaa to linear [r, g, b] and its alpha
+const hexColor = (hex) => {
+  const v = (i) => parseInt(hex.slice(i, i + 2), 16) / 255;
+  return { rgb: [toLinear(v(1)), toLinear(v(3)), toLinear(v(5))], alpha: hex.length > 7 ? v(7) : 1 };
+};
+
+function loadImage(url) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+}
+
+// The bytes of a w × h canvas with an image drawn at x, y, dw × dh
+function pixels(image, w, h, x, y, dw, dh) {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(image, x, y, dw, dh);
+  return context.getImageData(0, 0, w, h).data;
+}
+
+// Gaussian blur of an RGB float image (3 floats a pixel) in place, edges held
+function blurRgb(data, w, h, sigma) {
+  if (sigma < 0.3) {
+    return;
+  }
+  const r = Math.ceil(sigma * 3);
+  const kernel = Array.from({ length: 2 * r + 1 }, (_, i) => Math.exp(-0.5 * ((i - r) / sigma) ** 2));
+  const total = kernel.reduce((a, b) => a + b, 0);
+  const copy = new Float32Array(data.length);
+  const pass = (count, length, at) => {
+    for (let line = 0; line < count; line++) {
+      for (let i = 0; i < length; i++) {
+        let red = 0;
+        let green = 0;
+        let blue = 0;
+        for (let k = -r; k <= r; k++) {
+          const o = at(line, Math.min(length - 1, Math.max(0, i + k)));
+          const weight = kernel[k + r];
+          red += copy[o] * weight;
+          green += copy[o + 1] * weight;
+          blue += copy[o + 2] * weight;
+        }
+        const o = at(line, i);
+        data[o] = red / total;
+        data[o + 1] = green / total;
+        data[o + 2] = blue / total;
+      }
+    }
+  };
+  copy.set(data);
+  pass(h, w, (y, x) => (y * w + x) * 3);
+  copy.set(data);
+  pass(w, h, (x, y) => (y * w + x) * 3);
+}
+
+// Saturation towards or away from the luminance (0.2126, 0.7152, 0.0722)
+function saturate(data, amount) {
+  for (let o = 0; o < data.length; o += 3) {
+    const luma = 0.2126 * data[o] + 0.7152 * data[o + 1] + 0.0722 * data[o + 2];
+    data[o] = luma + amount * (data[o] - luma);
+    data[o + 1] = luma + amount * (data[o + 1] - luma);
+    data[o + 2] = luma + amount * (data[o + 2] - luma);
+  }
+}
+
+// The backdrop for a screen of w × h pixels, drawn into canvas
+function drawBackdrop(canvas, w, h, look, picture, mask) {
+  const rw = Math.min(BACKDROP_WIDTH, w);
+  const rh = Math.max(1, Math.round((h * rw) / w));
+  // one pixel of the game's 1080-high layout, in this picture's pixels
+  const unit = rh / 1080;
+  const out = new Float32Array(rw * rh * 3);
+  // The hero's gradient, top to bottom
+  const from = hexColor(look?.from ?? "#1b1f2a").rgb;
+  const to = hexColor(look?.to ?? "#0d0e12").rgb;
+  for (let y = 0; y < rh; y++) {
+    const t = rh > 1 ? y / (rh - 1) : 0;
+    for (let x = 0; x < rw; x++) {
+      const o = (y * rw + x) * 3;
+      for (let i = 0; i < 3; i++) {
+        out[o + i] = from[i] + (to[i] - from[i]) * t;
+      }
+    }
+  }
+  if (picture) {
+    // #HeroLoadoutBackgroundImage: as high as the screen, at most 1920 wide, centred; the picture
+    // contained in it, the mask stretched over it
+    const ew = Math.min(rw, 1920 * unit);
+    const ex = (rw - ew) / 2;
+    const fit = Math.min(ew / picture.width, rh / picture.height);
+    const pw = picture.width * fit;
+    const ph = picture.height * fit;
+    const bytes = pixels(picture, rw, rh, ex + (ew - pw) / 2, (rh - ph) / 2, pw, ph);
+    const maskBytes = mask ? pixels(mask, rw, rh, ex, 0, ew, rh) : null;
+    const layer = new Float32Array(rw * rh * 3);
+    const cover = new Float32Array(rw * rh);
+    for (let i = 0; i < rw * rh; i++) {
+      layer[i * 3] = LINEAR[bytes[i * 4]];
+      layer[i * 3 + 1] = LINEAR[bytes[i * 4 + 1]];
+      layer[i * 3 + 2] = LINEAR[bytes[i * 4 + 2]];
+      // where the picture is drawn, times the mask (its grey is the game texture's alpha)
+      cover[i] = (bytes[i * 4 + 3] / 255) * (maskBytes ? maskBytes[i * 4] / 255 : 1);
+    }
+    blurRgb(layer, rw, rh, 6 * unit);
+    saturate(layer, 0.4);
+    // wash-color tints: the picture times white moved towards the color by its alpha
+    const wash = look.wash ? hexColor(look.wash) : null;
+    const tint = wash ? wash.rgb.map((c) => 1 - wash.alpha + c * wash.alpha) : [1, 1, 1];
+    for (let i = 0; i < rw * rh; i++) {
+      const a = 0.3 * cover[i];
+      for (let k = 0; k < 3; k++) {
+        out[i * 3 + k] = out[i * 3 + k] * (1 - a) + layer[i * 3 + k] * tint[k] * a;
+      }
+    }
+  }
+  // DarkEdges: black over by a radial gradient at the middle, radii 80% × 100%, clear to 0.2
+  for (let y = 0; y < rh; y++) {
+    for (let x = 0; x < rw; x++) {
+      const d = Math.hypot((x / rw - 0.5) / 0.8, y / rh - 0.5);
+      const keep = 1 - Math.min(1, Math.max(0, (d - 0.2) / 0.8));
+      const o = (y * rw + x) * 3;
+      out[o] *= keep;
+      out[o + 1] *= keep;
+      out[o + 2] *= keep;
+    }
+  }
+  saturate(out, 1.3);
+  blurRgb(out, rw, rh, 6 * unit);
+  canvas.width = rw;
+  canvas.height = rh;
+  const context = canvas.getContext("2d");
+  const image = context.createImageData(rw, rh);
+  for (let i = 0; i < rw * rh; i++) {
+    image.data[i * 4] = Math.round(toSrgb(out[i * 3]) * 255);
+    image.data[i * 4 + 1] = Math.round(toSrgb(out[i * 3 + 1]) * 255);
+    image.data[i * 4 + 2] = Math.round(toSrgb(out[i * 3 + 2]) * 255);
+    image.data[i * 4 + 3] = 255;
+  }
+  context.putImageData(image, 0, 0);
+}
+
 function Backdrop({ base, heroId }) {
+  const canvasRef = useRef(null);
   const [all, setAll] = useState(null);
+  const [images, setImages] = useState({ key: null, picture: null, mask: null });
+  const [screen, setScreen] = useState(() => [window.innerWidth, window.innerHeight]);
   useEffect(() => {
     loadBackgrounds(base).then(setAll);
   }, [base]);
+  useEffect(() => {
+    let timer;
+    const onResize = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => setScreen([window.innerWidth, window.innerHeight]), 150);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
   const look = all?.heroes[heroId];
-  const maskUrl = all?.mask && `url(${base}${all.mask})`;
+  const key = all ? `${look?.image ?? ""}|${all.mask ?? ""}` : null;
+  useEffect(() => {
+    if (!key) {
+      return;
+    }
+    let current = true;
+    Promise.all([
+      look?.image ? loadImage(`${base}${look.image}`) : null,
+      look?.image && all.mask ? loadImage(`${base}${all.mask}`) : null,
+    ]).then(([picture, mask]) => current && setImages({ key, picture, mask }));
+    return () => {
+      current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, base]);
+  useEffect(() => {
+    if (!canvasRef.current || !all || images.key !== key) {
+      return;
+    }
+    try {
+      drawBackdrop(canvasRef.current, screen[0], screen[1], look, images.picture, images.mask);
+    } catch {
+      // a picture the browser will not let the page read: the gradient alone
+      drawBackdrop(canvasRef.current, screen[0], screen[1], look, null, null);
+    }
+  }, [all, look, images, key, screen]);
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div className="absolute inset-0 overflow-hidden bg-[#0d0e12]">
       {/* The game's panel covers the screen, under its top bar too; the page ends at the screen's bottom */}
-      <div
-        className="absolute inset-x-0 bottom-0 h-[100vh]"
-        style={{
-          background: look?.from
-            ? `linear-gradient(${look.from}, ${look.to})`
-            : "linear-gradient(#1b1f2a, #0d0e12)",
-          filter: `blur(${panorama(6)}) saturate(1.3)`,
-          transform: "scale(1.04)",
-        }}
-      >
-        {look?.image && (
-          <div
-            className="absolute left-1/2 top-1/2 aspect-video max-h-full -translate-x-1/2 -translate-y-1/2"
-            style={{
-              width: `min(100%, ${panorama(1920)})`,
-              backgroundImage: `url(${base}${look.image})`,
-              backgroundSize: "100% 100%",
-              opacity: 0.3,
-              filter: `blur(${panorama(6)}) saturate(0.4)`,
-              maskImage: maskUrl,
-              WebkitMaskImage: maskUrl,
-              maskSize: "100% 100%",
-              WebkitMaskSize: "100% 100%",
-              maskMode: "luminance",
-            }}
-          >
-            {/* wash-color: its color laid over the picture by its alpha */}
-            {look.wash && <div className="absolute inset-0" style={{ background: look.wash }} />}
-          </div>
-        )}
-        <div className="absolute inset-0 bg-[radial-gradient(80%_100%_at_50%_50%,transparent_20%,black)]" />
-      </div>
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-x-0 bottom-0 h-[100vh] w-full"
+        style={{ transform: "scale(1.04)" }}
+      />
     </div>
   );
 }

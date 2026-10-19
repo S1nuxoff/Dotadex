@@ -33,6 +33,13 @@ const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(S
 // The effects models start on their own, as the game's pedestal does its ground fog
 // (particles/model-effects.json: { "<model>.vmdl": [{ system, config }] }), loaded once
 let modelEffects = null;
+// The effects the heroes' page maps start (particles/map-effects.json: { "<map>.vmap": [{ system,
+// name, origin, angles }] }), loaded once
+let mapEffects = null;
+// Values the game's code puts in control points of a map's effects, by the entity's name: the
+// hero page gives pedestal_fx (the god rays and their dust, colored by CP1) grey 0.25, the same
+// for every hero (client.dll 0x182edf580, called with constants 0.5 for the fog and 0.25 for it)
+const MAP_EFFECT_VALUES = { pedestal_fx: { 1: [0.25, 0.25, 0.25] } };
 
 // Source's field of view is the horizontal one of a 4:3 screen (the engine has a separate
 // point_camera_vertical_fov for the other kind); wider screens keep its vertical angle.
@@ -1730,6 +1737,12 @@ export class Stage {
         this.pedestalParticles.update(delta, this.camera);
       }
     }
+    for (const { manager } of this.mapParticles ?? []) {
+      manager.group.visible = Boolean(this.pedestal?.visible);
+      if (this.pedestal?.visible) {
+        manager.update(delta, this.camera);
+      }
+    }
     // While developing, ?opaque draws the scene on black instead of see-through
     if (import.meta.env.DEV && window.location.search.includes("opaque") && !this.scene.background) {
       this.scene.background = new THREE.Color(0x000000);
@@ -1857,8 +1870,18 @@ export class Stage {
     const { particleBase: base, pedestal, pedestalUrl: url } = this;
     if (!base || !pedestal || !url?.startsWith(base) || !this.particlesShown) {
       this.pedestalParticles?.setEffects([]);
+      this.setMapEffects([]);
       return;
     }
+    mapEffects ??= fetch(`${base}particles/map-effects.json`)
+      .then((res) => (res.ok ? res.json() : {}))
+      .catch(() => ({}));
+    const map = this.portrait?.map;
+    mapEffects.then((all) => {
+      if (this.pedestal === pedestal && this.particlesShown && this.portrait?.map === map) {
+        this.setMapEffects(all[map] ?? []);
+      }
+    });
     modelEffects ??= fetch(`${base}particles/model-effects.json`)
       .then((res) => (res.ok ? res.json() : {}))
       .catch(() => ({}));
@@ -1880,6 +1903,33 @@ export class Stage {
         this.pedestalParticles.setModel(pedestal, [url]);
       }
       this.pedestalParticles.setEffects(effects);
+    });
+  }
+
+  // The effects the page's map starts (the god rays over the pedestal): each at its entity's place,
+  // which stays where it is while the hero and pedestal turn; its control points as the game's
+  // code sets them
+  setMapEffects(effects) {
+    const key = JSON.stringify(effects);
+    if (key === this.mapEffectsKey) {
+      return;
+    }
+    this.mapEffectsKey = key;
+    for (const { manager, anchor } of this.mapParticles ?? []) {
+      manager.dispose();
+      anchor.removeFromParent();
+    }
+    this.mapParticles = effects.map((effect) => {
+      const anchor = new THREE.Group();
+      anchor.position.copy(sourceToScene(effect.origin ?? [0, 0, 0]));
+      // Only the yaw: the maps' effects stand upright (pitch and roll are 0 on every page map)
+      anchor.rotation.y = THREE.MathUtils.degToRad(effect.angles?.[1] ?? 0);
+      this.scene.add(anchor);
+      const manager = new ParticleManager(this.particleScene, this.particleBase);
+      manager.setModel(anchor, []);
+      const values = MAP_EFFECT_VALUES[effect.name];
+      manager.setEffects([{ system: effect.system, ...(values ? { controlPoints: values } : {}) }]);
+      return { manager, anchor };
     });
   }
 

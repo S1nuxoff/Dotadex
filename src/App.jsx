@@ -401,7 +401,8 @@ export default function App() {
       loadout={route.type === "hero" && section.id === "heroes"}
       frameShift={route.type === "hero" && section.id === "heroes" && wardrobe ? 0.26 : 0}
       portrait={outfit?.hero ? portraits[`npc_dota_hero_${outfit.hero}`] ?? null : null}
-      portraitShot={wardrobe ? "econ_set_preview" : "default"}
+      // The game's hero page opens on this camera (its panel starts on the set preview slot)
+      portraitShot="econ_set_preview"
       outfit={outfit}
       urls={urls}
       particles={particles}

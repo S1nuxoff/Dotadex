@@ -149,8 +149,12 @@ A separate VPK (`game/dota/maps/ui/dota_hud_loadout_2022.vpk`). Its entities (`d
 - `.BackgroundShadow.Short` (in the middle column): 80% wide, 300 high, 36 from the bottom, radial black
   0.7 → 0.5 at 0.6 → 0, blurred 12px.
 
-The page's camera is each hero's `cameras.default` from portraits_full_body_loadout.txt; projected with
-it, the brick square's far edge lands where the site draws it (checked for Anti-Mage), so the far line
+The page's camera is each hero's `cameras.econ_set_preview` from portraits_full_body_loadout.txt: the
+panel (`DOTALargeModelLoadout`, client.dll 0x182ecfc34) starts on slot -20, which selects it (0x182ee9e0a;
+-10 selects `Default`, other slots `slot_<name>`; each first tries a map camera of that name + `_camera`).
+Its `PortraitFOV` is drawn as the vertical angle: then it frames each hero as large as `default` does with
+the 4:3 horizontal angle (median 1.003 over 137 heroes), the size measured on game shots. The map's
+`hero_camera` is not used. Projected with `default`, the brick square's far edge lands where the site draws it (checked for Anti-Mage), so the far line
 of the pedestal is in the game's frame too, over a darker backdrop.
 
 ## Deferred lighting

@@ -35,7 +35,9 @@ const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(S
 let modelEffects = null;
 
 // Source's field of view is the horizontal one of a 4:3 screen (the engine has a separate
-// point_camera_vertical_fov for the other kind); wider screens keep its vertical angle
+// point_camera_vertical_fov for the other kind); wider screens keep its vertical angle.
+// The hero page's portrait cameras are the exception: their PortraitFOV is the vertical angle
+// (so econ_set_preview frames each hero as large as the game shows it)
 const verticalFov = (fov) => THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov / 2)) * 0.75));
 
 // The height of the letters of the site's mark round the pedestal's edge, as a share of its radius
@@ -1415,7 +1417,7 @@ export class Stage {
       // Aimed at the point of the view nearest the hero's upright axis
       const across = Math.hypot(position.x, position.z);
       const target = position.clone().add(direction.clone().multiplyScalar(across / Math.max(Math.hypot(direction.x, direction.z), 0.01)));
-      this.camera.fov = verticalFov(portrait.fov);
+      this.camera.fov = portrait.fov;
       this.camera.near = across / 100;
       this.camera.far = across * 20;
       this.camera.updateProjectionMatrix();

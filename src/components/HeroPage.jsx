@@ -175,6 +175,10 @@ function drawBackdrop(canvas, w, h, look, picture, mask) {
   const rh = Math.max(1, Math.round((h * rw) / w));
   // one pixel of the game's 1080-high layout, in this picture's pixels
   const unit = rh / 1080;
+  // Panorama's blur: gaussian(6px) records (6 + 6) × passes × 0.8 = 9.6 for its blur pass
+  // (panorama.dll 0x1801c2a42), whose kernel weighs exp(-0.5 (i / (9.6 / 2))²) (0x180072f10):
+  // a standard deviation of 4.8 pixels of the screen, not scaled with the layout
+  const blurSigma = (0.8 * (6 + 6) * 0.5 * rh) / (h * (window.devicePixelRatio || 1));
   const out = new Float32Array(rw * rh * 3);
   // The hero's gradient, top to bottom
   const from = hexColor(look?.from ?? "#1b1f2a").rgb;
@@ -207,7 +211,7 @@ function drawBackdrop(canvas, w, h, look, picture, mask) {
       // where the picture is drawn, times the mask (its grey is the game texture's alpha)
       cover[i] = (bytes[i * 4 + 3] / 255) * (maskBytes ? maskBytes[i * 4] / 255 : 1);
     }
-    blurRgb(layer, rw, rh, 6 * unit);
+    blurRgb(layer, rw, rh, blurSigma);
     saturate(layer, 0.4);
     // wash-color tints: the picture times white moved towards the color by its alpha
     const wash = look.wash ? hexColor(look.wash) : null;
@@ -231,7 +235,7 @@ function drawBackdrop(canvas, w, h, look, picture, mask) {
     }
   }
   saturate(out, 1.3);
-  blurRgb(out, rw, rh, 6 * unit);
+  blurRgb(out, rw, rh, blurSigma);
   canvas.width = rw;
   canvas.height = rh;
   const context = canvas.getContext("2d");

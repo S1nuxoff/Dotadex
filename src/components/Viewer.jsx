@@ -338,6 +338,11 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
     stageRef.current.setWatermark(getViewSettings().watermark);
     return onViewSettings((settings) => stageRef.current?.setWatermark(settings.watermark));
   }, []);
+  // The hero's size on its page, as the game takes it: LoadoutScale, else ModelScale
+  const { data: heroData } = useGameData(catalog.modelsBase, ["heroes.json"]);
+  const heroEntry = outfit?.hero ? heroData?.heroes?.[`npc_dota_hero_${outfit.hero}`] : null;
+  const heroScale = Number(heroEntry?.LoadoutScale ?? heroEntry?.ModelScale ?? 1);
+  useEffect(() => stageRef.current.setHeroScale(heroScale), [heroScale]);
   // The game's pedestal and camera for the hero on its page
   useEffect(
     () => stageRef.current.setPortrait(loadout ? portrait : null, loadout && portrait ? `${catalog.modelsBase}${portrait.pedestal}` : null, portraitShot),

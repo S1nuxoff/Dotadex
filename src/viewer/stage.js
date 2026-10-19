@@ -30,10 +30,12 @@ const SOURCE_TO_METRES = 0.0254;
 // Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
 const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
 
-// How much darker the pedestal is drawn, and how far the hero page camera is raised, as a share
-// of half the view's height
+// How much darker the pedestal is drawn
 const PEDESTAL_DARKNESS = 0.14;
-const CAMERA_RAISE = 0.15;
+
+// Source's field of view is the horizontal one of a 4:3 screen (the engine has a separate
+// point_camera_vertical_fov for the other kind); wider screens keep its vertical angle
+const verticalFov = (fov) => THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov / 2)) * 0.75));
 
 // The height of the letters of the site's mark round the pedestal's edge, as a share of its radius
 const WATERMARK_BAND = 0.06;
@@ -638,10 +640,8 @@ export class Stage {
     this.composer.setSize(clientWidth, clientHeight);
     this.glowComposer.setPixelRatio(this.renderer.getPixelRatio());
     this.glowComposer.setSize(clientWidth, clientHeight);
-    this.camera.aspect = clientWidth / clientHeight;
     this.applyShift();
-    this.effects.hazeMaterial.uniforms.uAspect.value = this.camera.aspect;
-    this.camera.updateProjectionMatrix();
+    this.effects.hazeMaterial.uniforms.uAspect.value = clientWidth / clientHeight;
   }
 
   // urls[0] is the base (a hero), the rest are worn on it. The model with the most
@@ -1372,11 +1372,38 @@ export class Stage {
 
   applyShift() {
     const { clientWidth, clientHeight } = this.canvas.parentElement;
-    if (this.frameShift && clientWidth && clientHeight) {
-      this.camera.setViewOffset(clientWidth, clientHeight, clientWidth * this.frameShift, 0, clientWidth, clientHeight);
+    if (!clientWidth || !clientHeight) {
+      return;
+    }
+    // Through the game's camera on a hero's page the picture is cut from one the size of the
+    // window, as the game draws its hero over the whole screen, under its top bar too: the hero
+    // stands where it stands in the game
+    const whole = Boolean(this.portraitCamera());
+    const { left, top } = whole ? this.canvas.parentElement.getBoundingClientRect() : { left: 0, top: 0 };
+    const width = whole ? Math.max(window.innerWidth, clientWidth) : clientWidth;
+    const height = whole ? Math.max(window.innerHeight, clientHeight) : clientHeight;
+    this.camera.aspect = width / height;
+    if (whole || this.frameShift) {
+      this.camera.setViewOffset(width, height, left + clientWidth * this.frameShift, top, clientWidth, clientHeight);
     } else {
       this.camera.clearViewOffset();
     }
+    this.camera.updateProjectionMatrix();
+  }
+
+  // The game's camera for the hero on its page, unless another page is on screen
+  portraitCamera() {
+    return this.loadout && this.group && (this.portrait?.cameras?.[this.portraitShot] ?? this.portrait?.cameras?.default);
+  }
+
+  // The hero's size on its page: the game's LoadoutScale, or its ModelScale
+  setHeroScale(scale) {
+    this.heroScale = scale > 0 ? scale : 1;
+    this.applyHeroScale();
+  }
+
+  applyHeroScale() {
+    this.group?.scale.setScalar(this.loadout && this.portrait ? this.heroScale ?? 1 : 1);
   }
 
   setShading(mode) {
@@ -1438,7 +1465,9 @@ export class Stage {
   frameModel(immediate = false) {
     // On a hero's page, the game's own camera for the hero: Source units and axes (x ahead of the
     // hero, y to its left, z up) to the scene's metres with y up and the hero facing +z
-    const portrait = this.loadout && this.group && (this.portrait?.cameras?.[this.portraitShot] ?? this.portrait?.cameras?.default);
+    const portrait = this.portraitCamera();
+    this.applyHeroScale();
+    this.applyShift();
     if (portrait) {
       const [pitch, yaw] = portrait.angles.map((angle) => THREE.MathUtils.degToRad(angle));
       const position = sourceToScene(portrait.position);
@@ -1446,12 +1475,7 @@ export class Stage {
       // Aimed at the point of the view nearest the hero's upright axis
       const across = Math.hypot(position.x, position.z);
       const target = position.clone().add(direction.clone().multiplyScalar(across / Math.max(Math.hypot(direction.x, direction.z), 0.01)));
-      // Raised a little: our scene starts under the top bar, the game's behind it, so the hero
-      // would stand too high in ours
-      const raise = across * Math.tan(THREE.MathUtils.degToRad(portrait.fov / 2)) * CAMERA_RAISE;
-      position.y += raise;
-      target.y += raise;
-      this.camera.fov = portrait.fov;
+      this.camera.fov = verticalFov(portrait.fov);
       this.camera.near = across / 100;
       this.camera.far = across * 20;
       this.camera.updateProjectionMatrix();
@@ -1486,8 +1510,7 @@ export class Stage {
       this.camera.updateProjectionMatrix();
     }
     if (shot) {
-      // Source gives the horizontal field of view of a 4:3 screen
-      this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(shot.fov / 2)) * 0.75));
+      this.camera.fov = verticalFov(shot.fov);
       this.camera.near = 5;
       this.camera.far = 60000;
       this.camera.updateProjectionMatrix();
@@ -1680,7 +1703,7 @@ export class Stage {
     const speed = this.veilTarget > cover ? 1.8 : 1.4;
     veil.uCover.value = THREE.MathUtils.clamp(cover + Math.sign(this.veilTarget - cover) * delta * speed, 0, 1);
     veil.uTime.value += delta;
-    veil.uAspect.value = this.camera.aspect;
+    veil.uAspect.value = this.canvas.parentElement.clientWidth / Math.max(this.canvas.parentElement.clientHeight, 1);
     this.veil.visible = veil.uCover.value > 0.01;
     if (this.pendingShow && veil.uCover.value < 0.35) {
       this.pendingShow = false;
@@ -1697,7 +1720,7 @@ export class Stage {
     this.lastAngle = angle;
     this.turn = (this.turn ?? 0) + step;
     const tilt = Math.atan2(look.y, Math.hypot(look.x, look.z));
-    this.effects.hazeMaterial.uniforms.uView.value.set((-this.turn / (Math.PI * 2)) * 4 * 2.2 * this.camera.aspect, tilt * 1.5);
+    this.effects.hazeMaterial.uniforms.uView.value.set((-this.turn / (Math.PI * 2)) * 4 * 2.2 * veil.uAspect.value, tilt * 1.5);
     this.rockStage.update(delta);
 
     if (this.sceneLook) {

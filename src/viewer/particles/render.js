@@ -337,15 +337,18 @@ const SPRITE_VERTEX = /* glsl */ `
   void main() {
     // Drawn a little towards the camera, so particles inside the model show, as the game does
     vec3 center = iPosition + safeNormalize(cameraPosition - iPosition) * uCameraBias;
-    // The texture turned round its middle (m_flFinalTextureUVRotation), then its own scale and
-    // offset (a scale of -1 turns it round), within the frame
-    vec2 turned = uv;
+    // The texture as the game's spritecard shader places it: turned round its middle
+    // (m_flFinalTextureUVRotation), divided by its scale there (a scale of 0.4 draws the picture
+    // 0.4 as large: the pedestal's flat ground fog; -1 turns it round), then its offset, within the frame
+    vec2 turned = uv - 0.5;
     if (uTexRotation != 0.0) {
       float c = cos(uTexRotation), s = sin(uTexRotation);
-      turned = mat2(c, s, -s, c) * (uv - 0.5) + 0.5;
+      turned = mat2(c, s, -s, c) * turned;
     }
-    vUv = iFrame.xy + (turned * uTexTransform.xy + uTexTransform.zw) * iFrame.zw;
-    vUvNext = iFrameNext.xy + (turned * uTexTransform.xy + uTexTransform.zw) * iFrameNext.zw;
+    vec2 texScale = vec2(uTexTransform.x == 0.0 ? 1.0 : uTexTransform.x, uTexTransform.y == 0.0 ? 1.0 : uTexTransform.y);
+    vec2 placed = turned / texScale + 0.5 + uTexTransform.zw;
+    vUv = iFrame.xy + placed * iFrame.zw;
+    vUvNext = iFrameNext.xy + placed * iFrameNext.zw;
     vFrameBlend = iFrameBlend;
     vLocal = uv;
     vColor = iColor;

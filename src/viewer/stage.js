@@ -351,6 +351,25 @@ function environmentMaterial(material) {
 // Not an animation: the model standing in the pose it was made in
 export const T_POSE = "T-pose";
 
+// A part whose bone the animation puts this far below the model's origin (metres) is one the game
+// hides under the ground (see hideParked)
+const PARKED_DEPTH = 5;
+
+// The bone that moves most of a skinned mesh
+function mainBone(mesh) {
+  if (!mesh.userData.mainBone) {
+    const { skinIndex, skinWeight } = mesh.geometry.attributes;
+    const totals = new Float32Array(mesh.skeleton.bones.length);
+    for (let i = 0; i < skinIndex.count; i++) {
+      for (let k = 0; k < 4; k++) {
+        totals[skinIndex.getComponent(i, k)] += skinWeight.getComponent(i, k);
+      }
+    }
+    mesh.userData.mainBone = mesh.skeleton.bones[totals.indexOf(Math.max(...totals))];
+  }
+  return mesh.userData.mainBone;
+}
+
 // Makes the skinned meshes of `part` follow the bones of `root` with the same names, in any
 // letter case as the game matches them (Anti-Mage's base has Spine_0, many of his items spine_0).
 // Bones only the part has (chains, cloth) are moved under their parent in the root skeleton.
@@ -908,22 +927,32 @@ export class Stage {
     const result = new Map();
     this.group?.updateMatrixWorld(true);
     this.group?.traverse((node) => {
-      if (!node.isSkinnedMesh) {
-        return;
+      if (node.isSkinnedMesh) {
+        result.set(node, mainBone(node).getWorldPosition(new THREE.Vector3()));
       }
-      if (!node.userData.mainBone) {
-        const { skinIndex, skinWeight } = node.geometry.attributes;
-        const totals = new Float32Array(node.skeleton.bones.length);
-        for (let i = 0; i < skinIndex.count; i++) {
-          for (let k = 0; k < 4; k++) {
-            totals[skinIndex.getComponent(i, k)] += skinWeight.getComponent(i, k);
-          }
-        }
-        node.userData.mainBone = node.skeleton.bones[totals.indexOf(Math.max(...totals))];
-      }
-      result.set(node, node.userData.mainBone.getWorldPosition(new THREE.Vector3()));
     });
     return result;
+  }
+
+  // The game hides some parts by parking their bone far under the ground in every animation
+  // (Mirana persona's arrow, 12.7 m down): the ground hides them there, but our stage has none
+  // to see through, so a mesh whose main bone the animation puts that deep is not drawn
+  hideParked() {
+    if (!this.group) {
+      return;
+    }
+    const toModel = (this.parkInverse ??= new THREE.Matrix4()).copy(this.group.matrixWorld).invert();
+    const at = (this.parkAt ??= new THREE.Vector3());
+    this.group.traverse((node) => {
+      if (!node.isSkinnedMesh || (!node.visible && !node.userData.parked)) {
+        return;
+      }
+      const parked = at.setFromMatrixPosition(mainBone(node).matrixWorld).applyMatrix4(toModel).y < -PARKED_DEPTH;
+      if (parked !== Boolean(node.userData.parked)) {
+        node.userData.parked = parked;
+        node.visible = !parked;
+      }
+    });
   }
 
   setSpeed(speed) {
@@ -1728,6 +1757,8 @@ export class Stage {
 
     this.controls.update();
     this.updateCloth(delta);
+    this.group?.updateMatrixWorld(true);
+    this.hideParked();
     this.particles?.update(delta, this.camera);
     // While developing, ?opaque draws the scene on black instead of see-through
     if (import.meta.env.DEV && window.location.search.includes("opaque") && !this.scene.background) {

@@ -33,6 +33,10 @@ const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(S
 // How much darker the pedestal is drawn
 const PEDESTAL_DARKNESS = 0.14;
 
+// The effects models start on their own, as the game's pedestal does its ground fog
+// (particles/model-effects.json: { "<model>.vmdl": [{ system, config }] }), loaded once
+let modelEffects = null;
+
 // Source's field of view is the horizontal one of a 4:3 screen (the engine has a separate
 // point_camera_vertical_fov for the other kind); wider screens keep its vertical angle
 const verticalFov = (fov) => THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov / 2)) * 0.75));
@@ -1202,6 +1206,7 @@ export class Stage {
         this.dropModel(this.pedestal);
         this.pedestal = null;
         this.watermark = null;
+        this.pedestalParticles?.setModel(null, []);
       }
       if (pedestalUrl) {
         loadModel(pedestalUrl).then(
@@ -1248,6 +1253,7 @@ export class Stage {
             this.scene.add(this.pedestal);
             this.carveWatermark(this.pedestal, radius);
             this.updateShowcase();
+            this.updatePedestalParticles();
           },
           () => {}
         );
@@ -1786,6 +1792,12 @@ export class Stage {
     this.group?.updateMatrixWorld(true);
     this.hideParked();
     this.particles?.update(delta, this.camera);
+    if (this.pedestalParticles) {
+      this.pedestalParticles.group.visible = Boolean(this.pedestal?.visible);
+      if (this.pedestal?.visible) {
+        this.pedestalParticles.update(delta, this.camera);
+      }
+    }
     // While developing, ?opaque draws the scene on black instead of see-through
     if (import.meta.env.DEV && window.location.search.includes("opaque") && !this.scene.background) {
       this.scene.background = new THREE.Color(0x000000);
@@ -1886,8 +1898,9 @@ export class Stage {
     );
   }
 
-  // The game's particle effects on the model, systems by their path in the game
-  setParticles(base, paths) {
+  // The game's particle effects on the model, systems by their path in the game; shown: whether
+  // particles are drawn at all (the pedestal's own effects too)
+  setParticles(base, paths, shown = true) {
     if (import.meta.env.DEV && !this.probeKey) {
       this.probeKey = (event) => {
         if (event.key === "k" || event.key === "K" || event.code === "KeyK") this.probeRequested = true;
@@ -1901,6 +1914,33 @@ export class Stage {
       }
     }
     this.particles.setEffects(paths);
+    this.particleBase = base;
+    this.particlesShown = shown;
+    this.updatePedestalParticles();
+  }
+
+  // The effects the pedestal starts itself, as its model does in the game: the ground fog, and the
+  // dust it raises as it turns (emitted by how fast its edge moves, a control point on its rim)
+  updatePedestalParticles() {
+    const { particleBase: base, pedestal, pedestalUrl: url } = this;
+    if (!base || !pedestal || !url?.startsWith(base) || !this.particlesShown) {
+      this.pedestalParticles?.setEffects([]);
+      return;
+    }
+    modelEffects ??= fetch(`${base}particles/model-effects.json`)
+      .then((res) => (res.ok ? res.json() : {}))
+      .catch(() => ({}));
+    modelEffects.then((all) => {
+      if (this.pedestal !== pedestal || !this.particlesShown) {
+        return;
+      }
+      const effects = all[url.slice(base.length).replace(/\.glb$/, ".vmdl")] ?? [];
+      this.pedestalParticles ??= new ParticleManager(this.particleScene, base);
+      if (this.pedestalParticles.model !== pedestal) {
+        this.pedestalParticles.setModel(pedestal, [url]);
+      }
+      this.pedestalParticles.setEffects(effects);
+    });
   }
 
   // sound: { base, events, byModel, attack: { [model]: { event, point } } } or null to mute

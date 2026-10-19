@@ -255,8 +255,9 @@ export class ParticleManager {
     this.restart();
   }
 
-  // [{ system, models, snapshots }]: systems by their path in the game, the models they rise
-  // from, and snapshots put in place of others ({ default: its own })
+  // [{ system, models, snapshots, config }]: systems by their path in the game, the models they
+  // rise from, snapshots put in place of others ({ default: its own }), and the name of the
+  // control point configuration to start with (the first one otherwise)
   setEffects(list) {
     const sorted = [...list].sort((a, b) => a.system.localeCompare(b.system));
     const key = sorted.map((effect) => `${effect.system}@${(effect.models ?? []).join(",")}${effect.snapshots ? JSON.stringify(effect.snapshots) : ""}`).join("|");
@@ -277,7 +278,7 @@ export class ParticleManager {
     if (request !== this.request) return;
     for (const [index, def] of defs.entries()) {
       if (!def) continue;
-      const host = this.hostFor(def, list[index].models, list[index].snapshots);
+      const host = this.hostFor(def, list[index].models, list[index].snapshots, list[index].config);
       this.effects.push({ system: new ParticleSystem(def, host), host });
     }
     if (unsupported.size) {
@@ -291,10 +292,12 @@ export class ParticleManager {
     this.group.clear();
   }
 
-  // What a root system asks of the world: control points driven as its first configuration
-  // says (attachments of the parent model, its origin), textures, children, the model surface
-  hostFor(def, models = [], swaps = {}) {
-    const drivers = def.m_controlPointConfigurations?.[0]?.m_drivers ?? [];
+  // What a root system asks of the world: control points driven as its configuration (the one
+  // named, else the first) says (attachments of the parent model, its origin), textures,
+  // children, the model surface
+  hostFor(def, models = [], swaps = {}, config = null) {
+    const configurations = def.m_controlPointConfigurations ?? [];
+    const drivers = (configurations.find((entry) => config && entry?.m_name === config) ?? configurations[0])?.m_drivers ?? [];
     const points = new Map();
     const driven = new Map();
     for (const driver of drivers) {
@@ -341,7 +344,7 @@ export class ParticleManager {
           points.set(index, point);
           // In place at once: particles made this step must not start at the world's origin
           if (driven.has(index)) {
-            manager.drive(point, driven.get(index));
+            manager.drive(point, driven.get(index), 0);
           } else {
             const origin = this.controlPoint(0);
             point.position.copy(origin.position);
@@ -351,9 +354,9 @@ export class ParticleManager {
         }
         return point;
       },
-      update() {
+      update(delta) {
         for (const [index, driver] of driven) {
-          manager.drive(this.controlPoint(index), driver);
+          manager.drive(this.controlPoint(index), driver, delta);
         }
         // Control points nothing drives stand where the effect does
         const origin = this.controlPoint(0);
@@ -367,8 +370,9 @@ export class ParticleManager {
     };
   }
 
-  // A control point at an attachment of the model, or at its origin
-  drive(point, driver) {
+  // A control point at an attachment of the model, or at its origin; its speed over the frame's
+  // delta seconds (0: just placed)
+  drive(point, driver, delta) {
     point.previous.copy(point.position);
     const attachment = driver.m_attachmentName && this.attachments[driver.m_attachmentName];
     const type = driver.m_iAttachType ?? "PATTACH_ABSORIGIN_FOLLOW";
@@ -389,7 +393,7 @@ export class ParticleManager {
       point.position.y += offset[1];
       point.position.z += offset[2];
     }
-    point.speed = point.position.distanceTo(point.previous) * 60;
+    point.speed = delta > 0 ? point.position.distanceTo(point.previous) / delta : 0;
   }
 
   // A random point of the model's surface, in the game's space, and how to find it again
@@ -429,7 +433,7 @@ export class ParticleManager {
   update(delta, camera) {
     if (!this.effects.length) return;
     for (const effect of this.effects) {
-      effect.host.update();
+      effect.host.update(delta);
       effect.system.update(Math.min(delta, 0.1));
       effect.system.render(camera);
     }

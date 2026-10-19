@@ -1262,6 +1262,7 @@ export class Stage {
     this.applyControls();
     this.updatePortraitLight();
     this.updateShowcase();
+    this.updatePedestalParticles();
     if (changed && this.group) {
       this.frameModel();
     }
@@ -1934,7 +1935,14 @@ export class Stage {
       if (this.pedestal !== pedestal || !this.particlesShown) {
         return;
       }
-      const effects = all[url.slice(base.length).replace(/\.glb$/, ".vmdl")] ?? [];
+      const model = url.slice(base.length).replace(/\.glb$/, ".vmdl");
+      // The game's code gives the 2023 pedestal's ground fog its color in control point 1: the
+      // hero's GroundfogFXColor, else grey (client.dll 0x182edf5d0); without it the fog is black
+      const tinted = model === "models/heroes/pedestal/loadout_pedestal_2023.vmdl";
+      const color = this.portrait?.groundfog ?? [0.5, 0.5, 0.5];
+      const effects = (all[model] ?? []).map((effect) =>
+        tinted && effect.system === "particles/ui/dota_hud_loadout_pedestal_groundfog.vpcf" ? { ...effect, controlPoints: { 1: color } } : effect
+      );
       this.pedestalParticles ??= new ParticleManager(this.particleScene, base);
       if (this.pedestalParticles.model !== pedestal) {
         this.pedestalParticles.setModel(pedestal, [url]);

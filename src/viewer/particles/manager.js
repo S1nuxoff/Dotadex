@@ -257,12 +257,13 @@ export class ParticleManager {
     this.restart();
   }
 
-  // [{ system, models, snapshots, config }]: systems by their path in the game, the models they
-  // rise from, snapshots put in place of others ({ default: its own }), and the name of the
-  // control point configuration to start with (the first one otherwise)
+  // [{ system, models, snapshots, config, controlPoints }]: systems by their path in the game, the
+  // models they rise from, snapshots put in place of others ({ default: its own }), the name of
+  // the control point configuration to start with (the first one otherwise), and values the
+  // game's code puts in control points ({ 1: [r, g, b] })
   setEffects(list) {
     const sorted = [...list].sort((a, b) => a.system.localeCompare(b.system));
-    const key = sorted.map((effect) => `${effect.system}@${(effect.models ?? []).join(",")}${effect.snapshots ? JSON.stringify(effect.snapshots) : ""}`).join("|");
+    const key = sorted.map((effect) => `${effect.system}@${(effect.models ?? []).join(",")}${effect.snapshots ? JSON.stringify(effect.snapshots) : ""}${effect.controlPoints ? JSON.stringify(effect.controlPoints) : ""}`).join("|");
     if (key === this.key) return;
     this.key = key;
     this.list = sorted;
@@ -280,7 +281,7 @@ export class ParticleManager {
     if (request !== this.request) return;
     for (const [index, def] of defs.entries()) {
       if (!def) continue;
-      const host = this.hostFor(def, list[index].models, list[index].snapshots, list[index].config);
+      const host = this.hostFor(def, list[index].models, list[index].snapshots, list[index].config, list[index].controlPoints);
       this.effects.push({ system: new ParticleSystem(def, host), host });
     }
     if (unsupported.size) {
@@ -297,7 +298,7 @@ export class ParticleManager {
   // What a root system asks of the world: control points driven as its configuration (the one
   // named, else the first) says (attachments of the parent model, its origin), textures,
   // children, the model surface
-  hostFor(def, models = [], swaps = {}, config = null) {
+  hostFor(def, models = [], swaps = {}, config = null, values = {}) {
     const configurations = def.m_controlPointConfigurations ?? [];
     const drivers = (configurations.find((entry) => config && entry?.m_name === config) ?? configurations[0])?.m_drivers ?? [];
     const points = new Map();
@@ -306,6 +307,9 @@ export class ParticleManager {
       driven.set(driver.m_iControlPoint ?? 0, driver);
     }
     if (!driven.has(0)) driven.set(0, { m_iControlPoint: 0, m_iAttachType: "PATTACH_ABSORIGIN_FOLLOW" });
+    for (const [index, value] of Object.entries(values ?? {})) {
+      driven.set(Number(index), { value });
+    }
     const manager = this;
     // The surface of the effect's own models, or the whole model when none of its meshes is there
     const wanted = new Set(models);
@@ -376,6 +380,13 @@ export class ParticleManager {
   // delta seconds (0: just placed)
   drive(point, driver, delta) {
     point.previous.copy(point.position);
+    // A value the game's code sets, not a place
+    if (driver.value) {
+      point.position.set(driver.value[0] ?? 0, driver.value[1] ?? 0, driver.value[2] ?? 0);
+      point.quaternion.identity();
+      point.speed = 0;
+      return;
+    }
     const attachment = driver.m_attachmentName && this.attachments[driver.m_attachmentName];
     const type = driver.m_iAttachType ?? "PATTACH_ABSORIGIN_FOLLOW";
     if (attachment && /POINT/.test(type) && attachmentTransform(attachment, this.bones, v1, q1)) {

@@ -129,6 +129,30 @@ A separate VPK (`game/dota/maps/ui/dota_hud_loadout_2022.vpk`). Its entities (`d
   and `dota_hud_loadout_pedestal_depthmaskfog(_shadow)` (dark blue 4 7 15 cloud sprites behind the
   hero), `dota_hud_loadout_godrays_light` (a deferred light particle).
 
+## The hero page's panels (Panorama)
+
+`panorama/layout/dashboard_page_hero_new_v2.vxml` with `styles/dashboard_page_hero_new_v2.vcss` and
+`styles/hero_loadout_background_images.vcss`. Panorama lays out for a 1080-high screen and scales.
+
+- `#HeroLoadoutBackgroundImageContainer` (the whole screen): the hero's vertical gradient, saturation
+  1.3, blur gaussian 6px, scale 1.04 (1 on the fullscreen page; brightness 0.5 on the other tabs).
+  Inside: `#HeroLoadoutBackgroundImage` (100% × 100%, max-width 1920, background-size contain,
+  opacity 0.3, blur 6px, saturation 0.4, wash-color per hero e.g. `purple&66`, opacity-mask
+  `loadout_background_image_mask_psd`, a grey image) and `.DarkEdges` (radial gradient at 50% 50%,
+  radii 80% × 100%, clear to 0.2 then to black). Overrides: `.largo` (saturation 1, opacity 1, no blur,
+  brightness 0.2), `.broodmother` (picture hidden).
+- `#HeroSceneGroup` (the 3D scene): 100% × 100%, max-width 1920, opacity-mask
+  `hero_model_preview_mask_loadout_psd` (sides and bottom fade only; the middle band is fully shown).
+  `#HeroSceneBody` 1020 high with 60 top margin (scale 1.2 on the fullscreen page); other tabs blur it
+  12px at 0.05 opacity.
+- `.EquippedBackgroundShard`: an 800 × 300 skewed white-edged card at 0.05 opacity.
+- `.BackgroundShadow.Short` (in the middle column): 80% wide, 300 high, 36 from the bottom, radial black
+  0.7 → 0.5 at 0.6 → 0, blurred 12px.
+
+The page's camera is each hero's `cameras.default` from portraits_full_body_loadout.txt; projected with
+it, the brick square's far edge lands where the site draws it (checked for Anti-Mage), so the far line
+of the pedestal is in the game's frame too, over a darker backdrop.
+
 ## Deferred lighting
 
 - `deferred_global_light.vfx` (the sun pass): the same terms as global_lit_simple's forward shader,

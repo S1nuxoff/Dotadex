@@ -84,8 +84,14 @@ function loadBackgrounds(base) {
   return backgrounds;
 }
 
-// The picture behind the hero: the game's backdrop for it, blurred, faded and washed in its
-// color over a gradient of its own, the edges sinking into the dark
+// Panorama lays the game's screens out for a height of 1080 and scales them to the screen's
+const panorama = (px) => `calc(${px} * 100vh / 1080)`;
+
+// The picture behind the hero as the game's hero page draws it (dashboard_page_hero_new_v2 and
+// hero_loadout_background_images stylesheets): over the whole screen, the hero's gradient with its
+// backdrop picture (16:9, as high as the screen, at most 1920 wide) at 0.3 opacity, blurred 6 and
+// at 0.4 saturation, washed in its color, through the picture's mask; the whole blurred 6 again,
+// at 1.3 saturation, 1.04 times larger, its edges darkened (DarkEdges)
 function Backdrop({ base, heroId }) {
   const [all, setAll] = useState(null);
   useEffect(() => {
@@ -94,38 +100,40 @@ function Backdrop({ base, heroId }) {
   const look = all?.heroes[heroId];
   const maskUrl = all?.mask && `url(${base}${all.mask})`;
   return (
-    <div
-      className="absolute inset-0 overflow-hidden"
-      style={{
-        background: look?.from
-          ? `linear-gradient(${look.from}, ${look.to})`
-          : "linear-gradient(#1b1f2a, #0d0e12)",
-      }}
-    >
-      {look?.image && (
-        <div
-          className="absolute inset-0 mx-auto max-w-[1920px]"
-          style={{
-            backgroundImage: `url(${base}${look.image})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            filter: "blur(6px) saturate(0.52)",
-            maskImage: maskUrl,
-            WebkitMaskImage: maskUrl,
-            maskSize: "100% 100%",
-            WebkitMaskSize: "100% 100%",
-            maskMode: "luminance",
-          }}
-        >
-          {look.wash && (
-            <div
-              className="absolute inset-0 mix-blend-color"
-              style={{ background: look.wash }}
-            />
-          )}
-        </div>
-      )}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_75%_70%_at_50%_45%,transparent_55%,rgb(0_0_0/0.65))]" />
+    <div className="absolute inset-0 overflow-hidden">
+      {/* The game's panel covers the screen, under its top bar too; the page ends at the screen's bottom */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-[100vh]"
+        style={{
+          background: look?.from
+            ? `linear-gradient(${look.from}, ${look.to})`
+            : "linear-gradient(#1b1f2a, #0d0e12)",
+          filter: `blur(${panorama("6px")}) saturate(1.3)`,
+          transform: "scale(1.04)",
+        }}
+      >
+        {look?.image && (
+          <div
+            className="absolute left-1/2 top-1/2 aspect-video max-h-full -translate-x-1/2 -translate-y-1/2"
+            style={{
+              width: `min(100%, ${panorama("1920px")})`,
+              backgroundImage: `url(${base}${look.image})`,
+              backgroundSize: "100% 100%",
+              opacity: 0.3,
+              filter: `blur(${panorama("6px")}) saturate(0.4)`,
+              maskImage: maskUrl,
+              WebkitMaskImage: maskUrl,
+              maskSize: "100% 100%",
+              WebkitMaskSize: "100% 100%",
+              maskMode: "luminance",
+            }}
+          >
+            {/* wash-color: its color laid over the picture by its alpha */}
+            {look.wash && <div className="absolute inset-0" style={{ background: look.wash }} />}
+          </div>
+        )}
+        <div className="absolute inset-0 bg-[radial-gradient(80%_100%_at_50%_50%,transparent_20%,black)]" />
+      </div>
     </div>
   );
 }

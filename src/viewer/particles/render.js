@@ -1069,11 +1069,11 @@ function models(def, system) {
 // materials: { x, y, z, radius } in the scene's metres, width the share of the radius the light
 // fades over, r, g, b linear and times the light's intensity. Emptied by the stage every frame.
 export const frameLights = [];
-const srgbToLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 
 // Each particle a point light, as particles.dll hands it to the renderer (0x1803155c5): at the
 // particle, radius = its radius × m_flRadiusScale, color = its color with m_vecColorScale as
-// m_nColorBlendType says, clamped and passed as bytes (taken as gamma, as Source's colors are),
+// m_nColorBlendType says, clamped and passed as bytes (taken as they are, linear: the gamma
+// reading made Ember Spirit's sword flashes dark red where the game lights the floor orange),
 // intensity = alpha × the second alpha field × m_flAlphaScale. Defaults from the renderer's
 // constructor (0x18033c440): scales 1, m_flStartFalloff 0.25. deferred_local_light_cs lights
 // a surface by color × N·L × smoothstep(saturate((1 - d / radius) / (1 - start falloff)));
@@ -1104,7 +1104,7 @@ function deferredLights(def, system) {
         const intensity = Math.min(Math.max(alpha[i], 0), 1) * Math.min(Math.max(alpha2[i] ?? 1, 0), 1) * alphaScale;
         if (!(size > 0) || !(intensity > 0)) continue;
         const j = i * 3;
-        const channel = (k) => srgbToLinear(Math.min(Math.max(scale ? mix(tint[j + k] || 0, out[k]) : tint[j + k] || 0, 0), 1)) * intensity;
+        const channel = (k) => Math.min(Math.max(scale ? mix(tint[j + k] || 0, out[k]) : tint[j + k] || 0, 0), 1) * intensity;
         frameLights.push({
           x: p[j + 1] * UNIT,
           y: p[j + 2] * UNIT,

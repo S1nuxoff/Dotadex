@@ -1058,14 +1058,16 @@ export class Stage {
   updatePortraitLight() {
     const on = Boolean(this.loadout && this.portrait?.light && !this.sceneLook);
     if (on && !this.portraitSun) {
-      // The game casts the page's shadow from a spot light (client.dll's PortraitLightShadowRenderer):
-      // at PortraitLightPosition, aimed by PortraitLightAngles, PortraitLightFOV wide, into a
-      // shadow map r_dota_spotlight_shadows_resolution (256) square; the shaders push each point
-      // 1 unit out along its normal before reading it. The light itself still shades as a sun
+      // The page's light is the scene's global light in its spot mode (m_bSpotLight, m_flFOV): at
+      // PortraitLightPosition, aimed by PortraitLightAngles, PortraitLightFOV wide, its shadow map
+      // the sun's, DotaSunLightShadowDepthTexture, 2048 square (client.dll 0x1822014f0 by
+      // cl_globallight_shadow_mode, default 2; 256 is r_dota_spotlight_shadows_resolution, the
+      // minigames' portrait_world_light). The shaders push each point 1 unit out along its normal
+      // before reading it. The light itself still shades as a sun
       this.portraitSun = new THREE.DirectionalLight(0xffffff, 0);
       this.portraitSun.castShadow = true;
       this.portraitSun.shadow.camera = new THREE.PerspectiveCamera(63, 1, 10 * SOURCE_TO_METRES, 1000 * SOURCE_TO_METRES);
-      this.portraitSun.shadow.mapSize.set(256, 256);
+      this.portraitSun.shadow.mapSize.set(2048, 2048);
       this.portraitSun.shadow.bias = -0.0005;
       this.portraitSun.shadow.normalBias = SOURCE_TO_METRES;
       this.scene.add(this.portraitSun, this.portraitSun.target);

@@ -504,7 +504,8 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
           />
         )}
 
-        {hero?.personas?.length > 0 && (
+        {/* The hero page has the game's own persona switch over EQUIPPED */}
+        {hero?.personas?.length > 0 && !loadout && (
           <Toggle
             label="Persona"
             value={outfit.persona ?? 0}

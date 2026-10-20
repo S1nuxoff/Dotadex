@@ -429,8 +429,10 @@ export default function App() {
   // The game's loadout scene for what is on screen (loadout_portraits): the hero's own, else its
   // entries for a courier, a ward or anything else
   const shownItem = route?.type === "item" ? catalog.itemsById[route.id] : null;
+  // A persona has its own entry (npc_dota_hero_antimage_persona1: its light, shadow and cameras)
+  const personaKey = outfit?.persona ? `npc_dota_hero_${outfit.hero}_persona${outfit.persona}` : null;
   const portraitKey = outfit?.hero
-    ? `npc_dota_hero_${outfit.hero}`
+    ? (personaKey && portraits[personaKey] ? personaKey : `npc_dota_hero_${outfit.hero}`)
     : shownItem?.kind === "courier"
     ? "default_courier"
     : shownItem?.kind === "ward"

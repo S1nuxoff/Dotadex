@@ -29,6 +29,11 @@ const SOURCE_TO_METRES = 0.0254;
 const STEP = 1 / 60;
 // At most this many steps a frame: a long stall is skipped, not caught up with
 const MAX_STEPS = 8;
+// New cloth is settled before it is shown, as the game settles a new model's: this many steps in
+// the pose it comes in with, its speed cut by a share each step so it comes to rest where it
+// hangs (Tidehunter's fish otherwise fell from the animation's pose for seconds in front of you)
+const SETTLE_STEPS = 300;
+const SETTLE_KEEP = 0.9;
 // Rods and collisions solved this many times a step
 const ITERATIONS = 4;
 // A node this far from its place in the animation (inches) means the solver lost it: start over
@@ -639,6 +644,13 @@ export class Cloth {
       step.set(target);
       this.groupBefore.copy(groupWorld);
       this.started = true;
+      this.placeShapes();
+      for (let s = 0; s < SETTLE_STEPS; s++) {
+        this.advance(STEP, unit);
+        for (let k = 0; k < n * 3; k++) {
+          previous[k] = x[k] - (x[k] - previous[k]) * SETTLE_KEEP;
+        }
+      }
     }
     // Some cloth feels the model's own movement less (m_flLocalForce): carried along by that share
     if (this.localForce < 1) {

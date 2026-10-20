@@ -822,6 +822,12 @@ export class Stage {
       if (node.isMesh) {
         node.castShadow = true;
         node.receiveShadow = true;
+        // Both faces into the shadow map: three draws only the back faces by default, so a
+        // one-sided sheet turned to the light (hair, a cape) cast no shadow at all; the normal
+        // offset keeps the surfaces from shadowing themselves
+        for (const material of [node.material, node.userData.dota, node.userData.pbr].flat()) {
+          if (material) material.shadowSide = THREE.DoubleSide;
+        }
       }
       if (node.isBone) {
         node.userData.rest = { position: node.position.clone(), quaternion: node.quaternion.clone(), scale: node.scale.clone() };

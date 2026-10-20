@@ -116,6 +116,25 @@ function particlesOf(item) {
     : null;
 }
 
+// The activity modifiers an item gives the hero's animations ([activity or "ALL", modifier, style]),
+// by which the game picks among the sequences of an activity: Sven's TI7 sword makes his loadout
+// spawn `loadout_ti7_spawn` (ACT_DOTA_SPAWN + ti7 + loadout). The style is given where the item
+// gives it, for the site to keep those of the style worn; alternate-loadout-only ones are left out
+function activitiesOf(item) {
+  const list = [];
+  for (const visual of Object.values(item?.visuals ?? {})) {
+    if (!visual || typeof visual !== "object" || visual.type !== "activity" || typeof visual.modifier !== "string") {
+      continue;
+    }
+    if (String(visual.spawn_in_alternate_loadout_only ?? "0") === "1") {
+      continue;
+    }
+    const entry = [typeof visual.asset === "string" ? visual.asset : "ALL", visual.modifier];
+    list.push(visual.style !== undefined ? [...entry, Number(visual.style)] : entry);
+  }
+  return list.length ? list : null;
+}
+
 // A hero's own effects: those of its default items that have no model (its ambient effects)
 for (const [id, item] of Object.entries(gameItems)) {
   if (item.prefab !== "default_item" || index.items[id]) {
@@ -126,6 +145,14 @@ for (const [id, item] of Object.entries(gameItems)) {
     const hero = heroes[heroIdOf(key)];
     if (hero) {
       hero.particles = [...new Set([...(hero.particles ?? []), ...(particles.add ?? [])])];
+    }
+  }
+  // And its activity modifiers, which such an item gives too
+  const activities = activitiesOf(item);
+  for (const key of activities ? Object.keys(item.used_by_heroes ?? {}) : []) {
+    const hero = heroes[heroIdOf(key)];
+    if (hero) {
+      hero.activities = [...(hero.activities ?? []), ...activities];
     }
   }
 }
@@ -166,6 +193,10 @@ for (const [id, entry] of Object.entries(index.items)) {
   const particles = particlesOf(item);
   if (particles) {
     record.particles = particles;
+  }
+  const activities = activitiesOf(item);
+  if (activities) {
+    record.activities = activities;
   }
   const price = priceOf(entry.name);
   if (price) {

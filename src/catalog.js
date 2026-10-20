@@ -249,6 +249,43 @@ export function outfitUrls(catalog, outfit) {
   return [...new Set(urls)];
 }
 
+// What a hero wears, chosen or by default: [{ item, models, style }]
+function wornItems(catalog, outfit, hero, persona) {
+  const worn = [];
+  if (outfit.bare) {
+    return worn;
+  }
+  for (const slot of dressedSlots(hero, outfit, persona)) {
+    const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
+    if (chosen) {
+      worn.push({ item: chosen, models: itemUrls(catalog, chosen, outfit.slots[slot].style), style: outfit.slots[slot].style ?? 0 });
+    } else {
+      for (const entry of hero.defaults.filter((entry) => entry.slot === slot)) {
+        const item = catalog.itemsById[entry.id];
+        if (item) worn.push({ item, models: entry.models.map((model) => catalog.modelsBase + model), style: 0 });
+      }
+    }
+  }
+  return worn;
+}
+
+// The activity modifiers on the hero's animations, as the game sets them from what it wears (and
+// the hero's own default items without a model): [[activity or "ALL", modifier]], those of the
+// style worn. The game picks each activity's sequence by them (Sven's TI7 sword: his loadout spawn
+// with the sword's burst)
+export function outfitActivities(catalog, outfit) {
+  if (outfit.scene || !outfit.hero) {
+    return [];
+  }
+  const hero = catalog.heroesById[outfit.hero];
+  const persona = outfit.persona && hero.personas?.[outfit.persona - 1] ? outfit.persona : 0;
+  const list = persona ? [] : [...(hero.activities ?? [])];
+  for (const { item, style } of wornItems(catalog, outfit, hero, persona)) {
+    list.push(...(item.activities ?? []).filter((entry) => entry[2] === undefined || entry[2] === style));
+  }
+  return list.map(([activity, modifier]) => [activity, modifier]);
+}
+
 // The particle systems on screen, as the game puts them: the hero's own effects, those of what it
 // wears (or wears by default) added, and those an item puts in place of others swapped.
 // [{ system, models, snapshots }]: the models whose surface an effect's particles rise from, its
@@ -272,20 +309,7 @@ export function outfitParticles(catalog, outfit) {
   }
   const hero = catalog.heroesById[outfit.hero];
   const persona = outfit.persona && hero.personas?.[outfit.persona - 1] ? outfit.persona : 0;
-  const worn = [];
-  if (!outfit.bare) {
-    for (const slot of dressedSlots(hero, outfit, persona)) {
-      const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
-      if (chosen) {
-        worn.push({ item: chosen, models: itemUrls(catalog, chosen, outfit.slots[slot].style) });
-      } else {
-        for (const entry of hero.defaults.filter((entry) => entry.slot === slot)) {
-          const item = catalog.itemsById[entry.id];
-          if (item) worn.push({ item, models: entry.models.map((model) => catalog.modelsBase + model) });
-        }
-      }
-    }
-  }
+  const worn = wornItems(catalog, outfit, hero, persona);
   const heroModel = catalog.modelsBase + (persona ? hero.personas[persona - 1] : hero.model);
   let effects = persona ? [] : (hero.particles ?? []).map((system) => ({ system, models: [heroModel] }));
   for (const { item, models } of worn) {

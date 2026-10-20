@@ -54,6 +54,9 @@ export class ParticleManager {
     scene.add(this.group);
     this.effects = [];
     this.paths = [];
+    // Effects the model's animations started, each until it is spent (fire)
+    this.fired = [];
+    this.modelReady = Promise.resolve();
     this.model = null;
     this.bones = new Map();
     this.attachments = {};
@@ -239,6 +242,10 @@ export class ParticleManager {
   async setModel(group, urls) {
     // A counter of its own: effects set while the attachments load must not drop them
     const request = ++this.modelRequest;
+    let ready;
+    this.modelReady = new Promise((resolve) => (ready = resolve));
+    // What the last model's animations started goes with it
+    this.clearFired();
     this.model = group;
     this.bones = group ? bonesOf(group) : new Map();
     this.meshes = [];
@@ -262,7 +269,41 @@ export class ParticleManager {
     this.attachments = Object.assign({}, ...lists.filter(Boolean).reverse());
     // And each model's own, which its effects look in first
     this.modelAttachments = new Map((urls ?? []).map((url, k) => [url.split("#")[0], lists[k]]).filter(([, list]) => list));
+    ready();
     this.restart();
+  }
+
+  // An effect an animation of the model starts (AE_CL_CREATE_PARTICLE_EFFECT), { system, config,
+  // models }: it runs beside the worn ones, as the game's do, until its emitters are done and its
+  // particles gone, or until stopped; dropped when the model changes first. Returns the running
+  // effect, or null.
+  async fire(effect) {
+    const request = this.modelRequest;
+    const [def] = await Promise.all([this.loadEffect(effect.system), this.modelReady]);
+    if (!def || request !== this.modelRequest || !this.model) return null;
+    await this.loadResources(def);
+    if (request !== this.modelRequest) return null;
+    const host = this.hostFor(def, effect.models, undefined, effect.config, effect.controlPoints);
+    const fired = { system: new ParticleSystem(def, host), host, path: effect.system };
+    this.fired.push(fired);
+    return fired;
+  }
+
+  // Ends a fired effect: no more emission, its particles live out their lives; at once (the
+  // game's stop_immediately) removes them too
+  stopFired(fired, immediately = false) {
+    if (!this.fired.includes(fired)) return;
+    if (immediately) {
+      fired.system.dispose();
+      this.fired.splice(this.fired.indexOf(fired), 1);
+    } else {
+      fired.system.stop();
+    }
+  }
+
+  clearFired() {
+    for (const fired of this.fired) fired.system.dispose();
+    this.fired = [];
   }
 
   // [{ system, models, snapshots, config, controlPoints }]: systems by their path in the game, the
@@ -468,16 +509,21 @@ export class ParticleManager {
   }
 
   update(delta, camera) {
-    if (!this.effects.length) return;
-    for (const effect of this.effects) {
+    if (!this.effects.length && !this.fired.length && !this.group.children.length) return;
+    for (const effect of [...this.effects, ...this.fired]) {
       effect.host.update(delta);
       effect.system.update(Math.min(delta, 0.1));
       effect.system.render(camera);
     }
+    // A fired effect is removed once nothing of it is left, as the game removes a spent one
+    for (const fired of this.fired.filter((entry) => entry.system.spent || entry.system.finished)) {
+      fired.system.dispose();
+      this.fired.splice(this.fired.indexOf(fired), 1);
+    }
     this.report(delta);
     // Systems spawned along the way bring their own objects
     const objects = new Set();
-    for (const effect of this.effects) effect.system.objects().forEach((object) => objects.add(object));
+    for (const effect of [...this.effects, ...this.fired]) effect.system.objects().forEach((object) => objects.add(object));
     for (const child of [...this.group.children]) if (!objects.has(child)) this.group.remove(child);
     for (const object of objects) if (object.parent !== this.group) this.group.add(object);
   }
@@ -523,6 +569,7 @@ export class ParticleManager {
 
   dispose() {
     this.clear();
+    this.clearFired();
     this.group.removeFromParent();
   }
 }

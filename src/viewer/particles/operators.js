@@ -83,7 +83,14 @@ DEFS.C_OP_ContinuousEmitter = (def) => {
   const perParent = def.m_flScalePerParentParticle > 0 ? def.m_flScalePerParentParticle : 0;
   const fromKilled = Boolean(def.m_bInitFromKilledParentParticles);
   let carried = 0;
+  let ends = Infinity;
   return {
+    // Whether it emits no more: past its duration (none: never), or, made from the parent's
+    // killed particles, once the parent emits no more and has none left
+    done(system) {
+      if (fromKilled) return !system.parent || (system.parent.emittersDone && system.parent.count === 0);
+      return system.age > ends;
+    },
     emit(system, dt) {
       // One particle for each the parent lost, made from it (C_INIT_InitFromParentKilled)
       if (fromKilled) {
@@ -97,6 +104,7 @@ DEFS.C_OP_ContinuousEmitter = (def) => {
       }
       const from = start(system, -1);
       const length = duration(system, -1);
+      ends = length > 0 ? from + length : Infinity;
       if (system.age < from || (length > 0 && system.age > from + length)) {
         return;
       }
@@ -119,6 +127,7 @@ DEFS.C_OP_InstantaneousEmitter = (def) => {
   const snapshotPoint = def.m_nSnapshotControlPoint ?? -1;
   let left = null;
   return {
+    done: () => left === 0,
     emit(system) {
       if (left === null && system.age >= start(system, -1)) {
         const snapshot = snapshotPoint >= 0 && system.snapshot(snapshotPoint);
@@ -142,6 +151,7 @@ DEFS.C_OP_NoiseEmitter = (def) => {
   const duration = def.m_flEmissionDuration ?? 0;
   let carried = 0;
   return {
+    done: (system) => duration > 0 && system.age > start + duration,
     emit(system, dt) {
       if (system.age < start || (duration > 0 && system.age > start + duration)) return;
       carried += lerp(min, max, noise(system.age * scale * 10) * 0.5 + 0.5) * dt;

@@ -123,13 +123,41 @@ function loadSequences(modelUrl) {
   return sequenceFiles.get(url);
 }
 
-// The sequence the game picks for an activity with exactly these modifiers, among the model's clips
-function sequenceFor(sequences, names, activity, modifiers = []) {
-  const want = [...modifiers].sort().join(",");
-  return names.find((name) => {
-    const [act, ...mods] = sequences?.[name]?.activities ?? [];
-    return act === activity && mods.sort().join(",") === want;
-  });
+// The clip a sequence plays: the glb's clips are the model's animations, named apart from the
+// sequences that play them (vs_spawn_loadout plays @vs_spawn_loadout); the export gives it as
+// `clip`, older files do not, where the animation is the sequence's name or it with an @
+function clipOf(name, sequence, names) {
+  return [sequence?.clip, name, `@${name}`].find((clip) => clip && names.includes(clip));
+}
+
+// The sequence for each clip of the model (the first that plays it)
+function sequencesByClip(sequences, names) {
+  const byClip = new Map();
+  for (const [name, sequence] of Object.entries(sequences ?? {})) {
+    const clip = clipOf(name, sequence, names);
+    if (clip && !byClip.has(clip)) byClip.set(clip, sequence);
+  }
+  return byClip;
+}
+
+// The clip of the sequence the game picks for an activity under the modifiers set: of the
+// sequences of that activity whose modifiers are all set, the one matching most of them (the
+// first in the model's order among equals). With "loadout" and Sven's TI7 sword's "ti7" set,
+// his spawn is loadout_ti7_spawn (ti7 + loadout), not loadout_spawn (loadout); a sequence needing
+// a modifier not set (Void Spirit's vs_debut_spawn: debut + loadout) is never picked
+function sequenceFor(byClip, names, activity, modifiers = []) {
+  const set = new Set(modifiers);
+  let best = null;
+  let bestCount = -1;
+  for (const name of names) {
+    const [act, ...mods] = byClip?.get(name)?.activities ?? [];
+    if (act !== activity || !mods.every((mod) => set.has(mod))) continue;
+    if (mods.length > bestCount) {
+      best = name;
+      bestCount = mods.length;
+    }
+  }
+  return best ?? undefined;
 }
 
 // { "<material name>": { vmat, textures: { g_tColor: Texture, ... } } } for skin N of a model
@@ -694,6 +722,7 @@ export class Stage {
     });
 
     this.rootModel = entries[rootIndex].url.slice(entries[rootIndex].url.indexOf("/models/") + 1);
+    this.rootUrl = entries[rootIndex].url;
     // The swap happens behind the fog once it has closed over the view
     while (this.veilTarget === 1 && this.veil.material.uniforms.uCover.value < 0.95) {
       await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -811,17 +840,22 @@ export class Stage {
     // loadout, or the plain idle), come into with the loadout's spawn. By the sequences' activities;
     // by the clips' names for models without them (a name like run_to_idle was taken for idle)
     const names = Object.keys(this.actions).sort((a, b) => a.startsWith("@") - b.startsWith("@"));
-    const seq = this.sequences;
-    const idle = sequenceFor(seq, names, "ACT_DOTA_LOADOUT")
-      ?? sequenceFor(seq, names, "ACT_DOTA_IDLE", ["loadout"])
-      ?? sequenceFor(seq, names, "ACT_DOTA_IDLE")
+    const seq = this.sequences && sequencesByClip(this.sequences, names);
+    this.clipSequences = seq ?? new Map();
+    // The effects the new model's animations start begin with its first animation
+    this.effectClip = null;
+    // What is worn sets its modifiers (for every activity, or one); the spawn and a plain idle
+    // standing in for the stance are the loadout's ("loadout"). The stance is not: the portrait
+    // names ACT_DOTA_LOADOUT alone, and the only stance with "loadout" is Disruptor's one-off roar
+    const modifiers = (activity, loadout) => [...(loadout ? ["loadout"] : []), ...(this.activityModifiers ?? []).filter(([act]) => act === "ALL" || act === activity).map(([, mod]) => mod)];
+    const idle = sequenceFor(seq, names, "ACT_DOTA_LOADOUT", modifiers("ACT_DOTA_LOADOUT", false))
+      ?? sequenceFor(seq, names, "ACT_DOTA_IDLE", modifiers("ACT_DOTA_IDLE", true))
       ?? names.find((name) => /^idle$|^idle_anim$/i.test(name))
       ?? names.find((name) => /idle/i.test(name) && !/_to_|to_idle|transition/i.test(name))
       ?? names[0];
     this.idleName = idle;
     // Heroes come in with their spawn animation, as in the game, then settle into idle
-    const spawn = sequenceFor(seq, names, "ACT_DOTA_SPAWN", ["loadout"])
-      ?? sequenceFor(seq, names, "ACT_DOTA_SPAWN")
+    const spawn = sequenceFor(seq, names, "ACT_DOTA_SPAWN", modifiers("ACT_DOTA_SPAWN", true))
       ?? (seq ? undefined : names.find((name) => /spawn/i.test(name) && !/respawn|loadout/i.test(name)));
     // The frame and the ground are set from the idle pose: a spawn starts mid-leap or crouched.
     // The first model of a stage is framed at once, with no flight in from the starting camera.
@@ -936,6 +970,12 @@ export class Stage {
         node.visible = !parked;
       }
     });
+  }
+
+  // The activity modifiers what is worn sets ([[activity or "ALL", modifier]]), by which the next
+  // model's loadout stance and spawn are picked
+  setActivityModifiers(list) {
+    this.activityModifiers = list ?? [];
   }
 
   setSpeed(speed) {
@@ -1612,6 +1652,7 @@ export class Stage {
       this.mixer.update(delta * this.speed);
       this.playAnimationSounds();
       this.startClothEffects();
+      this.startAnimationEffects();
     }
 
     this.effects.update(delta);
@@ -1995,6 +2036,51 @@ export class Stage {
           this.cloths.forEach((cloth) => cloth.startEffect(name, [peak, tail, end], operation));
         }
       }
+    }
+  }
+
+  // The particle effects the current animation starts and stops between the last frame's point and
+  // this one's, as its AE_CL_CREATE_PARTICLE_EFFECT events do in the game (the export gives them
+  // with the sequence: [{ at, system, config, stopOnChange, immediately, stop }]); from the start
+  // when the animation changed, which ends the effects the last one marked stop_on_seq_change.
+  // Void Spirit's loadout spawn opens his portal so. Waits while the particles are not on this
+  // model yet (it just loaded) and while they are hidden.
+  startAnimationEffects() {
+    const particles = this.particles;
+    if (!particles || !this.current || particles.model !== this.group || !this.particlesShown) {
+      return;
+    }
+    const clip = this.current.getClip();
+    const duration = clip.duration || 1;
+    // A clip played once stops at its end, which the looping cycle would read as its start again
+    const once = this.current.loop === THREE.LoopOnce;
+    const now = once ? Math.min(this.current.time / duration, 1) : (this.current.time % duration) / duration;
+    const changed = clip !== this.effectClip;
+    const last = changed ? -1 : this.effectCycle;
+    this.effectClip = clip;
+    this.effectCycle = now;
+    if (changed) {
+      for (const running of this.animationEffects ?? []) {
+        if (running.event.stopOnChange) {
+          running.fired.then((fired) => fired && particles.stopFired(fired, running.event.immediately));
+        }
+      }
+      this.animationEffects = [];
+    }
+    const events = this.clipSequences?.get(clip.name)?.effects ?? [];
+    for (const event of events) {
+      const crossed = now >= last ? event.at > last && event.at <= now : event.at > last || event.at <= now;
+      if (!crossed) continue;
+      if (event.stop) {
+        // Ends the effects of that system this animation started
+        for (const running of this.animationEffects.filter((entry) => entry.event.system === event.system)) {
+          running.fired.then((fired) => fired && particles.stopFired(fired, event.immediately));
+        }
+        continue;
+      }
+      // Made on the model whose animation it is: its surface, its attachments first
+      const fired = particles.fire({ system: event.system, config: event.config, models: this.rootUrl ? [this.rootUrl] : [] });
+      this.animationEffects.push({ event, fired });
     }
   }
 

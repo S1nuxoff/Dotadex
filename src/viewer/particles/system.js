@@ -282,6 +282,23 @@ export class ParticleSystem {
     return this.endcap && this.count === 0 && this.children.every((child) => !child.system || child.system.finished);
   }
 
+  // Whether it emits no more: ended, or every emitter past its time (one that keeps on, as a
+  // maintained count, never is; a system without emitters is at once)
+  get emittersDone() {
+    return this.endcap || this.emitters.every((op) => op.done?.(this) ?? !op.emit);
+  }
+
+  // Nothing left and nothing to come: no particles, no more emission, every child started (an
+  // end-cap child only comes with the end) and spent too; the game removes such an effect
+  get spent() {
+    return (
+      this.age > 0 &&
+      this.count === 0 &&
+      this.emittersDone &&
+      this.children.every((child) => (child.system ? child.system.spent : child.endcap && !this.endcap))
+    );
+  }
+
   update(delta) {
     this.accumulator = Math.min(this.accumulator + delta, STEP * 6);
     while (this.accumulator >= STEP) {

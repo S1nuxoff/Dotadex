@@ -293,7 +293,7 @@ function useSceneMask(base, armory) {
   };
 }
 
-export default function Viewer({ catalog, language, hideTitle = false, controlsRight = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
+export default function Viewer({ catalog, language, hideTitle = false, controlsRight = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], activities = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -335,6 +335,13 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
   useEffect(() => {
     stageRef.current.setRim(color);
   }, [color]);
+
+  // What is worn picks the animations (its activity modifiers), set before the models it comes with
+  const activitiesKey = activities.map((entry) => entry.join(":")).join("|");
+  useEffect(() => {
+    stageRef.current.setActivityModifiers(activities);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activitiesKey]);
 
   useEffect(() => {
     let cancelled = false;

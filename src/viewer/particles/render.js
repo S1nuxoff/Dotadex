@@ -1006,7 +1006,9 @@ function models(def, system) {
       playing.set(id, state);
     }
     state.seen = system.age;
-    const clip = model.clips.find((clip) => clip.name === name);
+    // The animation the sequence plays (the export's `clip`; older files: its name, or it with an @)
+    const wanted = [model.sequences[name]?.clip, name, `@${name}`];
+    const clip = wanted.map((clipName) => clipName && model.clips.find((entry) => entry.name === clipName)).find(Boolean);
     if (!clip) return;
     if (object.userData.clip !== clip) {
       mixer.stopAllAction();

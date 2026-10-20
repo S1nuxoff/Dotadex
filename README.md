@@ -9,7 +9,7 @@ shown the way the game shows them.
 
 [![Open Dotadex](https://img.shields.io/badge/Open-Dotadex-c9a45c?style=for-the-badge)](https://s1nuxoff.github.io/Dotadex/)
 [![Deploy](https://img.shields.io/github/actions/workflow/status/S1nuxoff/Dotadex/deploy.yml?branch=main&style=for-the-badge&label=deploy)](https://github.com/S1nuxoff/Dotadex/actions/workflows/deploy.yml)
-[![Models dataset](https://img.shields.io/badge/%F0%9F%A4%97%20dataset-dota2--models-ffcc4d?style=for-the-badge)](https://huggingface.co/datasets/Sqls1/dota2-models)
+[![Models dataset](https://img.shields.io/badge/dataset-dota2--models-ffcc4d?style=for-the-badge)](https://huggingface.co/datasets/Sqls1/dota2-models)
 
 <a href="https://ko-fi.com/s1nuxoff"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" /></a>
 
@@ -30,24 +30,41 @@ shown the way the game shows them.
 
 ---
 
-## ✨ What's inside
+## What's inside
 
-| | |
-|---|---|
-| 🦸 **Heroes** | The hero grid and hero page as in the game: the loadout scene with its lights, camera and pedestal, the hero's stats, abilities, talents and voice lines. |
-| 👕 **Wardrobe** | Dress any hero in any cosmetic or whole set, switch styles, personas and arcanas. Every look has its own link to share. |
-| 🎨 **The game's shading** | Models drawn with a port of Dota's hero shader: color warp, rim light, specular and metalness masks, self-illumination, soft shadows, animated materials. |
-| 🔥 **Particle effects** | Ambient effects of heroes and items (fire, glows, trails, ropes) run from the game's own particle systems. |
-| 🎬 **Animations** | Every animation of a model can be played; models can be downloaded as `.glb`. |
-| 🎁 **Armory** | Treasures with their tiers, every courier, ward and other item. |
-| ⚔️ **Items** | The shop's items with their stats, abilities and recipes. |
-| 🎵 **Music and announcers** | Every music pack and announcer pack, to listen to. |
-| 🏞️ **Scenes** | Dashboard backgrounds and showcase scenes in 3D, with their lights and cameras. |
+| | | |
+|:-:|---|---|
+| <img src="docs/icons/hero.svg" width="28" alt="" /> | **Heroes** | The hero grid and hero page as in the game: the loadout scene with its lights, camera and pedestal, the hero's stats, abilities, talents and voice lines. |
+| <img src="docs/icons/armory.svg" width="28" alt="" /> | **Wardrobe** | Dress any hero in any cosmetic or whole set, switch styles, personas and arcanas. Every look has its own link to share. |
+| <img src="docs/icons/brightness.svg" width="28" alt="" /> | **The game's shading** | Models drawn with a port of Dota's hero shader: color warp, rim light, specular and metalness masks, self-illumination, soft shadows, animated materials. |
+| <img src="docs/icons/modifier_ambient_effects.svg" width="28" alt="" /> | **Particle effects** | Ambient effects of heroes and items (fire, glows, trails, ropes) run from the game's own particle systems. |
+| <img src="docs/icons/modifier_animation.svg" width="28" alt="" /> | **Animations** | Every animation of a model can be played; models can be downloaded as `.glb`. |
+| <img src="docs/icons/treasure.svg" width="28" alt="" /> | **Armory** | Treasures with their tiers, every courier, ward and other item. |
+| <img src="docs/icons/secret_shop.svg" width="28" alt="" /> | **Items** | The shop's items with their stats, abilities and recipes. |
+| <img src="docs/icons/music.svg" width="28" alt="" /> | **Music and announcers** | Every music pack and announcer pack, to listen to. |
+| <img src="docs/icons/terrain.svg" width="28" alt="" /> | **Scenes** | Dashboard backgrounds and showcase scenes in 3D, with their lights and cameras. |
 
 > [!NOTE]
 > Dotadex is made for desktop browsers, like the game's own interface.
 
-## 🔗 Links and previews
+## Screenshots
+
+<img src="docs/screenshots/hero.jpg" alt="Lina's hero page" width="100%" />
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/heroes.jpg" alt="The hero grid" /></td>
+    <td width="50%"><img src="docs/screenshots/armory.jpg" alt="The Armory with Queen of Pain's weapons" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>The hero grid</sub></td>
+    <td align="center"><sub>The Armory</sub></td>
+  </tr>
+</table>
+
+<img src="docs/screenshots/items.jpg" alt="Abyssal Blade's page" width="100%" />
+
+## Links and previews
 
 Every page has a plain address you can share, such as
 [`/Dotadex/hero/lina`](https://s1nuxoff.github.io/Dotadex/hero/lina) or
@@ -55,7 +72,7 @@ Every page has a plain address you can share, such as
 the link (`/hero/pudge?head=4007.1`). Link previews in messengers and search engines show the page's
 own title, description and picture.
 
-## 🧩 How it works
+## How it works
 
 Nothing on the site is drawn or tuned by hand: everything comes from the game files, through a chain of
 trackers that follow every Dota 2 update.
@@ -65,10 +82,10 @@ flowchart LR
     G[("Dota 2<br/>game files")] --> F["dota2-file-tracker<br/><sub>items_game, scripts, texts</sub>"]
     G --> I["dota2-image-tracker<br/><sub>icons and pictures</sub>"]
     G --> M["dota2-model-tracker<br/><sub>models, materials, particles</sub>"]
-    M --> D[("🤗 dota2-models<br/>dataset")]
+    M --> D[("dota2-models<br/>dataset")]
     F --> C["catalog.json"]
     D --> C
-    C --> S["🌐 Dotadex"]
+    C --> S["Dotadex"]
     I --> S
     D --> S
 ```
@@ -81,21 +98,10 @@ flowchart LR
   pictures.
 - The site is rebuilt on every push and every six hours, so new heroes and items show up on their own.
 
-## 🛠️ Development
-
-Built with React, three.js, Vite and Tailwind CSS; hosted on GitHub Pages.
-
-```bash
-npm install
-npm run catalog   # writes public/catalog.json from the dataset and items_game.json
-npm run dev       # http://localhost:5173/Dotadex/
-npm run build     # the site, plus a static page per hero and item for link previews, and a sitemap
-```
-
-## ☕ Support
+## Support
 
 Dotadex is free and made in spare time. If you enjoy it, you can
-[buy me a coffee on Ko-fi](https://ko-fi.com/s1nuxoff). ❤️
+[buy me a coffee on Ko-fi](https://ko-fi.com/s1nuxoff).
 
 ---
 

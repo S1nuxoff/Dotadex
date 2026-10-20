@@ -46,24 +46,6 @@ function loadSoundData(modelsBase) {
 
 const SPEEDS = [0.5, 1, 1.5];
 
-// The standard MVP forest, offered at night: its camera is placed by the game's code, so
-// ours frames the model; the light and fog are a night of our own instead of the scene's day.
-const SHOWCASE = "scenes/mvp/mvp_default";
-const NIGHT = {
-  light: {
-    color: [0.42, 0.5, 0.72],
-    direction: [0.45, -0.75, 0.5],
-    ambient: [
-      [0.32, 0.36, 0.55],
-      [0.12, 0.14, 0.24],
-      [0.05, 0.05, 0.1],
-    ],
-  },
-  fog: { color: [0.035, 0.04, 0.075], density: 0.0014 },
-  points: [],
-};
-
-
 function AnimationPicker({ names, current, onPick }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -254,8 +236,6 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
       window.removeEventListener("keydown", unlock);
     };
   }, []);
-  // A scene of the game behind the model; the pedestal by default
-  const [backdrop, setBackdrop] = useState("");
 
   const item = outfit.focus ? catalog.itemsById[outfit.focus] : null;
   const scene = outfit.scene ? catalog.scenesById[outfit.scene] : null;
@@ -303,22 +283,12 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   }, [urlsKey, attempt]);
 
   useEffect(() => stageRef.current.setPaused(paused), [paused]);
-  // The game's light and camera for the scene on screen
-  useEffect(() => {
-    // Scenes are built for their own camera: seen from anywhere else, their painted cards and
-    // foreground stand in the way
-    const picked = backdrop && hero ? catalog.scenesById[backdrop] : null;
-    const info = scene ?? (backdrop === SHOWCASE && picked ? { ...picked, ...NIGHT } : picked);
-    stageRef.current.setSceneLook(info ?? null);
-  }, [scene, backdrop, hero, catalog]);
+  // The game's light and camera for a scene of the Scenes section
+  useEffect(() => stageRef.current.setSceneLook(scene ?? null), [scene]);
 
   // A scene shown on its own has no pedestal, except treasure scenes: their backgrounds
   // are particles only, so the chest stands on the pedestal instead
   useEffect(() => stageRef.current.setShowcase(!scene || scene.id.startsWith("scenes/treasure/")), [scene]);
-  useEffect(() => {
-    // Behind heroes only; items and couriers keep the pedestal
-    stageRef.current.setBackdrop(backdrop && !scene && hero ? `${catalog.scenesBase}scenes/${backdrop}.glb` : null);
-  }, [backdrop, scene, hero, catalog.scenesBase]);
   useEffect(() => {
     let cancelled = false;
     if (!sound) {
@@ -333,7 +303,10 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   useEffect(() => stageRef.current.setSpeed(speed), [speed]);
   useEffect(() => stageRef.current.setFrameShift(frameShift), [frameShift]);
   const mask = useSceneMask(catalog.modelsBase);
-  useEffect(() => stageRef.current.setLoadout(loadout), [loadout]);
+  // Everything but a scene of the Scenes section stands in the game's loadout scene (its pedestal
+  // and light); off the hero page the model is framed by us, the game's cameras being the page's
+  const staged = !scene;
+  useEffect(() => stageRef.current.setLoadout(staged), [staged]);
   // The game's particle effects of what is on screen
   const [particlesOn, setParticlesOn] = useState(() => getViewSettings().particles);
   useEffect(() => onViewSettings((settings) => setParticlesOn(settings.particles)), []);
@@ -354,10 +327,12 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   const heroEntry = outfit?.hero ? heroData?.heroes?.[`npc_dota_hero_${outfit.hero}`] : null;
   const heroScale = Number(heroEntry?.LoadoutScale ?? heroEntry?.ModelScale ?? 1);
   useEffect(() => stageRef.current.setHeroScale(heroScale), [heroScale]);
-  // The game's pedestal and camera for the hero on its page
+  // The game's pedestal, light and (on the hero page) camera
+  const staging = staged && portrait ? (loadout ? portrait : { ...portrait, cameras: {} }) : null;
   useEffect(
-    () => stageRef.current.setPortrait(loadout ? portrait : null, loadout && portrait ? `${catalog.modelsBase}${portrait.pedestal}` : null, portraitShot),
-    [loadout, portrait, portraitShot, catalog.modelsBase]
+    () => stageRef.current.setPortrait(staging, staging ? `${catalog.modelsBase}${staging.pedestal}` : null, portraitShot),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [staged, loadout, portrait, portraitShot, catalog.modelsBase]
   );
 
   // Casting and emotes from the hero page: an animation, the ability's sound, a voice line
@@ -429,13 +404,6 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   };
 
   const title = scene ? scene.name : item ? item.name : hero?.name;
-  // Showcase scenes for a hero: its own (arcanas, personas) first, then the shared ones
-  const backdrops = hero
-    ? [
-        ...catalog.scenes.filter((entry) => entry.id.includes(`mvp_${hero.id}`)),
-        ...catalog.scenes.filter((entry) => entry.id === "scenes/mvp/mvp_default" || entry.id === SHOWCASE),
-      ]
-    : [];
   const changed = hero && !item ? Object.keys(outfit.slots).length : 0;
   const heroLine = useHeroLine(catalog, !item && !scene ? hero?.id : null, language);
   const subtitle = scene
@@ -479,17 +447,6 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
             <AnimationPicker names={[T_POSE, ...animations]} current={current} onPick={pick} />
             <Toggle label="Animation speed" value={speed} onChange={setSpeed} options={SPEEDS.map((value) => ({ value, label: `${value}×` }))} />
           </>
-        )}
-
-        {backdrops.length > 0 && (
-          <Select
-            label="Scene"
-            value={backdrop}
-            onChange={setBackdrop}
-            up
-            className="w-44"
-            options={[{ value: "", label: "Pedestal" }, ...backdrops.map((entry) => ({ value: entry.id, label: entry.name, hint: `${(entry.size / 1e6).toFixed(0)} MB` }))]}
-          />
         )}
 
         {hero && !item && (

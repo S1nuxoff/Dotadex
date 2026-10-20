@@ -393,6 +393,16 @@ export default function App() {
     <HeroPanel key={outfit.hero} catalog={catalog} outfit={outfit} language={language} wardrobe={wardrobeView} onView={setPanelView} />
   );
   const section = sectionOf(tab);
+  // The game's loadout scene for what is on screen (loadout_portraits): the hero's own, else its
+  // entries for a courier, a ward or anything else
+  const shownItem = route?.type === "item" ? catalog.itemsById[route.id] : null;
+  const portraitKey = outfit?.hero
+    ? `npc_dota_hero_${outfit.hero}`
+    : shownItem?.kind === "courier"
+    ? "default_courier"
+    : shownItem?.kind === "ward"
+    ? "default_ward"
+    : "default_entity_replacement";
   const viewer = !page && (
     <Viewer
       catalog={catalog}
@@ -400,7 +410,7 @@ export default function App() {
       hideTitle={route.type === "hero" && section.id === "heroes"}
       loadout={route.type === "hero" && section.id === "heroes"}
       frameShift={route.type === "hero" && section.id === "heroes" && wardrobe ? 0.26 : 0}
-      portrait={outfit?.hero ? portraits[`npc_dota_hero_${outfit.hero}`] ?? null : null}
+      portrait={portraits[portraitKey] ?? null}
       // The game's hero page opens on this camera (its panel starts on the set preview slot)
       portraitShot="econ_set_preview"
       outfit={outfit}

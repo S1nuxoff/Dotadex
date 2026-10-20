@@ -935,45 +935,6 @@ export class Stage {
     this.paused = paused;
   }
 
-  // A scene of the game behind the model instead of the pedestal; null takes it away
-  async setBackdrop(url) {
-    const request = (this.backdropRequest = (this.backdropRequest ?? 0) + 1);
-    if (this.backdrop) {
-      this.scene.remove(this.backdrop);
-      this.backdrop.traverse((node) => {
-        if (node.isMesh) {
-          node.userData.pbr.dispose();
-          node.userData.dota.dispose();
-        }
-      });
-      this.backdrop = null;
-    }
-    this.updateShowcase();
-    if (!url) {
-      return;
-    }
-    const gltf = await loadModel(url);
-    if (request !== this.backdropRequest) {
-      return;
-    }
-    const backdrop = cloneSkinned(gltf.scene);
-    // Statues and props of the scenes are drawn like heroes, the rest with their own flags
-    backdrop.traverse((node) => {
-      if (!node.isMesh) {
-        return;
-      }
-      node.frustumCulled = false;
-      node.visible = !editorOnly(node);
-      const pbr = environmentMaterial(node.material.clone());
-      node.userData.pbr = pbr;
-      node.userData.dota = dotaMaterialFor(node.material, gltf.userData.textures) ?? pbr;
-      node.material = this.shading === "dota" ? node.userData.dota : node.userData.pbr;
-    });
-    this.backdrop = backdrop;
-    this.scene.add(backdrop);
-    this.updateShowcase();
-  }
-
   // The light and camera of a scene of the game: { light, camera, points } from the scene
   // list, or null for the studio. The camera is taken when the scene says where it was.
   setSceneLook(info, { camera = true } = {}) {
@@ -1254,8 +1215,9 @@ export class Stage {
   // The pedestal and its smoke on their own; behind a model in a scene of the game, only the
   // embers and the haze, with fog that sinks the scene's distance into the dark
   updateShowcase() {
+    // A part shown alone (a weapon off the hero) floats in the view, without the pedestal
     if (this.pedestal) {
-      this.pedestal.visible = Boolean(this.loadout && this.portrait);
+      this.pedestal.visible = Boolean(this.loadout && this.portrait) && this.standing !== false;
     }
     // A hero's page as the game has it now: the hero on its pedestal with a soft shadow, over the
     // page's own backdrop; no rocks, embers or fog
@@ -1277,9 +1239,9 @@ export class Stage {
       this.scene.fog = null;
       return;
     }
-    const on = this.showcase !== false && !this.backdrop;
-    const scene = this.showcase !== false && Boolean(this.backdrop);
-    this.effects.group.visible = on || scene;
+    // A scene of the Scenes section: a treasure's chest on the pedestal, else the scene alone
+    const on = this.showcase !== false;
+    this.effects.group.visible = on;
     this.effects.setPedestal(on);
     // The rocks stand in for the stone pedestal, and their shadows for the soft disc under the model
     const rocks = on && this.standing !== false;
@@ -1300,7 +1262,7 @@ export class Stage {
     if (!on || rocks) {
       this.floor.visible = false;
     }
-    this.scene.fog = scene ? this.fog : null;
+    this.scene.fog = null;
   }
 
   // Takes a model off the stage for good
@@ -1359,7 +1321,7 @@ export class Stage {
 
   setShading(mode) {
     this.shading = mode;
-    [this.group, this.backdrop, this.pedestal].forEach((object) => object?.traverse((node) => {
+    [this.group, this.pedestal].forEach((object) => object?.traverse((node) => {
       if (node.isMesh) {
         node.material = mode === "dota" ? node.userData.dota : node.userData.pbr;
       }

@@ -133,6 +133,8 @@ const fragmentShader = /* glsl */ `
   uniform float uHasDiffuseWarp;
   uniform float uHasFresnelWarp;
   uniform float uHasCubeMap;
+  uniform sampler2D tCubeMask;
+  uniform float uHasCubeMask;
   uniform float uDetailMode;
   uniform float uDetailFactor;
   uniform float uAlphaTest;
@@ -304,6 +306,9 @@ const fragmentShader = /* glsl */ `
       // game's y, z, x), as hero.vfx samples its texturecube
       vec3 rw = inverseTransformDirection(r, viewMatrix);
       env = textureCube(tCubeMap, vec3(rw.z, rw.x, rw.y)).rgb * uCubeMapScale;
+      // F_MASK_CUBE_MAP_BY_SEPARATE_MASK: times the green of g_tCubeMapSeparateMask at the base
+      // coordinates (hero.vfx static combo 590626: sample t8.yxzw, mul by its first channel)
+      if (uHasCubeMask > 0.5) env *= texture2D(tCubeMask, uv).g;
     }
     vec3 specular = (phong * uKeyColor * uSpecularScale + env * (1.0 - uMaskCubeByMetal)) * specMask;
     specular *= mix(albedo, uSpecularColor, tintMask) * max(fresnel.b, metal);
@@ -537,6 +542,8 @@ export function createDotaMaterial(original, vmat, textures) {
       uHasDiffuseWarp: { value: int.F_DIFFUSE_WARP && pick("g_tDiffuseWarp") ? 1 : 0 },
       uHasFresnelWarp: { value: pick("g_tFresnelWarp") ? 1 : 0 },
       uHasCubeMap: { value: 0 },
+      tCubeMask: { value: int.F_MASK_CUBE_MAP_BY_SEPARATE_MASK ? pick("g_tCubeMapSeparateMask") : null },
+      uHasCubeMask: { value: int.F_MASK_CUBE_MAP_BY_SEPARATE_MASK && pick("g_tCubeMapSeparateMask") ? 1 : 0 },
       tDetail: { value: pick("g_tDetail") },
       tDetail2: { value: pick("g_tDetail2") },
       uDetail2Mode: { value: pick("g_tDetail2") && ((float.g_flDetail2BlendFactor ?? 1) > 0 || programs?.g_flDetail2BlendFactor) ? (int.F_DETAIL_2 ?? 0) : 0 },

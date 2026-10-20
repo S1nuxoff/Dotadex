@@ -1128,7 +1128,13 @@ export class Stage {
     }
     if (on) {
       const { light, ambient } = this.portrait;
-      const color = (values, scale) => new THREE.Color(...(values ?? [1, 1, 1]).map((value) => value * scale));
+      // The global light's colors go from gamma to linear on their way to the shaders (client.dll
+      // 0x181762f90 reads each Color through 0x18384f430, a 256-entry sRGB-to-linear table at
+      // 0x18501e200), the scales multiply after
+      const color = (values, scale) => {
+        const [r, g, b] = values ?? [1, 1, 1];
+        return new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace).multiplyScalar(scale);
+      };
       // As the game hands them to hero.vfx: the key light in its color times its scale; the second
       // light in the ambient color, its scale for the diffuse only (the rim takes the color alone).
       // While developing, ?key=<times> and ?amb=<times> scale them (V-13)
@@ -1139,19 +1145,17 @@ export class Stage {
         key: color(light.color, (light.scale ?? 1) * keyTimes),
         fill: color(ambient.color, 1),
         fillScale: (ambient.scale ?? 1) * ambientTimes,
-        sky: color(ambient.color, (ambient.scale ?? 1) * 0.1 * ambientTimes),
-        ground: color(ambient.color, (ambient.scale ?? 1) * 0.05 * ambientTimes),
+        // The sky/ground pair both shaders lerp by the normal's up, cb2[6] and cb2[17] (the global
+        // light's m_AmbientColor2 and m_AmbientColor3, client.dll 0x181762f90 → 0x182224610): on the
+        // page the shadow's color, PortraitShadowColor, for both. hero.vfx scales it by cb2[6].w
+        // (m_flAmbientScale2: PortraitShadowScale) and shows it only in the key light's shadow;
+        // global_lit_simple (the pedestal) by cb2[5].w (m_flGroundScale: PortraitGroundShadowScale)
+        // where the key does not reach. client.dll's defaults: 89 89 89, 1.5, 1.5
+        sky: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.ground ?? 1.5),
+        ground: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.ground ?? 1.5),
         fillFollows: Boolean(ambient.direction),
-        // hero.vfx's sky/ground term in the key light's shadow: PortraitShadowColor ×
-        // PortraitShadowScale (client.dll's defaults 89 89 89 and 1.5 when missing)
         shadowFill: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.scale ?? 1.5),
       };
-      // Whether the game hands the shadow color to the shader as it is or from gamma to linear (as
-      // hero.vfx takes its own colors) is not found yet: ?shadowlinear draws the second reading
-      if (search?.has("shadowlinear")) {
-        const [r, g, b] = this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255];
-        look.shadowFill = new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace).multiplyScalar(this.portrait.shadow?.scale ?? 1.5);
-      }
       // The second light from PortraitAmbientDirection: angles the light points along, as the key
       // light's (whose position lies the other way), so it comes from the opposite side
       this.portraitFillDir = null;

@@ -338,6 +338,13 @@ export class ParticleManager {
         sample: (position, normal) => this.sampleSurface(position, normal, meshes, total),
         position: (binding, target) => this.surfacePosition(binding, target),
       },
+      // The model's size in the scene (the hero page's LoadoutScale or ModelScale), which the
+      // game's object scale is
+      objectScale: () => {
+        if (!this.model) return 1;
+        this.model.updateWorldMatrix(true, false);
+        return this.model.matrixWorld.getMaxScaleOnAxis();
+      },
       loadSystem: (path) => this.loadSystem(path),
       loadTexture: (path) => this.loadTexture(path),
       loadedTexture: (path) => this.loadedTexture(path),

@@ -791,20 +791,26 @@ DEFS.C_INIT_InheritFromParentParticles = (def) => inheritFromParent(def, false);
 DEFS.C_OP_InheritFromParentParticles = (def) => inheritFromParent(def, true);
 DEFS.C_OP_InheritFromParentParticlesV2 = (def) => inheritFromParent(def, true);
 
+// Positions stretched from a control point by a warp between the two vectors, times the value of
+// m_nScaleControlPointNumber when something sets one (the model's scale, so a weapon's snapshot
+// shrinks with a hero drawn smaller)
 DEFS.C_INIT_PositionWarp = (def) => {
   const min = arr(def.m_vecWarpMin, [1, 1, 1]);
   const max = arr(def.m_vecWarpMax, [1, 1, 1]);
   const point = def.m_nControlPointNumber ?? 0;
+  const scalePoint = def.m_nScaleControlPointNumber ?? -1;
   return {
     init(system, start, end) {
       const center = system.controlPoint(point).position;
+      const scaled = scalePoint >= 0 && system.controlPointIfSet(scalePoint)?.value;
+      const by = scaled && scaled.lengthSq() > 0 ? scaled : null;
       const p = system.float(0);
       const q = system.float(2);
       for (let i = start; i < end; i++) {
         const t = Math.random();
         for (let k = 0; k < 3; k++) {
           const c = center.getComponent(k);
-          const warp = lerp(min[k], max[k], t);
+          const warp = lerp(min[k], max[k], t) * (by ? by.getComponent(k) : 1);
           p[i * 3 + k] = c + (p[i * 3 + k] - c) * warp;
           q[i * 3 + k] = c + (q[i * 3 + k] - c) * warp;
         }
@@ -2156,7 +2162,7 @@ DEFS.C_OP_SetControlPointFromObjectScale = (def) => {
   const output = def.m_nCPOutput ?? 1;
   return {
     update(system) {
-      system.ownControlPoint(output).value.set(1, 1, 1);
+      system.ownControlPoint(output).value.setScalar(system.host.objectScale?.() ?? 1);
     },
   };
 };

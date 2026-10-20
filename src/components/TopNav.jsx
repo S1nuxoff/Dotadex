@@ -243,6 +243,15 @@ export default function TopNav({ catalog, tab, onTab, onSection, onHome, onBack,
             ))}
           </nav>
 
+          {/* A fifth button left of the bar's four slots, set off by a tab separator */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute top-0 h-[61px] w-[50px] bg-[length:100%_100%]"
+            style={{ right: 1920 - 1581 + 38, backgroundImage: `url(${UI}separator.png)` }}
+          />
+          <RightButton label="Support Dotadex on Ko-fi" center={1920 - 1581} href="https://ko-fi.com/s1nuxoff">
+            <MaskIcon src={`${catalog.modelsBase}images/control_icons/24px/gift.svg`} size={[28, 28]} className="text-[#e3b54f]" />
+          </RightButton>
           <RightButton label="The models on Hugging Face" center={1920 - 1661} href={`https://huggingface.co/datasets/${dataset}`}>
             <Database className="size-[26px] text-[#8b95a3]" strokeWidth={1.75} />
           </RightButton>

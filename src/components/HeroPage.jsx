@@ -961,11 +961,12 @@ export default function HeroPage({
             {tab === "loadout" && (
               <div
                 aria-hidden
-                className="absolute top-[-61px] left-[calc(50%-400px)] h-[300px] w-[800px] border border-transparent opacity-5"
+                className="absolute top-[-61px] left-[calc(50%-400px)] h-[300px] w-[800px] border border-solid opacity-5"
                 style={{
                   transform: `skewX(-16deg) translateX(${aspect === "16x10" ? 700 : 750}px) translateY(196px)`,
-                  background:
-                    "linear-gradient(144.6deg, #ffffff27, #ffffff00 221px) padding-box, linear-gradient(156deg, #ffffff, #ffffff00 197px) border-box",
+                  // The game's gradients run from the top left corner to 16% 60% (fill) and 10% 60% (edge)
+                  background: "linear-gradient(144.6deg, #ffffff27, #ffffff00 221px)",
+                  borderImage: "linear-gradient(156deg, #ffffff, #ffffff00 197px) 1",
                 }}
               />
             )}

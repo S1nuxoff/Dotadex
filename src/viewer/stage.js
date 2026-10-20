@@ -1123,6 +1123,26 @@ export class Stage {
       this.hemi.intensity = 1.2;
       this.scene.environmentIntensity = 0.6;
     }
+    // On a hero's page the shadows go with the game's light, whoever turned it on
+    if (this.loadout) {
+      this.setShadows(Boolean(this.portraitLit));
+    }
+  }
+
+  // Shadows on or off; lit materials compile again with or without them (the hero's own, kept
+  // aside for the other shading, too)
+  setShadows(on) {
+    if (this.renderer.shadowMap.enabled === on) {
+      return;
+    }
+    this.renderer.shadowMap.enabled = on;
+    this.scene.traverse((node) => {
+      if (node.isMesh) {
+        for (const material of [node.material, node.userData.dota, node.userData.pbr].flat()) {
+          if (material) material.needsUpdate = true;
+        }
+      }
+    });
   }
 
   // The shadow's spot light where the game has it, turned round the hero with the free camera
@@ -1308,12 +1328,7 @@ export class Stage {
       this.effects.group.visible = false;
       this.rockStage.group.visible = false;
       this.floor.visible = this.standing !== false;
-      // Shadows only under the game's own light for the hero
-      const shadows = Boolean(this.portraitLit);
-      if (this.renderer.shadowMap.enabled !== shadows) {
-        this.renderer.shadowMap.enabled = shadows;
-        this.scene.traverse((node) => node.isMesh && node.material && (node.material.needsUpdate = true));
-      }
+      this.setShadows(Boolean(this.portraitLit));
       if (!this.portraitLit) {
         this.key.intensity = 2.2;
         this.scene.environmentIntensity = 0.6;
@@ -1332,11 +1347,7 @@ export class Stage {
     this.effects.pedestalMesh.visible = false;
     // The rocks have the model's own light; the pedestal's pool of light would glow on bare ground
     this.effects.pool.visible = !rocks;
-    if (this.renderer.shadowMap.enabled !== rocks) {
-      this.renderer.shadowMap.enabled = rocks;
-      // Lit materials compile again with or without shadows
-      this.scene.traverse((node) => node.isMesh && node.material && (node.material.needsUpdate = true));
-    }
+    this.setShadows(rocks);
     // On the rocks the light from the camera and the room is turned down, so the stage's sun
     // gives the stones their shape
     this.key.intensity = rocks ? 1.1 : 2.2;

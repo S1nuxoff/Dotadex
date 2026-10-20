@@ -276,6 +276,9 @@ const fragmentShader = /* glsl */ `
     // surface turns away from the eye (a rim light laid over a model, as the prismatic sets')
     float alpha = color.a * mix(1.0, 1.0 - clamp(abs(nv), 0.0, 1.0), uFresnelAlpha);
     gl_FragColor = vec4(outColor, uOpaque > 0.5 ? 1.0 : alpha);
+    #ifdef SHADOW_VIEW
+      gl_FragColor = vec4(vec3(shadow), 1.0);
+    #endif
     #include <colorspace_fragment>
   }
 `;
@@ -541,10 +544,11 @@ export function createDotaMaterial(original, vmat, textures) {
       }
     });
   }
-  // While developing, ?nospec drops the key light's highlight, ?noenv the cube map's reflection
-  // and ?norim the rim light
+  // While developing, ?nospec drops the key light's highlight, ?noenv the cube map's reflection,
+  // ?norim the rim light, and ?shadowview draws the sun's shadow alone (white lit, black shadowed)
   if (import.meta.env.DEV) {
     const search = window.location.search;
+    if (search.includes("shadowview")) material.defines = { ...material.defines, SHADOW_VIEW: "" };
     if (search.includes("nospec")) material.uniforms.uSpecularScale.value = 0;
     if (search.includes("noenv")) material.uniforms.uCubeMapScale.value = 0;
     if (search.includes("norim")) material.uniforms.uRimLightScale.value = 0;
@@ -689,6 +693,9 @@ const litSimpleFragment = /* glsl */ `
     light += (1.0 - key) * mix(uGroundColor, uSkyColor, worldN.y * 0.5 + 0.5);
     light += particleLights(n, -vViewPosition);
     gl_FragColor = vec4(light * albedo, 1.0);
+    #ifdef SHADOW_VIEW
+      gl_FragColor = vec4(vec3(shadow), 1.0);
+    #endif
     #include <colorspace_fragment>
   }
 `;
@@ -738,6 +745,7 @@ export function createLitSimpleMaterial(original, vmat, textures) {
   });
   material.name = original.name;
   setUvLayer(material.uniforms.uBaseUv.value, (name) => paramValue(vmat, name), UV_LAYERS.uBaseUv);
+  if (import.meta.env.DEV && window.location.search.includes("shadowview")) material.defines = { ...material.defines, SHADOW_VIEW: "" };
   return material;
 }
 

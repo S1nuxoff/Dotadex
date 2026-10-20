@@ -978,7 +978,7 @@ export class Stage {
     this.hemi.intensity = 2;
     this.scene.environmentIntensity = 0.15;
     for (const point of info.points ?? []) {
-      const lamp = new THREE.PointLight(color(point.color, 0.5), 1, 600, 1);
+      const lamp = new THREE.PointLight(color(point.color, 0.5), 1, 600 * SOURCE_TO_METRES, 1);
       lamp.position.set(...point.position);
       this.sceneLights.add(lamp);
     }
@@ -1424,13 +1424,15 @@ export class Stage {
     }
     if (shot) {
       this.camera.fov = verticalFov(shot.fov);
-      this.camera.near = 5;
-      this.camera.far = 60000;
+      // The scenes are in metres
+      this.camera.near = 0.1;
+      this.camera.far = 1500;
       this.camera.updateProjectionMatrix();
       const position = new THREE.Vector3(...shot.position);
-      const target = position.clone().add(new THREE.Vector3(...shot.direction).multiplyScalar(position.length()));
-      this.controls.minDistance = 20;
-      this.controls.maxDistance = 20000;
+      // Orbiting round a point ahead of the camera; a camera at the origin still needs one
+      const target = position.clone().add(new THREE.Vector3(...shot.direction).multiplyScalar(Math.max(position.length(), 5)));
+      this.controls.minDistance = 0.5;
+      this.controls.maxDistance = 500;
       this.controls.target.copy(target);
       this.camera.position.copy(position);
       this.tween = null;

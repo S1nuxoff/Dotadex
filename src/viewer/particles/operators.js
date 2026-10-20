@@ -1310,12 +1310,21 @@ DEFS.C_OP_InterpolateRadius = (def) => {
   const to = def.m_flEndScale ?? 1;
   const ease = Boolean(def.m_bEaseInAndOut);
   const amount = def.m_flBias ?? 0;
+  // Only within its window of the particle's life (particles.dll 0x1801f0c60: life > 0 and
+  // start ≤ age / life ≤ end, a window shorter than the step widened to it); outside it the radius
+  // is left to the other operators (Broodmother's page web pulses by OscillateScalar once grown)
   return {
-    update(system) {
+    update(system, dt) {
       const radius = system.float(3);
       const initial = system.initialFloat(3);
+      const born = system.float(8);
+      const life = system.float(1);
       for (let i = 0; i < system.count; i++) {
-        let t = window(system, i, start, end);
+        if (!(life[i] > 0) || end <= start) continue;
+        const share = (system.age - born[i]) / life[i];
+        const last = Math.max(end, start + dt / life[i]);
+        if (share < start || share > last) continue;
+        let t = clamp((share - start) / (end - start), 0, 1);
         if (ease) t = t * t * (3 - 2 * t);
         if (amount) t = biasOf(t, clamp(amount, 0.001, 0.999));
         radius[i] = initial[i] * lerp(from, to, t);

@@ -1653,7 +1653,10 @@ export class Stage {
     for (const cloth of this.cloths ?? []) {
       cloth.restore();
     }
-    if (this.mixer && !this.paused) {
+    // A new model waits on its first frame behind the fog until it is shown, so its spawn and
+    // what the spawn and its page start (Broodmother's web growing in) are seen from their start
+    const held = Boolean(this.pendingShow);
+    if (this.mixer && !this.paused && !held) {
       this.mixer.update(delta * this.speed);
       this.playAnimationSounds();
       this.startClothEffects();
@@ -1756,7 +1759,7 @@ export class Stage {
     this.hideParked();
     // The lights the particles cast this frame, gathered as their renderers run
     frameLights.length = 0;
-    this.particles?.update(delta, this.camera);
+    this.particles?.update(held ? 0 : delta, this.camera);
     if (this.pedestalParticles) {
       this.pedestalParticles.group.visible = Boolean(this.pedestal?.visible);
       if (this.pedestal?.visible) {

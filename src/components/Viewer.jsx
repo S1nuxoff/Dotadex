@@ -473,7 +473,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
   // The game's pedestal, light and (on the hero page) camera
   const staging = staged && portrait ? (loadout ? portrait : { ...portrait, cameras: {} }) : null;
   useEffect(
-    () => stageRef.current.setPortrait(staging, staging ? `${catalog.modelsBase}${staging.pedestal}` : null, portraitShot),
+    () => stageRef.current.setPortrait(staging, staging?.pedestal ? `${catalog.modelsBase}${staging.pedestal}` : null, portraitShot),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [staged, loadout, portrait, portraitShot, catalog.modelsBase]
   );

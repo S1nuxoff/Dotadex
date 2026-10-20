@@ -9,6 +9,7 @@ import { useUiScale } from "./components/ui.jsx";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { List, X } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
+import Scenes from "./components/Scenes.jsx";
 import Viewer from "./components/Viewer.jsx";
 import Wardrobe, { EquippedSummary, OutfitPicker } from "./components/Wardrobe.jsx";
 import HeroInfo from "./components/HeroInfo.jsx";
@@ -408,11 +409,14 @@ export default function App() {
     : "default_entity_replacement";
   // The Armory's scene is the hero page's, moved 600 right (#SceneGroup)
   const armory = section.id === "armory";
+  // The Scenes section puts the scene's name and cameras on its own page
+  const scenes = section.id === "scenes";
   const viewer = !page && (
     <Viewer
       catalog={catalog}
       language={language}
-      hideTitle={(route.type === "hero" && section.id === "heroes") || armory}
+      hideTitle={(route.type === "hero" && section.id === "heroes") || armory || scenes}
+      controlsRight={scenes}
       loadout={(route.type === "hero" && section.id === "heroes") || armory}
       armory={armory}
       frameShift={armory ? (-600 * uiScale) / document.documentElement.clientWidth : route.type === "hero" && section.id === "heroes" && wardrobe ? 0.26 : 0}
@@ -505,6 +509,8 @@ export default function App() {
           backdrop={outfit?.hero ? <Backdrop base={catalog.modelsBase} heroId={outfit.hero} /> : null}
           onOpen={open}
         />
+      ) : scenes ? (
+        <Scenes catalog={catalog} route={route} viewer={viewer} onOpen={open} />
       ) : (
         <div className="flex min-h-0 flex-1">
           <div className="hidden w-[23rem] shrink-0 border-r border-line lg:block xl:w-[26rem]">{sidebar}</div>

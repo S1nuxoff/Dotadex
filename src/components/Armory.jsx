@@ -44,10 +44,10 @@ const TILE = {
 const heroIcon = (base, id) => `${base}images/heroes/icons/npc_dota_hero_${id}_png.png`;
 
 // The tabs under the top bar (.SecondaryTabSet: 429 in from the left, 20 high capitals 3 apart)
-function ArmoryTabs({ tab, onTab }) {
+export function SecondaryTabs({ tabs = TABS, tab, onTab }) {
   return (
     <div className="flex h-[52px] items-center bg-gradient-to-b from-black/45 to-black/20 pl-[429px]">
-      {TABS.map(([id, label], index) => (
+      {tabs.map(([id, label], index) => (
         <Fragment key={id}>
           {index > 0 && (
             <span className="mx-[15px] mt-[4px] mb-px text-[18px] text-[#768e8d]" aria-hidden>
@@ -70,7 +70,7 @@ function ArmoryTabs({ tab, onTab }) {
 }
 
 // .SearchBox: a faint field, rounded 4, the search icon at 20% on its right
-function SearchBox({ value, onChange, placeholder, className = "" }) {
+export function SearchBox({ value, onChange, placeholder, className = "" }) {
   return (
     <label className={`flex items-center rounded-[4px] bg-[#d2e2ff11] hover:bg-[#d2e2ff22] ${className}`}>
       <input
@@ -492,7 +492,7 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
       {!wide && <div className="absolute inset-0">{viewer}</div>}
       <div className="pointer-events-none absolute inset-0 flex flex-col" style={{ zoom: scale }}>
         <div className="pointer-events-auto">
-          <ArmoryTabs
+          <SecondaryTabs
             tab={tab}
             onTab={(next) => {
               setTab(next);

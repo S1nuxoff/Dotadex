@@ -293,7 +293,7 @@ function useSceneMask(base, armory) {
   };
 }
 
-export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
+export default function Viewer({ catalog, language, hideTitle = false, controlsRight = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -366,10 +366,13 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   useEffect(() => {
     stageRef.current.setPaused(paused);
   }, [paused]);
-  // The game's light and camera for a scene of the Scenes section
+  // The game's light and camera for a scene of the Scenes section; another of its cameras when
+  // one is picked
+  const sceneCamera = outfit.camera;
   useEffect(() => {
-    stageRef.current.setSceneLook(scene ?? null);
-  }, [scene]);
+    const shot = scene?.cameras?.[sceneCamera];
+    stageRef.current.setSceneLook(scene && shot ? { ...scene, camera: { name: sceneCamera, ...shot } } : scene ?? null);
+  }, [scene, sceneCamera]);
 
   // A scene shown on its own has no pedestal, except treasure scenes: their backgrounds
   // are particles only, so the chest stands on the pedestal instead
@@ -579,7 +582,11 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
       <div
         hidden={loadout && !armory}
         className={`viewer-controls pointer-events-auto absolute flex flex-wrap items-center gap-2 ${
-          loadout ? `bottom-6 ${frameShift > 0 ? "left-[24%]" : "left-1/2"} max-w-[40%] -translate-x-1/2 justify-center` : `bottom-4 left-4 ${hideTitle ? "w-[calc(55%-2rem)]" : "right-4"}`
+          loadout
+            ? `bottom-6 ${frameShift > 0 ? "left-[24%]" : "left-1/2"} max-w-[40%] -translate-x-1/2 justify-center`
+            : controlsRight
+            ? "right-4 bottom-4 justify-end"
+            : `bottom-4 left-4 ${hideTitle ? "w-[calc(55%-2rem)]" : "right-4"}`
         }`}
       >
         {animations.length > 0 && (

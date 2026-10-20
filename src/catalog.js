@@ -200,7 +200,7 @@ export function itemsForSlot(catalog, heroId, slot) {
 // { hero, slots: { slot: { id, style } }, focus, style, variant }
 export function outfitFor(catalog, route) {
   if (route.type === "scene") {
-    return { scene: route.id, hero: null, slots: {}, focus: null };
+    return { scene: route.id, camera: route.camera, hero: null, slots: {}, focus: null };
   }
   if (route.type === "hero") {
     const slots = route.slots ?? {};
@@ -389,13 +389,17 @@ export function withExported(catalog, exported) {
 
 // #/hero/pudge?head=4007.1&weapon=7247  (slot=item.style)
 // #/item/4517?style=2&alone=1&variant=1
+// #/scene/backgrounds/hero_showcase_antimage_persona?camera=herocamera
 export function parseRoute(hash) {
   const [, type, id, query] = hash.match(/^#\/(hero|item|shop|treasure|audio|scene)\/([^?]+)(?:\?(.*))?$/) ?? [];
   if (!type) {
     return null;
   }
   const params = new URLSearchParams(query ?? "");
-  if (["shop", "treasure", "audio", "scene"].includes(type)) {
+  if (type === "scene") {
+    return { type, id: decodeURIComponent(id), camera: params.get("camera") || undefined };
+  }
+  if (["shop", "treasure", "audio"].includes(type)) {
     return { type, id: decodeURIComponent(id) };
   }
   if (type === "hero") {
@@ -427,6 +431,8 @@ export function routeHash(route) {
     }
     route.bare && params.set("bare", "1");
     route.persona && params.set("persona", route.persona);
+  } else if (route.type === "scene") {
+    route.camera && params.set("camera", route.camera);
   } else {
     route.style && params.set("style", route.style);
     route.alone && params.set("alone", "1");

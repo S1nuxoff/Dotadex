@@ -261,7 +261,12 @@ const scenes = (await getJson(MODELS_BASE.replace("dota2-models", "dota2-scenes"
   size: scene.size,
   light: scene.light,
   camera: scene.camera,
+  // Every named camera of the scene; camera is the one the game's interface looks through
+  cameras: scene.cameras,
   points: scene.points,
+  // What the map is for ("background", "game", ...) and whether the game's interface shows it
+  usage: scene.usage,
+  shown: scene.shown,
 }));
 
 const audio = Object.entries(library ?? {}).flatMap(([kind, packs]) =>

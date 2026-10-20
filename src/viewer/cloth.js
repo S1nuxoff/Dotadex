@@ -435,6 +435,9 @@ export class Cloth {
     }
     // Nodes the animation holds whose turn is still the cloth's
     const rotationLocked = fe.m_nRotLockStaticNodes ?? 0;
+    // A node's side partner (m_CtrlOsOffsets: a node kept beside it, the second column of a strip
+    // of bones), which gives the bone's turn about its length
+    const side = new Map((fe.m_CtrlOsOffsets ?? []).filter(({ nCtrlParent: p, nCtrlChild: c }) => p < n && c < n).map(({ nCtrlParent, nCtrlChild }) => [nCtrlParent, nCtrlChild]));
     const even = (nodes) => nodes.map((node) => [node, 1]);
     for (let i = 0; i < n; i++) {
       const bone = boneOf[i];
@@ -460,6 +463,7 @@ export class Cloth {
         // Turned towards a child bone that is a node too, or on from its parent node
         const child = bone.children.find((node) => nodeOfBone.has(node));
         driven.aim = child ? [i, nodeOfBone.get(child)] : nodeOfBone.has(bone.parent) ? [nodeOfBone.get(bone.parent), i] : null;
+        if (driven.aim && side.has(i)) driven.side = side.get(i);
         driven.anchor = [[i, 1]];
       } else if (hangers.has(i)) {
         driven.fit = even(hangers.get(i));
@@ -942,7 +946,33 @@ export class Cloth {
         v2.set(target[b * 3] - target[a * 3], target[b * 3 + 1] - target[a * 3 + 1], target[b * 3 + 2] - target[a * 3 + 2]);
         v3.set(x[b * 3] - x[a * 3], x[b * 3 + 1] - x[a * 3 + 1], x[b * 3 + 2] - x[a * 3 + 2]);
         if (v2.lengthSq() > 1e-12 && v3.lengthSq() > 1e-12) {
-          rotation.setFromUnitVectors(v2.normalize(), v3.normalize());
+          if (driven.side === undefined) {
+            rotation.setFromUnitVectors(v2.normalize(), v3.normalize());
+          } else {
+            // Turned along its length and about it: from the frame the animation gives the node,
+            // its next node and its side partner to the frame they make now (Tidehunter's fish
+            // twisted flat with its length alone)
+            // While the pair folds together (on the ground) its side says little: the last turn it
+            // gave, swung on with the length
+            const c = driven.side;
+            const own = driven.anchor[0][0];
+            const width = (positions) => Math.hypot(positions[c * 3] - positions[own * 3], positions[c * 3 + 1] - positions[own * 3 + 1], positions[c * 3 + 2] - positions[own * 3 + 2]);
+            const before = frameOf3(v2, target, own, c, m2);
+            const now = width(x) >= 0.5 * width(target) && frameOf3(v3, x, own, c, m3);
+            const length = v3.clone().normalize();
+            // A pair that crossed over (its side on the other side of the length) would flip the
+            // bone over at once: taken only while it agrees with the turn so far
+            const predicted = driven.good && new THREE.Quaternion().setFromUnitVectors(driven.good.length, length).multiply(driven.good.rotation);
+            if (before && now) rotation.setFromRotationMatrix(now.multiply(before.transpose()));
+            if (before && now && (!predicted || rotation.angleTo(predicted) < Math.PI / 3)) {
+              driven.good = { rotation: rotation.clone(), length };
+            } else if (predicted) {
+              rotation.copy(predicted);
+              driven.good = { rotation: rotation.clone(), length };
+            } else {
+              rotation.setFromUnitVectors(v2.normalize(), length);
+            }
+          }
         }
       }
       mean(driven.anchor, target, from);
@@ -962,6 +992,20 @@ export class Cloth {
       bone.updateMatrixWorld();
     }
   }
+}
+
+// An orthonormal frame (as a rotation matrix in `out`) from a length (`along`) and the way from
+// node a to its side node c in `positions`; null when the two are parallel
+const sideVector = new THREE.Vector3();
+const thirdAxis = new THREE.Vector3();
+function frameOf3(along, positions, a, c, out) {
+  const u = along.clone().normalize();
+  sideVector.set(positions[c * 3] - positions[a * 3], positions[c * 3 + 1] - positions[a * 3 + 1], positions[c * 3 + 2] - positions[a * 3 + 2]);
+  sideVector.addScaledVector(u, -sideVector.dot(u));
+  if (sideVector.lengthSq() < 1e-12) return null;
+  sideVector.normalize();
+  thirdAxis.crossVectors(u, sideVector);
+  return out.makeBasis(u, sideVector, thirdAxis);
 }
 
 // The weighted mean of the nodes' places ([node, weight] pairs)

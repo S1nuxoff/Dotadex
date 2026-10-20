@@ -177,7 +177,6 @@ export default function Scenes({ catalog, route, viewer, onOpen }) {
       <div className="absolute inset-0">{viewer}</div>
       {/* The column's side of the scene darkened, so its names read over any scene */}
       <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[40%] bg-gradient-to-r from-black/75 via-black/40 to-transparent" />
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[30%] bg-gradient-to-t from-black/70 to-transparent" />
 
       <div className="pointer-events-none absolute inset-0 flex flex-col" style={{ zoom: scale }}>
         <div className="pointer-events-auto">
@@ -222,23 +221,15 @@ export default function Scenes({ catalog, route, viewer, onOpen }) {
             </div>
           </div>
 
-          {/* The scene's name, where it is from, and the cameras the game has in it */}
-          {place && (
-            <div className="pointer-events-auto mt-auto mb-[60px] ml-[48px] flex min-w-0 flex-col items-start">
-              <span className="text-[16px] leading-[20px] tracking-[2px] text-[#8b989e] uppercase [text-shadow:0_1px_4px_#000]">{place.group}</span>
-              <h2 className="mt-[4px] max-w-[900px] font-display text-[52px] leading-[1.05] font-bold tracking-[1.5px] text-white uppercase [text-shadow:0_2px_12px_#000]">
-                {place.name}
-              </h2>
-              <div className="mt-[16px] flex flex-wrap items-center gap-[12px]">
-                {cameras.length > 1 && (
-                  <GamePills
-                    label="Camera"
-                    value={camera}
-                    onChange={(name) => onOpen({ type: "scene", id: current.id, camera: name === current.camera?.name ? undefined : name })}
-                    options={cameras.map((name) => ({ value: name, label: words(name.replace(/(^|_)cam(era)?(_|$)/g, "$1$3")) || "Main" }))}
-                  />
-                )}
-              </div>
+          {/* The cameras the game has in the scene, when there is more than one */}
+          {place && cameras.length > 1 && (
+            <div className="pointer-events-auto mt-auto mb-[60px] ml-[32px]">
+              <GamePills
+                label="Camera"
+                value={camera}
+                onChange={(name) => onOpen({ type: "scene", id: current.id, camera: name === current.camera?.name ? undefined : name })}
+                options={cameras.map((name) => ({ value: name, label: words(name.replace(/(^|_)cam(era)?(_|$)/g, "$1$3")) || "Main" }))}
+              />
             </div>
           )}
         </div>

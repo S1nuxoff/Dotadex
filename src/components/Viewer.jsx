@@ -69,7 +69,7 @@ function AnimationPicker({ names, current, onPick, game = false }) {
           <ChevronUp className={`size-[18px] shrink-0 text-[#b0bcc2] ${open ? "" : "rotate-180"}`} />
         </button>
         {open && (
-          <div className="absolute top-full left-0 z-30 w-[320px] bg-[#3d4448] shadow-[0_0_6px_#00000066]">
+          <div className="absolute bottom-full left-0 z-30 mb-[4px] w-[320px] bg-[#3d4448] shadow-[0_0_6px_#00000066]">
             <input
               autoFocus
               value={query}

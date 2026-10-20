@@ -496,9 +496,8 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
         <ChatWheel modelsBase={base} heroId={hero.id} />
       </div>
       {info && <StatsSummary base={base} info={info} />}
-      {/* The full screen button; the game's demo button beside it has nothing to open here. The
-          model's own controls (animation, speed, outfit, download) join the row */}
-      <div className="mt-[24px] flex flex-wrap gap-[8px]">
+      {/* The full screen button; the game's demo button beside it has nothing to open here */}
+      <div className="mt-[24px] flex">
         <DarkButton label="Fullscreen hero" onClick={onPreview}>
           {/* The game's control_icons/24px/full_screen, 20 square, washed LightestGrey */}
           <span
@@ -506,7 +505,6 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
             style={mask(`${base}images/control_icons/24px/full_screen.svg`)}
           />
         </DarkButton>
-        <div id="hero-model-controls" className="contents" />
       </div>
     </div>
   );
@@ -966,6 +964,14 @@ export default function HeroPage({
                 }}
               />
             )}
+            {/* The model's controls (animation, speed, outfit, download) where the game's dashboard
+                has its party panel (#FriendlistBottom): 32 from the left, 21 from the bottom, 70
+                high, at least 366 wide, a 1px edge over the rock texture */}
+            <div
+              id="hero-model-controls"
+              className="pointer-events-auto absolute bottom-[21px] left-[32px] z-10 flex h-[70px] min-w-[366px] items-center gap-[8px] border border-[#3d414450] bg-[#101315] bg-[length:100%_256px] bg-center bg-no-repeat px-[14px] empty:hidden"
+              style={{ backgroundImage: `url(${catalog.modelsBase}images/textures/miniprofile_rock_darker_psd.png)` }}
+            />
             <div className="pointer-events-auto">
               <HeroNav
                 hero={hero}

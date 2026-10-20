@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ChevronLeft, ChevronRight, Layers, RotateCcw, Search, Shuffle, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCcw, Search, Shuffle, X } from "lucide-react";
 import {
   emptySlotIcon,
   SORTS,
@@ -537,7 +537,15 @@ export function EquippedSummary({ catalog, outfit, onChange }) {
     // #EquippedSetDetailsContainer: the armory icon out to the left of EQUIPPED (LabelLarge), the
     // set's name in the title font, its rarity (LabelSmall)
     <div className="relative flex flex-col">
-      <Layers className="absolute top-[2px] -left-[32px] size-[24px] text-[#dae2e5]" aria-hidden />
+      {/* The game's control_icons/24px/armory, washed LightestGrey */}
+      <span
+        aria-hidden
+        className="absolute top-[2px] -left-[32px] size-[24px] bg-[#dae2e5]"
+        style={{
+          mask: `url(${catalog.modelsBase}images/control_icons/24px/armory.svg) center / contain no-repeat`,
+          WebkitMask: `url(${catalog.modelsBase}images/control_icons/24px/armory.svg) center / contain no-repeat`,
+        }}
+      />
       <h2 className="mb-[4px] text-[19px] leading-[24px] font-semibold tracking-[1.5px] text-[#dae2e5] uppercase">Equipped</h2>
       <p className="mt-[6px] font-display text-[24px] font-normal tracking-normal text-[#dae2e5]/90 normal-case">
         {worn ? worn.name : Object.keys(outfit.slots).length ? "Custom" : hero.name}

@@ -728,12 +728,15 @@ const snapshotInSpace = (def, point, space) => {
 
 // The same, when it reads the snapshot's positions (it may read another of its streams instead,
 // a color or a radius, which is not done here: on the model's surface then); in a control
-// point's space when it names one
-DEFS.C_INIT_InitFromCPSnapshot = (def) => {
+// point's space when it names one. A system that holds its particles with MovementRigidAttachToCP
+// takes the points as given too: they are offsets in that control point's space (Timbersaw's saw
+// outline round attach_saw), which binding them to the model's nearest vertices moved a second time
+DEFS.C_INIT_InitFromCPSnapshot = (def, system) => {
   if ((def.m_nAttributeToRead ?? 0) !== 0) return onModel();
   const point = def.m_nControlPointNumber ?? 0;
   const space = def.m_nLocalSpaceCP ?? -1;
-  return space >= 0 ? snapshotInSpace(def, point, space) : fromSnapshot(def, point);
+  const rigid = (system?.def?.m_Operators ?? []).some((op) => op?._class === "C_OP_MovementRigidAttachToCP" && !op.m_bDisableOperator && (op.m_nFieldInput ?? 0) === 0);
+  return space >= 0 || rigid ? snapshotInSpace(def, point, space) : fromSnapshot(def, point);
 };
 DEFS.C_INIT_CreateOnModelAtHeight = onModel;
 

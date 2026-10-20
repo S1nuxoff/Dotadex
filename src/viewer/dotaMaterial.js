@@ -3,15 +3,15 @@ import { materialPrograms, runProgram } from "./materialPrograms.js";
 
 // Dota's hero.vfx shader, after its compiled pixel shader. The textures and parameters come from the
 // material's vmat data that Source2Viewer keeps in the glTF extras:
-//   Masks1: R detail, G diffuse warp, B metalness, A self-illumination
+//   Masks1: R detail, G diffuse warp, B metalness, A self-illuminati
 //   Masks2: R specular intensity, G rim intensity, B tint specular by base color, A specular exponent
 //   DiffuseWarp: light ramp by half-Lambert, FresnelWarp: R color, G rim, B specular by view angle
 // Lighting is a fixed studio rig in view space, the rim light is tinted per item.
 
-// The sun's shadow as hero.vfx and global_lit_simple.vfx read it: 9 comparisons a texel apart
-// round the point (weights 0.206 the middle, 0.124 the sides, 0.075 the corners), each a bilinear
-// compare; outside the shadow map lit (its sampler's border is 1). The point is pushed out along its
-// normal before it is projected (the light's normalBias)
+// The sun's shadow as hero.vfx and global_lit_simple.vfx read it. The point is pushed out along
+// its normal before it is projected (the light's normalBias); outside the shadow map it is lit
+// (its sampler's border is 1). hero.vfx has a 9-tap path (a texel apart, 0.206 / 0.124 / 0.075)
+// and a soft 25-tap one; the hero page's shadow is soft in the game, so the soft one is drawn
 const sunShadowChunk = /* glsl */ `
   // ?shadowview tells apart a point outside the shadow map (-1) and no shadow map at all (-2)
   #ifdef SHADOW_VIEW
@@ -26,19 +26,28 @@ const sunShadowChunk = /* glsl */ `
     #define SUN_OFF 1.0
   #endif
   #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0 && defined( SHADOWMAP_TYPE_PCF )
+    // hero.vfx's soft path (cb2[18].w > 0, the scene's highqualityshadows): 25 bilinear compares 
+    // a Poisson disk of 5 texels radius, 0.0007 nearer the light, a tap off the map counting as shadow
+    const vec2 SUN_DISK[25] = vec2[25](
+      vec2(-0.978698, -0.088412), vec2(-0.841121, 0.521165), vec2(-0.717460, -0.503220), vec2(-0.702933, 0.903134), vec2(-0.663198, 0.154820),
+      vec2(-0.495102, -0.232887), vec2(-0.364238, -0.961791), vec2(-0.345866, -0.564379), vec2(-0.325663, 0.640370), vec2(-0.182714, 0.321329),
+      vec2(-0.142613, -0.022736), vec2(-0.056429, -0.367290), vec2(-0.018586, 0.918882), vec2(0.038179, -0.728996), vec2(0.165990, 0.093112),
+      vec2(0.253639, 0.719535), vec2(0.369549, -0.655019), vec2(0.423627, 0.429975), vec2(0.530747, -0.364971), vec2(0.566027, -0.940489),
+      vec2(0.639332, 0.028413), vec2(0.652089, 0.669668), vec2(0.773797, 0.345012), vec2(0.968871, 0.840449), vec2(0.991882, -0.657338)
+    );
     float sunShadow() {
       DirectionalLightShadow light = directionalLightShadows[ 0 ];
       vec4 coord = vDirectionalShadowCoord[ 0 ];
       coord.xyz /= coord.w;
-      coord.z += light.shadowBias;
+      coord.z += light.shadowBias - 0.0007;
       if (coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 || coord.z > 1.0) return SUN_OUTSIDE;
-      float s = 1.0 / light.shadowMapSize.x;
-      #define SUN_TAP(x, y) texture( directionalShadowMap[ 0 ], vec3( coord.xy + vec2(x, y) * s, coord.z ) )
-      float corners = SUN_TAP(1.0, 1.0) + SUN_TAP(-1.0, 1.0) + SUN_TAP(1.0, -1.0) + SUN_TAP(-1.0, -1.0);
-      float sides = SUN_TAP(1.0, 0.0) + SUN_TAP(-1.0, 0.0) + SUN_TAP(0.0, 1.0) + SUN_TAP(0.0, -1.0);
-      float shadow = corners * 0.074906 + sides * 0.123596 + SUN_TAP(0.0, 0.0) * 0.205993;
-      #undef SUN_TAP
-      return mix(1.0, shadow, light.shadowIntensity);
+      float radius = 5.0 / light.shadowMapSize.x;
+      float lit = 0.0;
+      for (int i = 0; i < 25; i++) {
+        vec2 uv = coord.xy + SUN_DISK[i] * radius;
+        if (uv.x >= 0.0 && uv.y >= 0.0 && uv.x <= 1.0 && uv.y <= 1.0) lit += texture( directionalShadowMap[ 0 ], vec3( uv, coord.z ) );
+      }
+      return mix(1.0, lit * 0.04, light.shadowIntensity);
     }
   #elif !defined( USE_SHADOWMAP )
     float sunShadow() { return SUN_OFF; }
@@ -489,7 +498,7 @@ export function createDotaMaterial(original, vmat, textures) {
       tMasks2: { value: pick("g_tMasks2") },
       tDiffuseWarp: { value: pick("g_tDiffuseWarp") },
       tFresnelWarp: { value: pick("g_tFresnelWarp") },
-      // The whole cube, once its faces are in (cubemaps/), else no reflection
+      // The whole cube, once its faces are in (cubemaps/), else no reflecti
       tCubeMap: { value: null },
       uHasNormal: { value: pick("g_tNormal") ? 1 : 0 },
       // A mask the material has is used, whether or not its flag made it into the data

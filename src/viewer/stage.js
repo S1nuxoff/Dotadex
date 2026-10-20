@@ -1146,6 +1146,12 @@ export class Stage {
         // PortraitShadowScale (client.dll's defaults 89 89 89 and 1.5 when missing)
         shadowFill: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.scale ?? 1.5),
       };
+      // Whether the game hands the shadow color to the shader as it is or from gamma to linear (as
+      // hero.vfx takes its own colors) is not found yet: ?shadowlinear draws the second reading
+      if (search?.has("shadowlinear")) {
+        const [r, g, b] = this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255];
+        look.shadowFill = new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace).multiplyScalar(this.portrait.shadow?.scale ?? 1.5);
+      }
       // The second light from PortraitAmbientDirection: angles the light points along, as the key
       // light's (whose position lies the other way), so it comes from the opposite side
       this.portraitFillDir = null;

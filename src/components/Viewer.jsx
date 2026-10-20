@@ -286,13 +286,19 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlsKey, attempt]);
 
-  useEffect(() => stageRef.current.setPaused(paused), [paused]);
+  useEffect(() => {
+    stageRef.current.setPaused(paused);
+  }, [paused]);
   // The game's light and camera for a scene of the Scenes section
-  useEffect(() => stageRef.current.setSceneLook(scene ?? null), [scene]);
+  useEffect(() => {
+    stageRef.current.setSceneLook(scene ?? null);
+  }, [scene]);
 
   // A scene shown on its own has no pedestal, except treasure scenes: their backgrounds
   // are particles only, so the chest stands on the pedestal instead
-  useEffect(() => stageRef.current.setShowcase(!scene || scene.id.startsWith("scenes/treasure/")), [scene]);
+  useEffect(() => {
+    stageRef.current.setShowcase(!scene || scene.id.startsWith("scenes/treasure/"));
+  }, [scene]);
   useEffect(() => {
     let cancelled = false;
     if (!sound) {
@@ -304,18 +310,26 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
       cancelled = true;
     };
   }, [sound, catalog.modelsBase]);
-  useEffect(() => stageRef.current.setSpeed(speed), [speed]);
-  useEffect(() => stageRef.current.setFrameShift(frameShift), [frameShift]);
+  useEffect(() => {
+    stageRef.current.setSpeed(speed);
+  }, [speed]);
+  useEffect(() => {
+    stageRef.current.setFrameShift(frameShift);
+  }, [frameShift]);
   const mask = useSceneMask(catalog.modelsBase, armory);
   // Everything but a scene of the Scenes section stands in the game's loadout scene (its pedestal
   // and light); off the hero page the model is framed by us, the game's cameras being the page's
   const staged = !scene;
-  useEffect(() => stageRef.current.setLoadout(staged), [staged]);
+  useEffect(() => {
+    stageRef.current.setLoadout(staged);
+  }, [staged]);
   // The game's particle effects of what is on screen
   const [particlesOn, setParticlesOn] = useState(() => getViewSettings().particles);
   useEffect(() => onViewSettings((settings) => setParticlesOn(settings.particles)), []);
   const particlesKey = particlesOn ? particles.map((effect) => `${effect.system}${effect.snapshots ? JSON.stringify(effect.snapshots) : ""}`).join("|") : "";
-  useEffect(() => stageRef.current.setParticles(catalog.modelsBase, particlesOn ? particles : [], particlesOn), [particlesKey, particlesOn, catalog.modelsBase]);
+  useEffect(() => {
+    stageRef.current.setParticles(catalog.modelsBase, particlesOn ? particles : [], particlesOn);
+  }, [particlesKey, particlesOn, catalog.modelsBase]);
   // The free camera of the settings, or the game's fixed one on a hero's page
   useEffect(() => {
     stageRef.current.setFreeCamera(getViewSettings().freeCamera);
@@ -330,7 +344,9 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   const { data: heroData } = useGameData(catalog.modelsBase, ["heroes.json"]);
   const heroEntry = outfit?.hero ? heroData?.heroes?.[`npc_dota_hero_${outfit.hero}`] : null;
   const heroScale = Number(heroEntry?.LoadoutScale ?? heroEntry?.ModelScale ?? 1);
-  useEffect(() => stageRef.current.setHeroScale(heroScale), [heroScale]);
+  useEffect(() => {
+    stageRef.current.setHeroScale(heroScale);
+  }, [heroScale]);
   // The game's pedestal, light and (on the hero page) camera
   const staging = staged && portrait ? (loadout ? portrait : { ...portrait, cameras: {} }) : null;
   useEffect(

@@ -223,7 +223,9 @@ function Group({ title, count, children }) {
 function useChunks(total, step = 120) {
   const [shown, setShown] = useState(step);
   const sentinel = useRef(null);
-  useEffect(() => setShown(step), [total, step]);
+  useEffect(() => {
+    setShown(step);
+  }, [total, step]);
   useEffect(() => {
     const node = sentinel.current;
     if (!node || shown >= total) {
@@ -384,7 +386,9 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
   const total = groups.reduce((sum, [, list]) => sum + list.length, 0);
   const [shown, sentinel] = useChunks(total);
   const listRef = useRef(null);
-  useEffect(() => listRef.current?.scrollTo(0, 0), [tab, heroId, world, treasure, kind, groupBy]);
+  useEffect(() => {
+    listRef.current?.scrollTo(0, 0);
+  }, [tab, heroId, world, treasure, kind, groupBy]);
 
   // An item shows on its hero, or alone (a courier, a ward) on the stage
   const openItem = (item) => onOpen({ type: "item", id: item.id });

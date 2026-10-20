@@ -966,10 +966,11 @@ export default function HeroPage({
             )}
             {/* The model's controls (animation, speed, outfit, download) where the game's dashboard
                 has its party panel (#FriendlistBottom): 32 from the left, 21 from the bottom, 70
-                high, at least 366 wide, a 1px edge over the rock texture */}
+                high, at least 366 wide, a 1px edge over the rock texture; drawn at 80%, smaller than
+                the page's own buttons */}
             <div
               id="hero-model-controls"
-              className="pointer-events-auto absolute bottom-[21px] left-[32px] z-10 flex h-[70px] min-w-[366px] items-center gap-[8px] border border-[#3d414450] bg-[#101315] bg-[length:100%_256px] bg-center bg-no-repeat px-[14px] empty:hidden"
+              className="pointer-events-auto absolute bottom-[21px] left-[32px] z-10 flex h-[70px] min-w-[366px] origin-bottom-left scale-[0.8] items-center gap-[8px] border border-[#3d414450] bg-[#101315] bg-[length:100%_256px] bg-center bg-no-repeat px-[14px] empty:hidden"
               style={{ backgroundImage: `url(${catalog.modelsBase}images/textures/miniprofile_rock_darker_psd.png)` }}
             />
             <div className="pointer-events-auto">

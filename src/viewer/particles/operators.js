@@ -681,7 +681,7 @@ const fromSnapshot = (def, point) => {
         const k = randomly ? Math.floor(Math.random() * points.length) : Math.floor(next) % points.length;
         if (!randomly) next += increment;
         const found = points[k];
-        const binding = { mesh: found.mesh, index: found.index };
+        const binding = { mesh: found.mesh, index: found.index, offset: found.offset };
         system.bindings[i] = binding;
         surface.position(binding, v1);
         for (let c = 0; c < 3; c++) p[i * 3 + c] = q[i * 3 + c] = v1.getComponent(c);
@@ -762,7 +762,7 @@ DEFS.C_INIT_CreateFromParentParticles = (def) => {
         const binding = parent.bindings?.[j];
         if (binding) {
           system.bindings ??= [];
-          system.bindings[i] = { mesh: binding.mesh, index: binding.index };
+          system.bindings[i] = { mesh: binding.mesh, index: binding.index, offset: binding.offset };
         }
       }
     },

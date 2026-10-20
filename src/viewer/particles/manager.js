@@ -195,9 +195,15 @@ export class ParticleManager {
     }
     // The effect's own models while they fit about as well (within an inch or half again)
     const chosen = nearest(own && own.mean <= best.mean * 1.5 + UNIT ? meshes : best.group, points).found;
+    // Each point kept where it is, not at its vertex: by its offset from the vertex in the mesh's
+    // own space, which moves as the vertex does (a blade's edge points lie between the vertices,
+    // three of every four; snapped to the nearest ones the rope through them went back and forth)
+    const toMesh = new Map();
     return positions.map((source, k) => {
       const { mesh, index } = chosen[k];
-      const found = { mesh, index };
+      if (!toMesh.has(mesh)) toMesh.set(mesh, new THREE.Matrix4().multiplyMatrices(toModel, mesh.matrixWorld).invert());
+      const offset = points[k].clone().applyMatrix4(toMesh.get(mesh)).sub(target.fromBufferAttribute(mesh.geometry.attributes.position, index));
+      const found = { mesh, index, offset };
       if (data.radius?.[k] !== undefined) found.radius = data.radius[k];
       if (data.normal?.[k]) found.normal = data.normal[k];
       const color = data.color?.[k];
@@ -254,6 +260,8 @@ export class ParticleManager {
     if (request !== this.modelRequest) return;
     // The hero's own attachments first, what it wears adds its own
     this.attachments = Object.assign({}, ...lists.filter(Boolean).reverse());
+    // And each model's own, which its effects look in first
+    this.modelAttachments = new Map((urls ?? []).map((url, k) => [url.split("#")[0], lists[k]]).filter(([, list]) => list));
     this.restart();
   }
 
@@ -311,6 +319,10 @@ export class ParticleManager {
       driven.set(Number(index), { value });
     }
     const manager = this;
+    // An item's effect is made on the item, so it finds an attachment on the item's own model
+    // before the hero's of the same name (Pumpkin Splitter's attach_saw is off the saw bone, the
+    // hero's on it: the ring stood off the blade)
+    const attachments = Object.assign({}, this.attachments, ...models.map((url) => this.modelAttachments?.get(url.split("#")[0])).filter(Boolean));
     // The surface of the effect's own models, or the whole model when none of its meshes is there
     const wanted = new Set(models);
     const own = this.meshes.filter((mesh) => wanted.has(mesh.userData.model));
@@ -357,7 +369,7 @@ export class ParticleManager {
           points.set(index, point);
           // In place at once: particles made this step must not start at the world's origin
           if (driven.has(index)) {
-            manager.drive(point, driven.get(index), 0);
+            manager.drive(point, driven.get(index), 0, attachments);
           } else {
             const origin = this.controlPoint(0);
             point.position.copy(origin.position);
@@ -369,7 +381,7 @@ export class ParticleManager {
       },
       update(delta) {
         for (const [index, driver] of driven) {
-          manager.drive(this.controlPoint(index), driver, delta);
+          manager.drive(this.controlPoint(index), driver, delta, attachments);
         }
         // Control points nothing drives stand where the effect does
         const origin = this.controlPoint(0);
@@ -385,7 +397,7 @@ export class ParticleManager {
 
   // A control point at an attachment of the model, or at its origin; its speed over the frame's
   // delta seconds (0: just placed)
-  drive(point, driver, delta) {
+  drive(point, driver, delta, attachments = this.attachments) {
     point.previous.copy(point.position);
     // A value the game's code sets, not a place
     if (driver.value) {
@@ -394,7 +406,7 @@ export class ParticleManager {
       point.speed = 0;
       return;
     }
-    const attachment = driver.m_attachmentName && this.attachments[driver.m_attachmentName];
+    const attachment = driver.m_attachmentName && attachments[driver.m_attachmentName];
     const type = driver.m_iAttachType ?? "PATTACH_ABSORIGIN_FOLLOW";
     if (attachment && /POINT/.test(type) && attachmentTransform(attachment, this.bones, v1, q1)) {
       // At the attachment
@@ -447,12 +459,10 @@ export class ParticleManager {
   }
 
   surfacePosition(binding, target) {
-    const { mesh, index } = binding;
-    if (mesh.isSkinnedMesh) {
-      mesh.getVertexPosition(index, v1);
-    } else {
-      v1.fromBufferAttribute(mesh.geometry.attributes.position, index);
-    }
+    const { mesh, index, offset } = binding;
+    v1.fromBufferAttribute(mesh.geometry.attributes.position, index);
+    if (offset) v1.add(offset);
+    if (mesh.isSkinnedMesh) mesh.applyBoneTransform(index, v1);
     mesh.localToWorld(v1);
     return toSource(v1, target);
   }

@@ -47,6 +47,9 @@ function loadSoundData(modelsBase) {
 
 const SPEEDS = [0.5, 1, 1.5];
 
+// The game's dark button, fully round as the controls row has it
+const ROUND_BUTTON = GAME_BUTTON.replace("rounded-[3px]", "rounded-full");
+
 function AnimationPicker({ names, current, onPick, game = false, speed, speeds = [], onSpeed, paused, onPause }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -62,14 +65,14 @@ function AnimationPicker({ names, current, onPick, game = false, speed, speeds =
           aria-label="Animation"
           title="Animation"
           data-sound="click"
-          className="flex h-[34px] w-[240px] items-center border-2 border-[#5e686966] bg-gradient-to-b from-[#292e2e] to-[#191e1e] px-[8px] text-left shadow-[0_0_1px_3px_#00000055] hover:from-[#393e3e] hover:to-[#292e2e]"
+          className="flex h-[34px] w-[240px] items-center rounded-full border-2 border-[#5e686966] bg-gradient-to-b from-[#292e2e] to-[#191e1e] px-[8px] text-left shadow-[0_0_1px_3px_#00000055] hover:from-[#393e3e] hover:to-[#292e2e]"
         >
-          <span className={`ml-[6px] flex-1 truncate text-[18px] ${open ? "text-white" : "text-[#b0bcc2]"}`}>{current ?? "No animation"}</span>
+          <span className={`ml-[8px] flex-1 truncate text-[18px] ${open ? "text-white" : "text-[#b0bcc2]"}`}>{current ?? "No animation"}</span>
           <span className="mr-[6px] text-[14px] text-[#8b989e] tabular-nums">{names.length}</span>
           <ChevronUp className={`size-[18px] shrink-0 text-[#b0bcc2] ${open ? "" : "rotate-180"}`} />
         </button>
         {open && (
-          <div className="absolute bottom-full left-0 z-30 mb-[4px] w-[320px] bg-[#3d4448] shadow-[0_0_6px_#00000066]">
+          <div className="absolute bottom-full left-0 z-30 mb-[6px] w-[320px] overflow-hidden rounded-[12px] bg-[#3d4448] shadow-[0_0_6px_#00000066]">
             {/* Pause and the playback speed, in the menu's own rows */}
             {speeds.length > 0 && (
               <div role="group" aria-label="Playback" className="flex border-b border-black/40">
@@ -557,13 +560,13 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
               />
             )}
             {downloads.map((model) => (
-              <a key={model} href={catalog.modelsBase + model} download title={model} data-sound="click" className={GAME_BUTTON}>
+              <a key={model} href={catalog.modelsBase + model} download title={model} data-sound="click" className={ROUND_BUTTON}>
                 <Download className="mr-[8px] size-[20px]" />
                 {downloads.length > 1 ? model.split("/").pop() : "GLB"}
               </a>
             ))}
             {freeCamera && (
-              <button onClick={() => stageRef.current.frameModel()} data-sound="click" aria-label="Fit to view" title="Fit to view" className={GAME_BUTTON}>
+              <button onClick={() => stageRef.current.frameModel()} data-sound="click" aria-label="Fit to view" title="Fit to view" className={ROUND_BUTTON}>
                 <Focus className="mx-[4px] size-[20px]" />
               </button>
             )}

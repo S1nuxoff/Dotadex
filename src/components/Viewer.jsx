@@ -293,6 +293,32 @@ function useSceneMask(base, armory) {
   };
 }
 
+// The game's response rules for what heroes say coming onto their page (data/portrait-speech.json:
+// [{ when: [[key, expression]], lines: [sound event] }]), loaded once
+let portraitSpeech = null;
+function loadPortraitSpeech(modelsBase) {
+  portraitSpeech ??= fetch(`${modelsBase}data/portrait-speech.json`)
+    .then((res) => (res.ok ? res.json() : []))
+    .catch(() => []);
+  return portraitSpeech;
+}
+
+// The files of a line the rules give for an animation's speech event: of the groups whose every
+// requirement holds ("!=x" for not x, else the same value, any case), the one with the most
+// requirements, and a line of it the hero has. The event's criteria name the unit
+// portrait_world_unit, but every rule asks for the hero's own class (213 of 213 groups), so the
+// hero's class is the one matched
+function portraitLine(rules, voices, speech, heroId) {
+  const criteria = { ...speech.criteria, Concept: speech.concept, classname: `npc_dota_hero_${heroId}` };
+  const holds = ([key, expr]) => {
+    const value = String(criteria[key] ?? "").toLowerCase();
+    return expr.startsWith("!=") ? value !== expr.slice(2).toLowerCase() : value === expr.toLowerCase();
+  };
+  const group = rules.filter((rule) => rule.when.every(holds)).sort((a, b) => b.when.length - a.when.length)[0];
+  const files = (group?.lines ?? []).map((event) => voices.find((entry) => entry.event === event)?.files).filter((list) => list?.length);
+  return files.length ? files[Math.floor(Math.random() * files.length)] : null;
+}
+
 export default function Viewer({ catalog, language, hideTitle = false, controlsRight = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], activities = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
@@ -481,29 +507,49 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
     };
   }, [catalog.modelsBase]);
 
-  // A hero comes in with one of its spawn lines, as in the game: fetched when the hero is
-  // picked, spoken when its model shows up on the stage
+  // A hero speaks coming onto its page as in the game: its loadout spawn's animation says
+  // something (AE_CL_SPEECH: concept and criteria, special_spawn=<hero>_loadout_spawn), and the
+  // hero's response rules pick the group of lines (portraitLine). A spawn without such an event
+  // (older data) says one of the hero's spawn lines once its model shows up
   const spawnLine = useRef({ files: null, shown: false });
   useEffect(() => {
-    const line = (spawnLine.current = { files: null, shown: false });
+    const line = (spawnLine.current = { files: null, shown: false, speech: [] });
+    const play = (files) => files?.length && playSound(soundsBase(catalog.modelsBase) + files[Math.floor(Math.random() * files.length)]);
     const speak = () => {
-      if (line.files?.length && line.shown && sound) {
-        playSound(soundsBase(catalog.modelsBase) + line.files[Math.floor(Math.random() * line.files.length)]);
+      if (line.files?.length && line.shown && sound && !stageRef.current.spawnSpeaks) {
+        play(line.files);
         line.files = null;
+      }
+    };
+    const answer = () => {
+      if (!line.voices || !line.rules) return;
+      for (const speech of line.speech.splice(0)) {
+        play(portraitLine(line.rules, line.voices, speech, hero.id));
       }
     };
     stageRef.current.onShow = () => {
       line.shown = true;
       speak();
     };
+    stageRef.current.onSpeech = (speech) => {
+      if (!sound || !hero) return;
+      line.speech.push(speech);
+      answer();
+    };
     if (!sound || !hero) {
       return;
     }
+    loadPortraitSpeech(catalog.modelsBase).then((rules) => {
+      line.rules = rules;
+      answer();
+    });
     fetch(`${catalog.modelsBase}data/voices/npc_dota_hero_${hero.id}.json`)
       .then((res) => (res.ok ? res.json() : []))
       .then((lines) => {
+        line.voices = lines;
         line.files = lines.filter((entry) => /_spawn|_respawn/.test(entry.event)).flatMap((entry) => entry.files);
         speak();
+        answer();
       })
       .catch(() => {});
   }, [hero?.id, outfit.persona, sound, catalog.modelsBase]);

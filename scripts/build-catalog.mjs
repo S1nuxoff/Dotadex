@@ -279,6 +279,20 @@ for (const hero of Object.values(heroes)) {
   }
 }
 
+// The effects the game's hero page shows on the hero (its RenderablePortrait Particles:
+// Broodmother's web): [{ system, config }] by the name of the effect's control point
+// configuration, or [{ system, points }] where the hero gives its control points instead
+// ({ "0": { type: "follow_origin" | "follow_attachment", location, position } })
+for (const hero of Object.values(heroes)) {
+  const particles = heroData?.[`npc_dota_hero_${hero.id}`]?.RenderablePortrait?.Particles ?? {};
+  const portrait = Object.entries(particles)
+    .filter(([system]) => system.toLowerCase().endsWith(".vpcf"))
+    .map(([system, how]) => (typeof how === "string" ? { system: system.toLowerCase(), config: how } : { system: system.toLowerCase(), points: how }));
+  if (portrait.length) {
+    hero.portrait = portrait;
+  }
+}
+
 // Announcer and music packs: "announcer_dlc_bastion" -> "Bastion"
 const packName = (folder) =>
   folder

@@ -312,9 +312,16 @@ export function outfitParticles(catalog, outfit) {
   const worn = wornItems(catalog, outfit, hero, persona);
   const heroModel = catalog.modelsBase + (persona ? hero.personas[persona - 1] : hero.model);
   let effects = persona ? [] : (hero.particles ?? []).map((system) => ({ system, models: [heroModel] }));
+  // And those the game's hero page shows on it (Broodmother's web), by their configuration or
+  // the control points the hero gives
+  if (!persona) {
+    for (const { system, config, points } of hero.portrait ?? []) {
+      effects.push({ system, models: [heroModel], ...(config && { config }), ...(points && { points }) });
+    }
+  }
   for (const { item, models } of worn) {
     for (const [from, to] of item.particles?.swap ?? []) {
-      effects = effects.map((effect) => (effect.system === from ? { system: to, models: models.map((url) => url.split("#")[0]) } : effect));
+      effects = effects.map((effect) => (effect.system === from ? { ...effect, system: to, models: models.map((url) => url.split("#")[0]) } : effect));
     }
   }
   for (const { item, models } of worn) {

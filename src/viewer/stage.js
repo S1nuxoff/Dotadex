@@ -842,8 +842,11 @@ export class Stage {
     const names = Object.keys(this.actions).sort((a, b) => a.startsWith("@") - b.startsWith("@"));
     const seq = this.sequences && sequencesByClip(this.sequences, names);
     this.clipSequences = seq ?? new Map();
-    // The effects the new model's animations start begin with its first animation
+    // The effects the new model's animations start, and what they say, begin with its first animation
     this.effectClip = null;
+    this.effectAction = null;
+    this.speechClip = null;
+    this.speechAction = null;
     // What is worn sets its modifiers (for every activity, or one); the spawn and a plain idle
     // standing in for the stance are the loadout's ("loadout"). The stance is not: the portrait
     // names ACT_DOTA_LOADOUT alone, and the only stance with "loadout" is Disruptor's one-off roar
@@ -857,6 +860,8 @@ export class Stage {
     // Heroes come in with their spawn animation, as in the game, then settle into idle
     const spawn = sequenceFor(seq, names, "ACT_DOTA_SPAWN", modifiers("ACT_DOTA_SPAWN", true))
       ?? (seq ? undefined : names.find((name) => /spawn/i.test(name) && !/respawn|loadout/i.test(name)));
+    // Whether the spawn says its own line (AE_CL_SPEECH), so no other is said for it
+    this.spawnSpeaks = Boolean(spawn && !reducedMotion.matches && seq?.get(spawn)?.speech?.length);
     // The frame and the ground are set from the idle pose: a spawn starts mid-leap or crouched.
     // The first model of a stage is framed at once, with no flight in from the starting camera.
     if (idle) {
@@ -1653,6 +1658,7 @@ export class Stage {
       this.playAnimationSounds();
       this.startClothEffects();
       this.startAnimationEffects();
+      this.speakAnimationLines();
     }
 
     this.effects.update(delta);
@@ -2051,13 +2057,16 @@ export class Stage {
       return;
     }
     const clip = this.current.getClip();
-    const duration = clip.duration || 1;
-    // A clip played once stops at its end, which the looping cycle would read as its start again
-    const once = this.current.loop === THREE.LoopOnce;
-    const now = once ? Math.min(this.current.time / duration, 1) : (this.current.time % duration) / duration;
     const changed = clip !== this.effectClip;
+    // A clip that ended this frame hands over to the next at once (the spawn to the stance): its
+    // events up to its end still happen
+    if (changed && this.effectAction) {
+      this.fireAnimationEvents(this.effectClip, this.effectCycle, this.cycleOf(this.effectAction), particles);
+    }
+    const now = this.cycleOf(this.current);
     const last = changed ? -1 : this.effectCycle;
     this.effectClip = clip;
+    this.effectAction = this.current;
     this.effectCycle = now;
     if (changed) {
       for (const running of this.animationEffects ?? []) {
@@ -2067,10 +2076,45 @@ export class Stage {
       }
       this.animationEffects = [];
     }
-    const events = this.clipSequences?.get(clip.name)?.effects ?? [];
-    for (const event of events) {
-      const crossed = now >= last ? event.at > last && event.at <= now : event.at > last || event.at <= now;
-      if (!crossed) continue;
+    this.fireAnimationEvents(clip, last, now, particles);
+  }
+
+  // How far an animation is through its clip, 0 to 1; a clip played once stops at its end, which
+  // the looping cycle would read as its start again
+  cycleOf(action) {
+    const duration = action.getClip().duration || 1;
+    return action.loop === THREE.LoopOnce ? Math.min(action.time / duration, 1) : (action.time % duration) / duration;
+  }
+
+  // What the current animation says between the last frame's point and this one's (AE_CL_SPEECH:
+  // { concept, criteria }, handed to onSpeech, which the hero's response rules turn into a line),
+  // with or without particles; a clip that just ended says what was left of it (Broodmother
+  // speaks at her spawn's last frame, the frame it hands over to the stance)
+  speakAnimationLines() {
+    if (!this.current) return;
+    const clip = this.current.getClip();
+    const changed = clip !== this.speechClip;
+    const lines = (from, last, now) => {
+      const crossed = (at) => (now >= last ? at > last && at <= now : at > last || at <= now);
+      for (const speech of this.clipSequences?.get(from.name)?.speech ?? []) {
+        if (crossed(speech.at)) this.onSpeech?.(speech);
+      }
+    };
+    if (changed && this.speechAction) lines(this.speechClip, this.speechCycle, this.cycleOf(this.speechAction));
+    const now = this.cycleOf(this.current);
+    lines(clip, changed ? -1 : this.speechCycle, now);
+    this.speechClip = clip;
+    this.speechAction = this.current;
+    this.speechCycle = now;
+  }
+
+  // The particle effects a clip starts or stops between two of its points (wrapping round when
+  // the second is lower)
+  fireAnimationEvents(clip, last, now, particles) {
+    const crossed = (at) => (now >= last ? at > last && at <= now : at > last || at <= now);
+    const sequence = this.clipSequences?.get(clip.name);
+    for (const event of sequence?.effects ?? []) {
+      if (!crossed(event.at)) continue;
       if (event.stop) {
         // Ends the effects of that system this animation started
         for (const running of this.animationEffects.filter((entry) => entry.event.system === event.system)) {

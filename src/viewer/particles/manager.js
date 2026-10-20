@@ -46,6 +46,18 @@ const v1 = new THREE.Vector3();
 const q1 = new THREE.Quaternion();
 const scale = new THREE.Vector3();
 
+// Control points as a hero's RenderablePortrait gives them ({ "0": { type, location, position } }),
+// as the drivers of a configuration: follow_origin stays on the model's origin, follow_attachment
+// on the attachment named by location; position is an offset
+function driversOf(points) {
+  return Object.entries(points).map(([index, point]) => ({
+    m_iControlPoint: Number(index),
+    m_iAttachType: point?.type === "follow_attachment" ? "PATTACH_POINT_FOLLOW" : "PATTACH_ABSORIGIN_FOLLOW",
+    ...(point?.type === "follow_attachment" && point.location && { m_attachmentName: point.location }),
+    ...(typeof point?.position === "string" && { m_vecOffset: point.position.trim().split(/\s+/).map(Number) }),
+  }));
+}
+
 export class ParticleManager {
   constructor(scene, base) {
     this.base = base;
@@ -312,7 +324,7 @@ export class ParticleManager {
   // game's code puts in control points ({ 1: [r, g, b] })
   setEffects(list) {
     const sorted = [...list].sort((a, b) => a.system.localeCompare(b.system));
-    const key = sorted.map((effect) => `${effect.system}@${(effect.models ?? []).join(",")}${effect.snapshots ? JSON.stringify(effect.snapshots) : ""}${effect.controlPoints ? JSON.stringify(effect.controlPoints) : ""}`).join("|");
+    const key = sorted.map((effect) => `${effect.system}@${(effect.models ?? []).join(",")}${effect.snapshots ? JSON.stringify(effect.snapshots) : ""}${effect.controlPoints ? JSON.stringify(effect.controlPoints) : ""}${effect.config ?? ""}${effect.points ? JSON.stringify(effect.points) : ""}`).join("|");
     if (key === this.key) return;
     this.key = key;
     this.list = sorted;
@@ -330,7 +342,7 @@ export class ParticleManager {
     if (request !== this.request) return;
     for (const [index, def] of defs.entries()) {
       if (!def) continue;
-      const host = this.hostFor(def, list[index].models, list[index].snapshots, list[index].config, list[index].controlPoints);
+      const host = this.hostFor(def, list[index].models, list[index].snapshots, list[index].config, list[index].controlPoints, list[index].points);
       this.effects.push({ system: new ParticleSystem(def, host), host });
     }
     if (unsupported.size) {
@@ -347,9 +359,9 @@ export class ParticleManager {
   // What a root system asks of the world: control points driven as its configuration (the one
   // named, else the first) says (attachments of the parent model, its origin), textures,
   // children, the model surface
-  hostFor(def, models = [], swaps = {}, config = null, values = {}) {
+  hostFor(def, models = [], swaps = {}, config = null, values = {}, portraitPoints = null) {
     const configurations = def.m_controlPointConfigurations ?? [];
-    const drivers = (configurations.find((entry) => config && entry?.m_name === config) ?? configurations[0])?.m_drivers ?? [];
+    const drivers = portraitPoints ? driversOf(portraitPoints) : (configurations.find((entry) => config && entry?.m_name === config) ?? configurations[0])?.m_drivers ?? [];
     const points = new Map();
     const driven = new Map();
     for (const driver of drivers) {

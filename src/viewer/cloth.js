@@ -260,8 +260,9 @@ class Wind {
 
 export class Cloth {
   // fe: the model's FeModel; group: the shown model, its bones by name (any letter case) and
-  // each bone's bind pose in userData.rest
-  constructor(fe, group) {
+  // each bone's bind pose in userData.rest; animated: the names (lower case) of the bones the
+  // model's animations move, when known
+  constructor(fe, group, animated = null) {
     this.group = group;
     const n = (this.n = fe.m_nNodeCount ?? 0);
     const names = fe.m_CtrlName ?? [];
@@ -317,7 +318,7 @@ export class Cloth {
         if (bone) {
           if (!frameIndex.has(bone)) {
             frameIndex.set(bone, this.frames.length);
-            this.frames.push({ bone, inverseRest: restMatrix(bone, group).invert(), world: new THREE.Matrix4() });
+            this.frames.push({ bone, node: j, inverseRest: restMatrix(bone, group).invert(), world: new THREE.Matrix4() });
           }
           return frameIndex.get(bone);
         }
@@ -325,12 +326,31 @@ export class Cloth {
       return -1;
     };
     const pose = fe.m_InitPose ?? [];
-    const local = (node, point) => {
+    const IDENTITY = [0, 0, 0, 1, 0, 0, 0, 1];
+    // A point given in a node's own space (inches) where the bone carrying it has it. Mostly the
+    // InitPose is the glb's rest pose and the point is measured from the bone's rest. Where a bone
+    // the animations hold rests elsewhere than its InitPose (Tidehunter's hook bones rest by his
+    // feet, the cloth was made with the anchor in his hand: from the rest its nodes were put 130
+    // inches off their own bones, and the anchor stretched to the floor), the node is the bone and
+    // the point is taken from it within the InitPose, the bones keeping the game's axes
+    const restOff = (j) => {
+      const at = new THREE.Vector3().setFromMatrixPosition(restMatrix(boneOf[j], group));
+      const p = pose[j];
+      return Math.hypot(at.z / SOURCE_TO_METRES - p[0], at.x / SOURCE_TO_METRES - p[1], at.y / SOURCE_TO_METRES - p[2]) > 1;
+    };
+    const byAnimation = (j) => j < firstDriven && !carried[j] && pose[j] && (!animated || animated.has(boneOf[j].name.toLowerCase())) && restOff(j);
+    const local = (node, offset = [0, 0, 0]) => {
       const frame = frameOf(node);
-      const model = fromSource(point.x, point.y, point.z);
+      const at = inNodeSpace(pose[node] ?? IDENTITY, offset);
+      const base = frame >= 0 && node < firstDriven && byAnimation(this.frames[frame].node) && pose[this.frames[frame].node];
+      if (base) {
+        at.sub(new THREE.Vector3(base[0], base[1], base[2])).applyQuaternion(new THREE.Quaternion(base[4], base[5], base[6], base[7]).invert());
+        return { frame, point: at.multiplyScalar(SOURCE_TO_METRES) };
+      }
+      const model = fromSource(at.x, at.y, at.z);
       return { frame, point: frame >= 0 ? model.applyMatrix4(this.frames[frame].inverseRest) : model };
     };
-    this.anchors = Array.from({ length: n }, (_, i) => local(i, inNodeSpace(pose[i] ?? [0, 0, 0, 1, 0, 0, 0, 1], [0, 0, 0])));
+    this.anchors = Array.from({ length: n }, (_, i) => local(i));
 
     const integrator = fe.m_NodeIntegrator ?? [];
     const gravityScale = fe.m_flDefaultGravityScale ?? 1;
@@ -356,6 +376,16 @@ export class Cloth {
     this.locks = (fe.m_LockToGoal ?? []).filter((i) => i < n && this.moving[i]);
     this.lockToParent = (fe.m_LockToParent ?? []).filter(({ nCtrlParent: p, nCtrlChild: c }) => p < n && c < n && this.moving[c]);
 
+    // Nodes that touch the world (m_WorldCollisionNodes, each list's friction from
+    // m_WorldCollisionParams): kept above the ground the model stands on, which takes their speed
+    // along it by the ground's friction (Tidehunter's fish, hanging from his hand, went through
+    // the floor)
+    const worldNodes = fe.m_WorldCollisionNodes ?? [];
+    this.grounded = (fe.m_WorldCollisionParams ?? []).flatMap(({ nListBegin = 0, nListEnd = 0, flGroundFriction = 0 }) =>
+      worldNodes.slice(nListBegin, nListEnd).filter((i) => i < n && this.moving[i]).map((i) => [i, THREE.MathUtils.clamp(flGroundFriction, 0, 1)])
+    );
+    this.ground = 0;
+
     // The body's capsules and spheres, as two points (and radii) in their bone's space
     const radii = fe.m_NodeCollisionRadii ?? [];
     this.radius = Float64Array.from({ length: n }, (_, i) => (this.moving[i] ? radii[i - staticCount] ?? 0 : 0));
@@ -366,8 +396,8 @@ export class Cloth {
     this.shapes = shapes.map(({ node, spheres: [s0, s1] }) => {
       const p0 = inNodeSpace(pose[node], s0);
       const p1 = inNodeSpace(pose[node], s1);
-      const a = local(node, p0);
-      const b = local(node, p1);
+      const a = local(node, s0);
+      const b = local(node, s1);
       // Nodes the shape already holds in the pose the cloth was made in are left to it: pushing
       // them out would tear the cloth from where it hangs
       const holds = new Uint8Array(n);
@@ -569,6 +599,8 @@ export class Cloth {
     }
     // Inches to the world's units
     const unit = SOURCE_TO_METRES * v1.setFromMatrixColumn(groupWorld, 0).length();
+    // The ground: level with the model's origin, where it stands
+    this.ground = groupWorld.elements[13];
     for (const frame of this.frames) {
       frame.world.copy(frame.bone.matrixWorld);
       if (view) {
@@ -846,7 +878,16 @@ export class Cloth {
   }
 
   collide(unit) {
-    const { n, moving, x, radius } = this;
+    const { n, moving, x, previous, radius } = this;
+    for (const [i, friction] of this.grounded) {
+      const floor = this.ground + radius[i] * unit;
+      if (x[i * 3 + 1] < floor) {
+        x[i * 3 + 1] = floor;
+        previous[i * 3 + 1] = Math.min(previous[i * 3 + 1], floor);
+        previous[i * 3] += (x[i * 3] - previous[i * 3]) * friction;
+        previous[i * 3 + 2] += (x[i * 3 + 2] - previous[i * 3 + 2]) * friction;
+      }
+    }
     for (const shape of this.shapes) {
       for (let i = 0; i < n; i++) {
         if (!moving[i] || shape.holds[i]) {

@@ -704,11 +704,13 @@ export class Stage {
     this.sequences = sequences[rootIndex];
     this.replace(group, gltfs[rootIndex].animations);
     this.cloths = [];
+    // The bones the hero's animations move, by name in lower case
+    const animatedBones = new Set(gltfs[rootIndex].animations.flatMap((clip) => clip.tracks.map((track) => track.name.slice(0, track.name.lastIndexOf(".")).toLowerCase())));
     // The new cloth's effects start with the animation playing now
     this.clothClip = null;
     for (const fe of shownCloth) {
       try {
-        const cloth = fe && new Cloth(fe, group);
+        const cloth = fe && new Cloth(fe, group, animatedBones);
         if (cloth && !cloth.empty) {
           this.cloths.push(cloth);
         }

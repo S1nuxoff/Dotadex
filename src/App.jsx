@@ -16,16 +16,20 @@ import HeroInfo from "./components/HeroInfo.jsx";
 import Voice from "./components/Voice.jsx";
 import { AudioPage, ShopPage, TreasurePage } from "./components/InfoPages.jsx";
 import {
+  HOME_TITLE,
   isKnown,
+  listOf,
   loadCatalog,
   loadExported,
   outfitFor,
   outfitParticles,
   outfitActivities,
   outfitUrls,
+  homePath,
+  pageMeta,
   parseRoute,
   personaOf,
-  routeHash,
+  routePath,
   withExported,
 } from "./catalog.js";
 
@@ -190,9 +194,8 @@ export default function App() {
   const routeHero = route?.type === "hero" ? route.id : null;
   useEffect(() => setWardrobe(false), [routeHero]);
   const [panelView, setPanelView] = useState("hero");
-  // The hero grid, as the game opens on it, always, until a hero is picked
-  // (while developing, a link to a hero or item opens it, for checking a look directly)
-  const [heroGrid, setHeroGrid] = useState(() => !(import.meta.env.DEV && window.location.hash));
+  // The hero grid, as the game opens on it, until a hero is picked; a link to a page opens that page
+  const [heroGrid, setHeroGrid] = useState(() => !parseRoute(window.location));
   const wide = useWide();
   const uiScale = useUiScale();
   const [language, setLanguage] = useLanguage();
@@ -204,17 +207,17 @@ export default function App() {
       .then(async (loaded) => {
         const done = await loadExported(loaded.modelsBase);
         const ready = withExported(loaded, done);
-        const fromLink = parseRoute(window.location.hash);
-        const first = isKnown(ready, fromLink) ? fromLink : firstRoute(ready);
+        const fromLink = parseRoute(window.location);
+        const known = isKnown(ready, fromLink);
+        const first = known ? fromLink : firstRoute(ready);
         setBase(loaded);
         setExported(done);
         setRoute(first);
-        // The site opens on the hero grid whatever the link; the hero or item of the link waits
-        // behind it
-        if (!import.meta.env.DEV) {
-          window.history.replaceState(null, "", window.location.pathname);
-        } else if (window.location.hash) {
+        // A page not shown (yet) opens the hero grid, the first page waiting behind it
+        if (known) {
           setTab(tabFor(ready, first));
+        } else {
+          setHeroGrid(true);
         }
       })
       .catch((reason) => setError(reason.message));
@@ -236,14 +239,20 @@ export default function App() {
     if (!catalog) {
       return;
     }
-    const onHash = () => {
-      const next = parseRoute(window.location.hash);
+    // The browser's back and forward buttons
+    const onPop = () => {
+      const next = parseRoute(window.location);
       if (isKnown(catalog, next)) {
         setRoute(next);
+        setTab(tabFor(catalog, next));
+        setHeroGrid(false);
+      } else {
+        setTab("heroes");
+        setHeroGrid(true);
       }
     };
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, [catalog]);
 
   // The first model to arrive is shown when the page opened before any was exported
@@ -290,11 +299,30 @@ export default function App() {
     }
     travelling.current = true;
     setVisited({ ...visited, index: visited.index + step });
-    window.history.replaceState(null, "", target.heroGrid ? window.location.pathname : routeHash(target.route));
     setRoute(target.route);
     setTab(target.tab);
     setHeroGrid(target.heroGrid);
   };
+  // The address follows what is on screen: a new page is a new entry of the browser's history,
+  // a change of look on the same page replaces it (the first one too, so an old #/ link is
+  // rewritten). The tab's title is the page's, as the static page of the link has it.
+  const address = pageKey && (pageKey === "grid" ? homePath() : routePath(route));
+  const addressed = useRef(false);
+  useEffect(() => {
+    if (!address) {
+      return;
+    }
+    const here = window.location.pathname + window.location.search;
+    if (address !== here || window.location.hash) {
+      const samePage = address.split("?")[0] === window.location.pathname;
+      window.history[samePage || !addressed.current ? "replaceState" : "pushState"](null, "", address);
+    }
+    addressed.current = true;
+    const entry = pageKey !== "grid" && listOf(catalog, route.type)?.[route.id];
+    document.title = entry ? pageMeta(route.type, entry, catalog).title : HOME_TITLE;
+    // The address is made from the route
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address]);
   const urls = useMemo(() => catalog && outfit && outfitUrls(catalog, outfit), [catalog, outfit]);
   const particles = useMemo(() => (catalog && outfit ? outfitParticles(catalog, outfit) : []), [catalog, outfit]);
   const activities = useMemo(() => (catalog && outfit ? outfitActivities(catalog, outfit) : []), [catalog, outfit]);
@@ -315,7 +343,6 @@ export default function App() {
 
   const open = (next) => {
     setHeroGrid(false);
-    window.history.replaceState(null, "", routeHash(next));
     setRoute(next);
     setBrowse(false);
   };

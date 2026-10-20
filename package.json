@@ -5,7 +5,7 @@
   "scripts": {
     "catalog": "node scripts/build-catalog.mjs",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/build-pages.mjs",
     "preview": "vite preview",
     "particles:coverage": "node scripts/particle-coverage.mjs"
   },

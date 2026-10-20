@@ -418,15 +418,31 @@ export function withExported(catalog, exported) {
   };
 }
 
-// #/hero/pudge?head=4007.1&weapon=7247  (slot=item.style)
-// #/item/4517?style=2&alone=1&variant=1
-// #/scene/backgrounds/hero_showcase_antimage_persona?camera=herocamera
-export function parseRoute(hash) {
-  const [, type, id, query] = hash.match(/^#\/(hero|item|shop|treasure|audio|scene)\/([^?]+)(?:\?(.*))?$/) ?? [];
+// Where the site is served, as vite.config.js says (the build's page script reads this file in
+// Node, without Vite's import.meta.env)
+export const BASE = import.meta.env?.BASE_URL ?? "/Dotadex/";
+
+// The start's title, as index.html has it
+export const HOME_TITLE = "Dotadex: the complete Dota 2 encyclopedia in 3D";
+
+// Switches of the dev server (?shadowview, ?preview=all…): kept in the address while
+// developing, never read as a look
+const DEV_SWITCHES = ["preview", "key", "amb", "nospec", "noenv", "norim", "shadowview", "shadow9", "opaque", "nobloom", "flatparticles", "pfilter"];
+
+// /Dotadex/hero/pudge?head=4007.1&weapon=7247  (slot=item.style)
+// /Dotadex/item/4517?style=2&alone=1&variant=1
+// /Dotadex/scene/backgrounds/hero_showcase_antimage_persona?camera=herocamera
+// Older links had the same after a hash (/Dotadex/#/hero/pudge), which is still read
+export function parseRoute({ pathname, search, hash }) {
+  const path = hash?.startsWith("#/") ? hash.slice(1) : `/${pathname.slice(BASE.length)}${search}`;
+  const [, type, id, query] = path.match(/^\/(hero|item|shop|treasure|audio|scene)\/([^?]+?)\/?(?:\?(.*))?$/) ?? [];
   if (!type) {
     return null;
   }
   const params = new URLSearchParams(query ?? "");
+  for (const name of DEV_SWITCHES) {
+    params.delete(name);
+  }
   if (type === "scene") {
     return { type, id: decodeURIComponent(id), camera: params.get("camera") || undefined };
   }
@@ -454,7 +470,28 @@ export function parseRoute(hash) {
   };
 }
 
-export function routeHash(route) {
+// The dev server's switches of the address, carried over to the next one
+function devQuery(params) {
+  if (import.meta.env?.DEV) {
+    for (const [name, value] of new URLSearchParams(window.location.search)) {
+      DEV_SWITCHES.includes(name) && params.set(name, value);
+    }
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+// The site's start, the hero grid
+export function homePath() {
+  return `${BASE}${devQuery(new URLSearchParams())}`;
+}
+
+// The route's id as a path: a scene's or an audio pack's slashes stay folders
+export function routeId(route) {
+  return route.id.split("/").map(encodeURIComponent).join("/");
+}
+
+export function routePath(route) {
   const params = new URLSearchParams();
   if (route.type === "hero") {
     for (const [slot, { id, style }] of Object.entries(route.slots ?? {})) {
@@ -469,11 +506,62 @@ export function routeHash(route) {
     route.alone && params.set("alone", "1");
     route.variant && params.set("variant", route.variant);
   }
-  const query = params.toString();
-  return `#/${route.type}/${encodeURIComponent(route.id)}${query ? `?${query}` : ""}`;
+  return `${BASE}${route.type}/${routeId(route)}${devQuery(params)}`;
 }
 
-export function isKnown(catalog, route) {
+// A page's title, description and picture, for the browser's tab and for the static pages that
+// link previews and search engines read (scripts/build-pages.mjs)
+export function pageMeta(type, entry, catalog) {
+  const name = entry.name.trim();
+  const title = `${name} · Dotadex`;
+  if (type === "hero") {
+    return {
+      title,
+      description: `${name} from Dota 2 in 3D: the hero's model, animations, voice lines and every cosmetic item and set, with the game's own shading.`,
+      image: `${catalog.modelsBase}images/heroes/selection/npc_dota_hero_${entry.id}_png.png`,
+    };
+  }
+  if (type === "item") {
+    const hero = entry.hero && catalog.heroNames[entry.hero];
+    const kind =
+      entry.kind === "courier" ? "courier" : entry.kind === "ward" ? "ward" : entry.slot ? `${slotName(entry.slot).toLowerCase()} item` : "item";
+    const what = `${rarity(entry).name} ${kind}${hero ? ` for ${hero}` : ""}`;
+    const article = /^[AEIOU]/.test(what) ? "an" : "a";
+    const date = entry.date ? `, released ${entry.date}` : "";
+    return {
+      title,
+      description: `${name}: ${article} ${what} in Dota 2${date}. See the model in 3D with the game's shading, its styles and effects.`,
+      image: itemIcon(entry),
+    };
+  }
+  if (type === "shop") {
+    return {
+      title,
+      description: `${name}: a Dota 2 shop item${entry.cost ? ` for ${entry.cost} gold` : ""}. Its stats, abilities and recipe.`,
+      image: entry.texture ? `${catalog.modelsBase}images/items/${entry.texture}_png.png` : null,
+    };
+  }
+  if (type === "treasure") {
+    const count = (entry.tiers ?? []).flat().length;
+    return {
+      title,
+      description: `${name}: a Dota 2 treasure${count ? ` with ${count} items` : ""}. See what is inside, in 3D.`,
+      image: itemIcon(entry),
+    };
+  }
+  if (type === "audio") {
+    const pack = `${name[0].toUpperCase()}${name.slice(1)} ${entry.kind === "announcers" ? "announcer" : "music"} pack`;
+    return {
+      title: `${pack} · Dotadex`,
+      description: `${pack} of Dota 2${entry.count ? `: ${entry.count} sounds` : ""} to listen to.`,
+      image: null,
+    };
+  }
+  return { title, description: `${name}: a Dota 2 scene in 3D, with its lights and cameras.`, image: null };
+}
+
+// The pages of a route's type, by id
+export function listOf(catalog, type) {
   const lists = {
     hero: catalog.heroesById,
     item: catalog.itemsById,
@@ -482,7 +570,11 @@ export function isKnown(catalog, route) {
     audio: catalog.audioById,
     scene: catalog.scenesById,
   };
-  return Boolean(route && lists[route.type]?.[route.id]);
+  return lists[type];
+}
+
+export function isKnown(catalog, route) {
+  return Boolean(route && listOf(catalog, route.type)?.[route.id]);
 }
 
 // The scene a treasure opens in. The game picks it in code, not in its data, so it is

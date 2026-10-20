@@ -3,19 +3,50 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { formatPrice, itemIcon, rarity } from "../catalog.js";
 
-// The game's interface is laid out for a 1920 wide screen and scaled with it; the pages made
-// after it are too
+// Panorama lays the interface out 1080 high and scales it with the screen's height; the width is
+// what the screen's shape gives, 1920 on 16:9, never under 4:3 (a narrower screen squeezes it,
+// client.dll 0x18055bf2f). One zoom for both here, so a window narrower than 4:3 shrinks to fit.
 export const UI_WIDTH = 1920;
-export function useUiScale() {
-  // The page's width without the scrollbar, which a scrollbar coming or going changes too
-  const scaleFor = () => Math.max(document.documentElement.clientWidth / UI_WIDTH, 0.5);
-  const [scale, setScale] = useState(scaleFor);
+export const UI_HEIGHT = 1080;
+const MIN_ASPECT = 4 / 3;
+
+// The game's classes for the screen's shape: the nearest of these ratios (client.dll table at
+// 0x184f421a0; 17:9 counts as 16:9). Pages move their margins by them.
+const ASPECTS = [
+  [16 / 9, "16x9"],
+  [17 / 9, "16x9"],
+  [1.6, "16x10"],
+  [4 / 3, "4x3"],
+  [7 / 3, "21x9"],
+];
+function aspectOf(ratio) {
+  return ASPECTS.reduce((best, entry) => (Math.abs(entry[0] - ratio) < Math.abs(best[0] - ratio) ? entry : best))[1];
+}
+
+function layoutFor() {
+  // The page's size without the scrollbar, which a scrollbar coming or going changes too
+  const { clientWidth: width, clientHeight: height } = document.documentElement;
+  const scale = Math.max(Math.min(height / UI_HEIGHT, width / (UI_HEIGHT * MIN_ASPECT)), 0.5);
+  return { scale, aspect: aspectOf(width / height) };
+}
+
+export function useUiLayout() {
+  const [layout, setLayout] = useState(layoutFor);
   useEffect(() => {
-    const observer = new ResizeObserver(() => setScale(scaleFor()));
+    const observer = new ResizeObserver(() =>
+      setLayout((old) => {
+        const next = layoutFor();
+        return next.scale === old.scale && next.aspect === old.aspect ? old : next;
+      })
+    );
     observer.observe(document.documentElement);
     return () => observer.disconnect();
   }, []);
-  return scale;
+  return layout;
+}
+
+export function useUiScale() {
+  return useUiLayout().scale;
 }
 
 // Valve's terms for fan sites ask for this wherever the game's content is shown

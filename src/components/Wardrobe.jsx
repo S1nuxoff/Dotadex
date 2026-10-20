@@ -533,15 +533,16 @@ export function EquippedSummary({ catalog, outfit, onChange }) {
   });
   const look = worn ? rarity(catalog.itemsById[worn.items[0]] ?? {}) : Object.keys(outfit.slots).length ? null : rarity({ rarity: "common" });
   return (
-    <div className="flex flex-col">
-      <h2 className="flex items-center gap-[10px] text-[20px] font-semibold tracking-[2px] text-[#e6ebef] uppercase">
-        <Layers className="size-[20px]" aria-hidden /> Selected
-      </h2>
-      <p className="mt-[6px] font-display text-[24px] font-normal tracking-normal text-[#e6ebef]/90 normal-case">
+    // #EquippedSetDetailsContainer: the armory icon out to the left of EQUIPPED (LabelLarge), the
+    // set's name in the title font, its rarity (LabelSmall)
+    <div className="relative flex flex-col">
+      <Layers className="absolute top-[2px] -left-[32px] size-[24px] text-[#dae2e5]" aria-hidden />
+      <h2 className="mb-[4px] text-[19px] leading-[24px] font-semibold tracking-[1.5px] text-[#dae2e5] uppercase">Selected</h2>
+      <p className="mt-[6px] font-display text-[24px] font-normal tracking-normal text-[#dae2e5]/90 normal-case">
         {worn ? worn.name : Object.keys(outfit.slots).length ? "Custom" : hero.name}
       </p>
       {look && (
-        <p className="text-[14px] font-semibold tracking-[1px] uppercase brightness-125" style={{ color: look.color }}>
+        <p className="text-[13px] leading-[16px] font-semibold tracking-[1px] uppercase brightness-125" style={{ color: look.color }}>
           {look.name}
         </p>
       )}
@@ -559,10 +560,11 @@ export function EquippedSummary({ catalog, outfit, onChange }) {
           </button>
         ))}
       </div>
+      {/* ButtonPrimary Large LightGrey, 56 high with 48 to the sides */}
       <button
         onClick={() => onChange("sets")}
         data-sound="click"
-        className="mt-[24px] h-[56px] w-[232px] rounded-[2px] bg-gradient-to-b from-[#5d6673] to-[#3d444e] text-[20px] font-semibold tracking-[3px] text-white uppercase shadow-[0_4px_24px_-2px_rgb(0_0_0/0.4),inset_0_1px_0_rgb(255_255_255/0.2)] hover:brightness-125"
+        className="mt-[24px] h-[56px] self-start rounded-[3px] border border-white/[0.08] bg-gradient-to-b from-[#525f65] to-[#2f363a] px-[48px] text-[20px] leading-[24px] font-semibold tracking-[1.5px] text-white/80 uppercase shadow-[0_4px_24px_-2px_rgb(0_0_0/0.4)] [text-shadow:0_1px_4px_#000] hover:brightness-150 active:from-[#2f363a] active:to-[#525f65]"
       >
         Change outfit
       </button>

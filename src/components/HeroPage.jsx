@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Maximize2, Minimize2, X } from "lucide-react";
 import { abilityIcon, useGameData } from "../gamedata.js";
-import { useUiScale } from "./ui.jsx";
+import { useUiLayout } from "./ui.jsx";
 import HeroInfo from "./HeroInfo.jsx";
 import Voice from "./Voice.jsx";
 import ChatWheel from "./ChatWheel.jsx";
@@ -46,7 +46,7 @@ function castable(info, known) {
 
 // A hero's page as the game has it now (dashboard_page_hero_new_v2): the hero's backdrop, the
 // model in the middle; on the left its name, attribute, complexity, attack type and tags, its
-// abilities and stats; on the right what it wears. Sizes are the game's, on a 1920 wide screen.
+// abilities and stats; on the right what it wears. Sizes are the game's, on a 1080 high screen.
 
 const TABS = [
   ["loadout", "Loadout"],
@@ -69,6 +69,9 @@ const ATTRIBUTES = {
   DOTA_ATTRIBUTE_INTELLECT: "intelligence",
   DOTA_ATTRIBUTE_ALL: "all",
 };
+// The columns' distance from the content's sides by the screen's shape
+const SIDE = { "16x10": 60, "21x9": 0 };
+
 const image = (base, path) => `${base}images/${path}.png`;
 const mask = (url) => ({
   mask: `url(${url}) center / contain no-repeat`,
@@ -308,22 +311,24 @@ function Backdrop({ base, heroId }) {
   );
 }
 
-// The name on one line, made smaller when it is too long for the column, as the game shrinks it
-const NAME_SIZE = 68;
-const NAME_WIDTH = 660;
+// The name on one line (TitleExtraLarge: the title font, bold, 52, 1.5 letter spacing), made
+// smaller when it is too long for 95% of its 660 wide panel, as the game shrinks it
+const NAME_SIZE = 52;
+const NAME_SPACING = 1.5;
+const NAME_WIDTH = 660 * 0.95;
 // The title font's width of a text at the name's full size, measured off the page so its zoom
-// and layout play no part; the font's letter spacing (0.06em) added
+// and layout play no part; the letter spacing added
 function nameWidth(name) {
   const context = (nameWidth.canvas ??=
     document.createElement("canvas")).getContext("2d");
   context.font = `700 ${NAME_SIZE}px Reaver, Radiance, sans-serif`;
   const text = name.toUpperCase();
-  return context.measureText(text).width + text.length * NAME_SIZE * 0.06;
+  return context.measureText(text).width + text.length * NAME_SPACING;
 }
 
 function HeroName({ name }) {
   const fit = () =>
-    Math.min(NAME_SIZE, Math.floor((NAME_SIZE * NAME_WIDTH) / nameWidth(name)));
+    Math.min(NAME_SIZE, (NAME_SIZE * NAME_WIDTH) / nameWidth(name));
   const [size, setSize] = useState(fit);
   useEffect(() => {
     let current = true;
@@ -340,7 +345,7 @@ function HeroName({ name }) {
   return (
     <h1 className="flex h-[75px] w-[660px] items-center">
       <span
-        className="shrink-0 font-display leading-none font-bold whitespace-nowrap text-white"
+        className="shrink-0 font-display leading-none font-bold tracking-[1.5px] whitespace-nowrap text-white uppercase"
         style={{ fontSize: size }}
       >
         {name}
@@ -349,15 +354,31 @@ function HeroName({ name }) {
   );
 }
 
+// LabelMedium in LightestGrey at half opacity
 function Label({ children }) {
   return (
-    <span className="text-[16px] tracking-[2px] text-[#e6ebef]/50 uppercase">
+    <span className="text-[16px] leading-[20px] tracking-[1px] text-[#dae2e5]/50 uppercase">
       {children}
     </span>
   );
 }
 
-function HeroSummary({ catalog, hero, info, data, onAbout, onCast }) {
+// ButtonPrimary DarkGrey with an icon: 34 high, 16 to the sides, a dark gradient, a faint edge
+function DarkButton({ label, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      data-sound="click"
+      aria-label={label}
+      title={label}
+      className="flex h-[34px] items-center rounded-[3px] border border-white/[0.02] bg-gradient-to-b from-[#262c30] to-[#121719] px-[16px] text-[#dae2e5] shadow-[0_2px_8px_rgb(0_0_0/0.3)] hover:brightness-150 active:from-[#121719] active:to-[#262c30]"
+    >
+      {children}
+    </button>
+  );
+}
+
+function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) {
   const base = catalog.modelsBase;
   const roles = (info?.Role ?? "").split(",").filter(Boolean);
   const ranged = (info?.AttackCapabilities ?? "").includes("RANGED");
@@ -408,22 +429,23 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast }) {
           title={attribute}
           className="mr-[12px] size-[32px]"
         />
-        <span
-          className="mr-[14px] flex items-center gap-[9px]"
-          title={`Complexity ${complexity}`}
-        >
+        {/* The game's pips, 20 square at 90%, washed #dedede */}
+        <span className="mr-[8px] flex items-center" title={`Complexity ${complexity}`}>
           {[1, 2, 3].map((level) => (
             <span
               key={level}
-              className={`size-[11px] rotate-45 ${level <= complexity ? "bg-[#dedede]" : "border-2 border-[#dedede]"}`}
+              className="mr-[2px] size-[20px] bg-[length:90%] bg-center bg-no-repeat brightness-[0.87]"
+              style={{
+                backgroundImage: `url(${image(base, `hero_complexity_${level <= complexity ? "full" : "empty"}_png`)})`,
+              }}
             />
           ))}
         </span>
-        <span className="mr-[16px] flex items-center gap-[6px]">
+        <span className="mr-[16px] flex items-center">
           <Label>Attack type:</Label>
           <span
             title={ranged ? "Ranged" : "Melee"}
-            className="size-[30px] bg-[#c4c9cf]"
+            className="-mr-[2px] size-[30px] bg-[#8b989e] hover:bg-[#b0bcc2]"
             style={mask(
               image(
                 base,
@@ -432,14 +454,14 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast }) {
             )}
           />
         </span>
-        <span className="flex items-center gap-[6px]">
+        <span className="flex items-center">
           <Label>Tags:</Label>
           <span className="flex">
             {roles.map((role) => (
               <span
                 key={role}
                 title={role}
-                className="-mr-[2px] size-[30px] bg-[#c4c9cf] hover:bg-[#dfe3e7]"
+                className="-mr-[2px] size-[30px] bg-[#8b989e] hover:bg-[#b0bcc2]"
                 style={mask(
                   image(base, `control_icons/filter_${role.toLowerCase()}_png`),
                 )}
@@ -448,8 +470,9 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast }) {
           </span>
         </span>
       </div>
-      {/* The talent tree, the innate, the abilities, then Aghanim's */}
-      <div className="mt-[12px] flex flex-wrap items-center">
+      {/* The talent tree, the innate, the abilities, then Aghanim's: 12 below the row less the
+          actions' 5, and 12 above the stats */}
+      <div className="mt-[7px] mb-[12px] flex flex-wrap items-center">
         <button
           onClick={onAbout}
           data-sound="click"
@@ -479,6 +502,12 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast }) {
         <ChatWheel modelsBase={base} heroId={hero.id} />
       </div>
       {info && <StatsSummary base={base} info={info} />}
+      {/* The full screen button; the game's demo button beside it has nothing to open here */}
+      <div className="mt-[24px] flex">
+        <DarkButton label="Preview" onClick={onPreview}>
+          <Maximize2 className="mx-[4px] size-[20px]" strokeWidth={2.25} />
+        </DarkButton>
+      </div>
     </div>
   );
 }
@@ -533,7 +562,7 @@ function StatsSummary({ base, info }) {
       "Health",
       number("StatusHealth", 120) + strength * HEALTH_PER_STRENGTH,
       round(number("StatusHealthRegen") + strength * HEALTH_REGEN_PER_STRENGTH),
-      "from-[#2f8a3c] to-[#57c043]",
+      "from-[#5aa15e] to-[#406c55]",
     ],
     [
       "Mana",
@@ -541,12 +570,13 @@ function StatsSummary({ base, info }) {
       round(
         number("StatusManaRegen") + intelligence * MANA_REGEN_PER_INTELLIGENCE,
       ),
-      "from-[#1a5ca8] to-[#3a8fe0]",
+      "from-[#3782a4] to-[#235777]",
     ],
   ];
-  const line = "linear-gradient(90deg, #ffffff10, #ffffff00)";
+  // The border's brush: white at 6% fading out over the right half
+  const line = "linear-gradient(90deg, #ffffff06 50%, #ffffff00)";
   return (
-    <div className="relative my-[8px] flex w-[500px]">
+    <div className="relative my-[8px] flex w-[500px] py-px">
       <span
         aria-hidden
         className="absolute inset-x-0 top-0 h-px"
@@ -557,13 +587,14 @@ function StatsSummary({ base, info }) {
         className="absolute inset-x-0 bottom-0 h-px"
         style={{ background: line }}
       />
-      <div className="w-[128px] border-r border-white/[0.02] py-[16px]">
-        {attributes.map(([label, icon, value, gain]) => (
-          <div key={label} className="mb-[8px]">
-            <p className="mb-[2px] text-[13px] tracking-[1.5px] text-[#e6ebef]/40 uppercase">
+      {/* LabelSmall titles at 40%, TitleSmall values (the title font, 17, bold) */}
+      <div className="w-[128px] shrink-0 border-r border-white/[0.02] py-[16px]">
+        {attributes.map(([label, icon, value, gain], index) => (
+          <div key={label} className={index < 2 ? "mb-[8px]" : ""}>
+            <p className="mb-[2px] text-[13px] leading-[16px] tracking-[1px] text-[#dae2e5]/40 uppercase">
               {label}
             </p>
-            <p className="flex items-center text-[20px] tracking-[0.8px] text-[#e6ebef]">
+            <p className="flex items-center font-display text-[17px] leading-[1.2] font-bold tracking-[0.8px] text-[#dae2e5] uppercase">
               <img
                 src={image(
                   base,
@@ -577,8 +608,8 @@ function StatsSummary({ base, info }) {
           </div>
         ))}
       </div>
-      <div className="flex-1">
-        <div className="mt-[16px] ml-[16px] flex pr-[24px]">
+      <div className="min-w-0 flex-1">
+        <div className="mt-[16px] ml-[16px] flex pr-[64px]">
           {derived.map(([icon, label, value]) => (
             <div
               key={label}
@@ -586,28 +617,29 @@ function StatsSummary({ base, info }) {
               className="flex flex-1 flex-col items-center"
             >
               <span
-                className="size-[20px] bg-[#e6ebef]"
+                className="size-[20px] bg-[#dae2e5]"
                 style={mask(image(base, `hud/reborn/${icon}`))}
               />
-              <span className="mt-[2px] h-[18px] text-[16px] text-[#e6ebef]/80 tabular-nums">
+              <span className="mt-[2px] h-[18px] text-[16px] leading-[18px] whitespace-nowrap text-[#dae2e5]/80 tabular-nums">
                 {value}
               </span>
             </div>
           ))}
         </div>
-        <div className="mt-[8px] mr-[24px] ml-[16px]">
+        {/* 16 in from the left, 160 from the right */}
+        <div className="mt-[8px] mr-[160px] ml-[16px]">
           {pools.map(([label, value, regen, colors]) => (
-            <div key={label}>
-              <p className="text-[13px] tracking-[1.5px] text-[#aab4c0] uppercase">
+            <div key={label} className="mb-[4px]">
+              <p className="text-[13px] leading-[16px] tracking-[1px] text-[#8b989e] uppercase">
                 {label}
               </p>
               <div
-                className={`relative mt-[2px] mb-[4px] flex h-[24px] items-center rounded-[3px] bg-gradient-to-r ${colors}`}
+                className={`relative mt-[2px] flex h-[24px] items-center rounded-[3px] bg-gradient-to-b ${colors}`}
               >
-                <span className="absolute inset-x-0 text-center text-[20px] font-semibold text-white [text-shadow:0_2px_5px_#000]">
+                <span className="absolute inset-x-0 text-center font-display text-[17px] leading-[1.2] font-bold tracking-[1.5px] text-white [text-shadow:0_2px_5px_#000]">
                   {value}
                 </span>
-                <span className="mr-[8px] ml-auto text-[15px] font-semibold text-white/80 [text-shadow:0_1px_5px_#000]">
+                <span className="relative mr-[8px] ml-auto text-[16px] leading-[20px] font-semibold tracking-[1px] text-white/80 [text-shadow:0_1px_5px_#000]">
                   +{regen}
                 </span>
               </div>
@@ -679,30 +711,32 @@ function HeroNav({ hero, base, tab, onTab, previous, next, onOpen }) {
       <button
         onClick={() => onOpen({ type: "hero", id: other.id })}
         data-sound="toptab"
-        className={`flex items-center gap-[10px] text-[16px] tracking-[2px] text-[#808fa6] uppercase hover:text-[#e6ebef] ${forward ? "flex-row-reverse" : ""}`}
+        className={`flex items-center p-[12px] text-[16px] leading-[20px] tracking-[1px] text-[#b0bcc2] uppercase opacity-20 transition-opacity duration-100 hover:opacity-100 hover:brightness-150 active:translate-y-px ${forward ? "flex-row-reverse" : ""}`}
       >
         {forward ? (
-          <ArrowRight className="size-[22px]" />
+          <ArrowRight className="mx-[6px] size-[24px]" />
         ) : (
-          <ArrowLeft className="size-[22px]" />
+          <ArrowLeft className="mx-[6px] size-[24px]" />
         )}
         {other.name}
       </button>
     );
   return (
-    <div className="flex h-[52px] items-center bg-gradient-to-b from-black/45 to-black/20 px-[60px]">
+    // The game's secondary tabs (dashboard_tabs_heroes): the previous and next hero 40 in from the
+    // sides at 20% until hovered; the tabs 20 high with 3 letter spacing
+    <div className="flex h-[52px] items-center bg-gradient-to-b from-black/45 to-black/20 px-[40px]">
       <div className="w-[300px]">{side(previous, false)}</div>
-      <div className="flex flex-1 items-center justify-center gap-[22px]">
+      <div className="flex flex-1 items-center justify-center">
         <img
           src={image(base, `heroes/icons/npc_dota_hero_${hero.id}_png`)}
           alt=""
-          className="size-[28px]"
+          className="mt-[2px] mr-[12px] size-[28px]"
           onError={(event) => (event.currentTarget.style.display = "none")}
         />
         {TABS.map(([id, label], index) => (
           <Fragment key={id}>
             {index > 0 && (
-              <span className="text-[20px] text-[#808fa6]/50" aria-hidden>
+              <span className="mx-[15px] mt-[4px] mb-px text-[18px] text-[#768e8d]" aria-hidden>
                 /
               </span>
             )}
@@ -711,7 +745,7 @@ function HeroNav({ hero, base, tab, onTab, previous, next, onOpen }) {
               aria-selected={tab === id}
               data-sound="toptab"
               onClick={() => onTab(id)}
-              className={`text-[20px] tracking-[4px] uppercase transition-colors ${tab === id ? "text-white [text-shadow:0_0_12px_rgb(255_255_255/0.35)]" : "text-[#808fa6] hover:text-[#e6ebef]"}`}
+              className={`mt-[4px] text-[20px] tracking-[3px] uppercase transition-colors ${tab === id ? "text-white [text-shadow:0_0_12px_#5d7070]" : "text-[#768e8d] hover:text-white"}`}
             >
               {label}
             </button>
@@ -740,7 +774,7 @@ export default function HeroPage({
   // The hero alone on the whole screen, as the game's preview button does
   const [preview, setPreview] = useState(false);
   const page = useRef(null);
-  const scale = useUiScale();
+  const { scale, aspect } = useUiLayout();
   const { data } = useGameData(
     catalog.modelsBase,
     ["heroes.json", "abilities.json"],
@@ -846,24 +880,17 @@ export default function HeroPage({
       <Backdrop base={catalog.modelsBase} heroId={hero.id} />
       {/* The model fills the page under the columns */}
       <div className="absolute inset-0">{viewer}</div>
-      {!wardrobeOpen && (
+      {/* Back from the preview; the loadout's own button sits in the left column */}
+      {preview && (
         <button
           onClick={togglePreview}
           data-sound="click"
-          aria-label={
-            preview
-              ? "Back to the loadout"
-              : "Preview the hero on the whole screen"
-          }
-          title={preview ? "Back to the loadout" : "Preview"}
-          className={`absolute right-[24px] bottom-[24px] z-10 grid size-[40px] place-items-center rounded-[2px] bg-gradient-to-b from-[#3b434e] to-[#262c34] text-[#e6ebef] shadow-[0_2px_8px_rgb(0_0_0/0.5)] transition hover:brightness-150 ${preview ? "opacity-40 hover:opacity-100" : ""}`}
+          aria-label="Back to the loadout"
+          title="Back to the loadout"
+          className="absolute right-[24px] bottom-[24px] z-10 grid size-[40px] place-items-center rounded-[2px] bg-gradient-to-b from-[#3b434e] to-[#262c34] text-[#e6ebef] opacity-40 shadow-[0_2px_8px_rgb(0_0_0/0.5)] transition hover:opacity-100 hover:brightness-150"
           style={{ zoom: scale }}
         >
-          {preview ? (
-            <Minimize2 className="size-[20px]" strokeWidth={2.25} />
-          ) : (
-            <Maximize2 className="size-[20px]" strokeWidth={2.25} />
-          )}
+          <Minimize2 className="size-[20px]" strokeWidth={2.25} />
         </button>
       )}
       <div
@@ -887,9 +914,14 @@ export default function HeroPage({
               />
             </div>
             <div className="relative min-h-0 flex-1">
-              {/* The columns stand in the middle of the page's height, as in the game */}
-              <div className="absolute inset-y-0 left-[90px] flex w-[540px] items-center">
-                <div className="pointer-events-auto w-full">
+              {/* #HeroPageContent: 1920 wide at most, in the middle. The columns start 212 below
+                  the screen's top (here the top bar's 61 and these tabs' 52 are above), 90 in
+                  from its sides (60 on 16:10, none on 21:9) */}
+              <div
+                className="absolute inset-0 mx-auto max-w-[1920px]"
+                style={{ "--side": `${SIDE[aspect] ?? 90}px` }}
+              >
+                <div className="pointer-events-auto absolute top-[99px] left-(--side) w-[540px]">
                   <HeroSummary
                     catalog={catalog}
                     hero={hero}
@@ -899,8 +931,14 @@ export default function HeroPage({
                       setTab(tab === "about" ? "loadout" : "about")
                     }
                     onCast={cast}
+                    onPreview={togglePreview}
                   />
                 </div>
+                {tab === "loadout" && (
+                  <div className="pointer-events-auto absolute top-[111px] right-(--side) w-[422px]">
+                    {summary}
+                  </div>
+                )}
               </div>
               {tab !== "loadout" ? (
                 <div className="pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
@@ -930,11 +968,7 @@ export default function HeroPage({
                     <X className="size-[20px]" strokeWidth={2.5} />
                   </button>
                 </div>
-              ) : (
-                <div className="absolute inset-y-0 right-[90px] flex w-[422px] items-center">
-                  <div className="pointer-events-auto w-full">{summary}</div>
-                </div>
-              )}
+              ) : null}
             </div>
           </>
         )}

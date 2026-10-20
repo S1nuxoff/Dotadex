@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { Code2, Database } from "lucide-react";
 import { LANGUAGES } from "../gamedata.js";
-import { Popover, Select, UI_WIDTH as WIDTH, useDismiss, useUiScale, VALVE_NOTICE } from "./ui.jsx";
+import { Popover, Select, useDismiss, useUiScale, VALVE_NOTICE } from "./ui.jsx";
 import { useMenuMusic, VolumeSliders } from "./Music.jsx";
 import { getVolume, onVolume, setVolume } from "../volume.js";
 import { getViewSettings, onViewSettings, setViewSettings } from "../viewSettings.js";
@@ -176,7 +176,9 @@ export default function TopNav({ catalog, tab, onTab, onSection, onHome, onBack,
   useMenuMusic(catalog.modelsBase);
   const [muted, toggleMute] = useMuted();
   const scale = useUiScale();
-  const width = Math.max(WIDTH, document.documentElement.clientWidth / scale);
+  // The bar spans the screen in the game's pixels: 1920 on 16:9, less on a narrower screen, its
+  // right end kept at the right
+  const width = document.documentElement.clientWidth / scale;
   const section = sectionOf(tab);
   const active = SECTIONS.findIndex((entry) => entry.id === section.id);
   const dataset = catalog.modelsBase.split("/datasets/")[1]?.split("/resolve")[0];

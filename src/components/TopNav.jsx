@@ -9,19 +9,9 @@ import { getViewSettings, onViewSettings, setViewSettings } from "../viewSetting
 // The sections across the top, as the game's dashboard has them, and the pages of each below
 export const SECTIONS = [
   { id: "heroes", name: "Heroes", tabs: [["heroes", "Heroes"]] },
-  {
-    id: "cosmetics",
-    name: "Cosmetics",
-    tabs: [
-      ["wearable", "Cosmetics"],
-      ["sets", "Sets"],
-      ["courier", "Couriers"],
-      ["ward", "Wards"],
-      ["other", "Other"],
-    ],
-  },
+  // The game's Armory: its own tabs (Hero, World, Treasury, All Items) are on its page
+  { id: "armory", name: "Armory", tabs: [["armory", "Armory"]] },
   { id: "items", name: "Items", tabs: [["shop", "Items"]] },
-  { id: "treasures", name: "Treasures", tabs: [["treasures", "Treasures"]] },
   {
     id: "music",
     name: "Music",

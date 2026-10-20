@@ -182,37 +182,41 @@ function useHeroLine(catalog, heroId, language) {
 
 // The mask the game sees a hero page's scene through; used only once it has loaded, as a mask
 // that fails to load would hide the whole scene
-function useSceneMask(base) {
-  const src = `${base}images/masks/hero_model_preview_mask_loadout_psd.png`;
-  const [ready, setReady] = useState(false);
+function useSceneMask(base, armory) {
+  const src = `${base}images/masks/${armory ? "hero_model_preview_mask_psd" : "hero_model_preview_mask_loadout_psd"}.png`;
+  const [ready, setReady] = useState(null);
   useEffect(() => {
     const image = new Image();
-    image.onload = () => setReady(true);
+    image.onload = () => setReady(src);
     image.src = src;
   }, [src]);
-  if (!ready) {
+  if (ready !== src) {
     return undefined;
   }
   const url = `url(${src})`;
   // The game stretches it over #HeroSceneGroup: the whole screen's height, at most 1920 of its
   // 1080-high layout wide, centred (the mask is the texture's alpha, the PNG's grey). Our canvas
   // starts below the top bar and ends at the screen's bottom, so the mask is sized by the screen
-  // and set to the bottom, its top cut off as the bar covers it; past its sides the scene is hidden
-  const size = "min(100%, calc(100vh * 1920 / 1080)) 100vh";
+  // and set to the bottom, its top cut off as the bar covers it; past its sides the scene is hidden.
+  // The Armory's (#CollectionSceneBody) is 30 below the screen's top and 50 above its bottom, its
+  // group moved 600 right.
+  const unit = "100vh / 1080";
+  const size = armory ? `min(100%, calc(100vh * 1920 / 1080)) calc(${unit} * 1000)` : "min(100%, calc(100vh * 1920 / 1080)) 100vh";
+  const position = armory ? `calc(50% + ${unit} * 600) calc(${unit} * -31)` : "center bottom";
   return {
     maskImage: url,
     WebkitMaskImage: url,
     maskMode: "luminance",
     maskSize: size,
     WebkitMaskSize: size,
-    maskPosition: "center bottom",
-    WebkitMaskPosition: "center bottom",
+    maskPosition: position,
+    WebkitMaskPosition: position,
     maskRepeat: "no-repeat",
     WebkitMaskRepeat: "no-repeat",
   };
 }
 
-export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, portrait = null, portraitShot = "default", particles = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
+export default function Viewer({ catalog, language, hideTitle = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -302,7 +306,7 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
   }, [sound, catalog.modelsBase]);
   useEffect(() => stageRef.current.setSpeed(speed), [speed]);
   useEffect(() => stageRef.current.setFrameShift(frameShift), [frameShift]);
-  const mask = useSceneMask(catalog.modelsBase);
+  const mask = useSceneMask(catalog.modelsBase, armory);
   // Everything but a scene of the Scenes section stands in the game's loadout scene (its pedestal
   // and light); off the hero page the model is framed by us, the game's cameras being the page's
   const staged = !scene;

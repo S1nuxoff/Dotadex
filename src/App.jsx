@@ -3,7 +3,9 @@ import { prefetchModels } from "./viewer/stage.js";
 import { installUiSounds } from "./uiSounds.js";
 import TopNav, { SECTIONS, sectionOf } from "./components/TopNav.jsx";
 import HeroGrid from "./components/HeroGrid.jsx";
-import HeroPage from "./components/HeroPage.jsx";
+import HeroPage, { Backdrop } from "./components/HeroPage.jsx";
+import Armory from "./components/Armory.jsx";
+import { useUiScale } from "./components/ui.jsx";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { List, X } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
@@ -36,7 +38,7 @@ function tabFor(catalog, route) {
     return "shop";
   }
   if (route.type === "treasure") {
-    return "treasures";
+    return "armory";
   }
   if (route.type === "audio") {
     return catalog.audioById[route.id]?.kind ?? "music";
@@ -44,7 +46,7 @@ function tabFor(catalog, route) {
   if (route.type === "scene") {
     return "scenes";
   }
-  return catalog.itemsById[route.id]?.kind ?? "wearable";
+  return "armory";
 }
 
 // A light model to open with: heroes carry hundreds of animations and take a while
@@ -190,6 +192,7 @@ export default function App() {
   // (while developing, a link to a hero or item opens it, for checking a look directly)
   const [heroGrid, setHeroGrid] = useState(() => !(import.meta.env.DEV && window.location.hash));
   const wide = useWide();
+  const uiScale = useUiScale();
   const [language, setLanguage] = useLanguage();
 
   const catalog = useMemo(() => base && exported && withExported(base, exported), [base, exported]);
@@ -403,16 +406,19 @@ export default function App() {
     : shownItem?.kind === "ward"
     ? "default_ward"
     : "default_entity_replacement";
+  // The Armory's scene is the hero page's, moved 600 right (#SceneGroup)
+  const armory = section.id === "armory";
   const viewer = !page && (
     <Viewer
       catalog={catalog}
       language={language}
-      hideTitle={route.type === "hero" && section.id === "heroes"}
-      loadout={route.type === "hero" && section.id === "heroes"}
-      frameShift={route.type === "hero" && section.id === "heroes" && wardrobe ? 0.26 : 0}
+      hideTitle={(route.type === "hero" && section.id === "heroes") || armory}
+      loadout={(route.type === "hero" && section.id === "heroes") || armory}
+      armory={armory}
+      frameShift={armory ? (-600 * uiScale) / document.documentElement.clientWidth : route.type === "hero" && section.id === "heroes" && wardrobe ? 0.26 : 0}
       portrait={portraits[portraitKey] ?? null}
       // The game's hero page opens on this camera (its panel starts on the set preview slot)
-      portraitShot="econ_set_preview"
+      portraitShot={armory ? "default" : "econ_set_preview"}
       outfit={outfit}
       urls={urls}
       particles={particles}
@@ -488,6 +494,15 @@ export default function App() {
           onCloseWardrobe={() => setWardrobe(false)}
           previous={heroOrder[(heroIndex - 1 + heroOrder.length) % heroOrder.length]}
           next={heroOrder[(heroIndex + 1) % heroOrder.length]}
+          onOpen={open}
+        />
+      ) : armory ? (
+        <Armory
+          catalog={catalog}
+          route={route}
+          outfit={outfit}
+          viewer={viewer}
+          backdrop={outfit?.hero ? <Backdrop base={catalog.modelsBase} heroId={outfit.hero} /> : null}
           onOpen={open}
         />
       ) : (

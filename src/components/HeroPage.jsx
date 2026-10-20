@@ -252,7 +252,7 @@ function drawBackdrop(canvas, w, h, look, picture, mask) {
   context.putImageData(image, 0, 0);
 }
 
-function Backdrop({ base, heroId }) {
+export function Backdrop({ base, heroId }) {
   const canvasRef = useRef(null);
   const [all, setAll] = useState(null);
   const [images, setImages] = useState({ key: null, picture: null, mask: null });

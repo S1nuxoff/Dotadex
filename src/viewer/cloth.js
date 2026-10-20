@@ -394,9 +394,13 @@ export class Cloth {
     // along it by the ground's friction (Tidehunter's fish, hanging from his hand, went through
     // the floor)
     const worldNodes = fe.m_WorldCollisionNodes ?? [];
-    this.grounded = (fe.m_WorldCollisionParams ?? []).flatMap(({ nListBegin = 0, nListEnd = 0, flGroundFriction = 0 }) =>
-      worldNodes.slice(nListBegin, nListEnd).filter((i) => i < n && this.moving[i]).map((i) => [i, THREE.MathUtils.clamp(flGroundFriction, 0, 1)])
+    // The floor here is the world's: its friction is the larger of the two the list gives (Tidehunter's
+    // fish slid on a floor without friction after his spawn and ended between his legs).
+    // m_flAddWorldCollisionRadius is no contact radius (24 inches on Necrophos' robe)
+    this.grounded = (fe.m_WorldCollisionParams ?? []).flatMap(({ nListBegin = 0, nListEnd = 0, flGroundFriction = 0, flWorldFriction = 0 }) =>
+      worldNodes.slice(nListBegin, nListEnd).filter((i) => i < n && this.moving[i]).map((i) => [i, THREE.MathUtils.clamp(Math.max(flGroundFriction, flWorldFriction), 0, 1)])
     );
+
     this.ground = 0;
 
     // The body's capsules and spheres, as two points (and radii) in their bone's space

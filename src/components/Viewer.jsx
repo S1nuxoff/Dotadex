@@ -568,18 +568,23 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
           ))}
         </div>
             <div className="ml-auto flex items-center gap-2">
-        <IconButton label={sound ? "Mute animation sounds" : "Play animation sounds"} onClick={() => {
-            unlockSound();
-            setSound(!sound);
-          }} active={sound}>
-          {sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
-        </IconButton>
+        {/* The hero page goes without the sound and link buttons, as the game's has none */}
+        {!loadout && (
+          <IconButton label={sound ? "Mute animation sounds" : "Play animation sounds"} onClick={() => {
+              unlockSound();
+              setSound(!sound);
+            }} active={sound}>
+            {sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+          </IconButton>
+        )}
         <IconButton label="Fit to view" onClick={() => stageRef.current.frameModel()}>
           <Focus className="size-4" />
         </IconButton>
-        <IconButton label={copied ? "Link copied" : "Copy link"} onClick={copyLink} active={copied}>
-          {copied ? <Check className="size-4" /> : <Link2 className="size-4" />}
-        </IconButton>
+        {!loadout && (
+          <IconButton label={copied ? "Link copied" : "Copy link"} onClick={copyLink} active={copied}>
+            {copied ? <Check className="size-4" /> : <Link2 className="size-4" />}
+          </IconButton>
+        )}
         {hero && onWardrobe && (
           <IconButton label="Wardrobe" onClick={onWardrobe}>
             <Shirt className="size-4" />

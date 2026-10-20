@@ -1434,12 +1434,19 @@ DEFS.C_OP_RampScalarLinearSimple = (def) => {
   const start = def.m_flStartTime ?? 0;
   const end = def.m_flEndTime ?? 1;
   const field = def.m_nField ?? 3;
+  // Its times are shares of the particle's life not capped at 1 (particles.dll 0x1801e6be0:
+  // (now − born) / life, start ≤ t < end, nothing for a life of 0), so a particle past its life
+  // still ramps: Underlord's loadout rift, a black disc of life 1 that grows and fades from its
+  // 2nd second, stayed on for good while the share stopped at 1
   return {
     update(system, dt) {
       const data = system.float(field);
+      const born = system.float(8);
+      const life = system.float(1);
       for (let i = 0; i < system.count; i++) {
-        const t = system.normalizedAge(i);
-        if (t >= start && t <= end) data[i] += rate * dt;
+        if (!(life[i] > 0)) continue;
+        const t = (system.age - born[i]) / life[i];
+        if (t >= start && t < end) data[i] += rate * dt;
       }
     },
   };

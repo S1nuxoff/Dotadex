@@ -2574,6 +2574,47 @@ function strengthFilter(def, instance) {
   return instance;
 }
 
+// An operator's fade in and out over the system's time (m_flOpStartFadeInTime … EndFadeOutTime,
+// ~800 operators), as particles.dll does (0x18003f9b0, its time 0x18003f870): the time is the
+// system's age, from its end with m_bNormalizeToStopTime on an end-cap operator, moved by a
+// random offset and scaled by a random rate only where their seeds are set, and made a phase of
+// 0 to 1 by m_flOpFadeOscillatePeriod; nothing before the fade in starts or (where given) after
+// the fade out ends, else a ramp up from the start to the end of the fade in and down from the
+// start to the end of the fade out. An operator at nothing does nothing (Broodmother's page web:
+// its AlphaDecay, on from 0.25 s, killed the web while it faded in from nothing)
+function fadeFilter(def, instance) {
+  const start = def.m_flOpStartFadeInTime ?? 0;
+  const endIn = def.m_flOpEndFadeInTime ?? 0;
+  const startOut = def.m_flOpStartFadeOutTime ?? 0;
+  const endOut = def.m_flOpEndFadeOutTime ?? 0;
+  const period = def.m_flOpFadeOscillatePeriod ?? 0;
+  const offsetSeed = def.m_nOpTimeOffsetSeed ?? 0;
+  const scaleSeed = def.m_nOpTimeScaleSeed ?? 0;
+  if (!start && !endIn && !startOut && !endOut && !period && !offsetSeed && !scaleSeed) return instance;
+  const offset = offsetSeed ? lerp(def.m_flOpTimeOffsetMin ?? 0, def.m_flOpTimeOffsetMax ?? 0, Math.random()) : 0;
+  const scale = scaleSeed ? 1 / Math.max(1e-4, lerp(def.m_flOpTimeScaleMin ?? 1, def.m_flOpTimeScaleMax ?? 1, Math.random())) : 1;
+  const fromEnd = Boolean(def.m_bNormalizeToStopTime) && def.m_nOpEndCapState === "PARTICLE_ENDCAP_ENDCAP_ON";
+  const fadeIn = Math.max(endIn, start);
+  const fadeOut = Math.max(startOut, fadeIn);
+  const fadeOutEnd = Math.max(endOut, fadeOut);
+  const strength = (system) => {
+    let t = fromEnd ? system.endcapAge : system.age;
+    if (offsetSeed) t = Math.max(0, t + offset);
+    if (scaleSeed && t > start) t = (t - start) * scale + start;
+    if (period > 0) t = ((t / period) % 1 + 1) % 1;
+    if (start > t || (endOut > 0 && t > endOut)) return 0;
+    let value = 1;
+    if (fadeIn > t && fadeIn > start) value = Math.min(value, (t - start) / (fadeIn - start));
+    if (t > fadeOut && fadeOutEnd > fadeOut) value = Math.min(value, (t - fadeOutEnd) / (fadeOut - fadeOutEnd));
+    return value;
+  };
+  for (const method of ["init", "update", "force", "emit"]) {
+    const original = instance[method];
+    if (original) instance[method] = (system, a, b) => strength(system) > 0 && original.call(instance, system, a, b);
+  }
+  return instance;
+}
+
 // Parameters the newer files give as literal inputs, made plain numbers and vectors, so code
 // reading a number gets one
 function flatten(def) {
@@ -2617,7 +2658,7 @@ export function createOperator(def, kind, system) {
     return null;
   }
   try {
-    return strengthFilter(def, endCapFilter(def, make(def, system)));
+    return fadeFilter(def, strengthFilter(def, endCapFilter(def, make(def, system))));
   } catch (error) {
     console.warn(`[particles] ${name}: ${error.message}`);
     return null;

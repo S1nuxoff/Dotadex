@@ -47,7 +47,7 @@ function loadSoundData(modelsBase) {
 
 const SPEEDS = [0.5, 1, 1.5];
 
-function AnimationPicker({ names, current, onPick, game = false }) {
+function AnimationPicker({ names, current, onPick, game = false, speed, speeds = [], onSpeed }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const ref = useDismiss(open, setOpen);
@@ -70,6 +70,22 @@ function AnimationPicker({ names, current, onPick, game = false }) {
         </button>
         {open && (
           <div className="absolute bottom-full left-0 z-30 mb-[4px] w-[320px] bg-[#3d4448] shadow-[0_0_6px_#00000066]">
+            {/* The playback speed, in the menu's own rows */}
+            {speeds.length > 0 && (
+              <div role="group" aria-label="Animation speed" className="flex border-b border-black/40">
+                {speeds.map((value) => (
+                  <button
+                    key={value}
+                    onClick={() => onSpeed(value)}
+                    data-sound="click"
+                    aria-pressed={speed === value}
+                    className={`flex-1 pt-[6px] pb-[2px] text-[18px] tabular-nums hover:bg-[#585e62] ${speed === value ? "bg-[#585e62] text-white" : "text-white/60"}`}
+                  >
+                    {value}×
+                  </button>
+                ))}
+              </div>
+            )}
             <input
               autoFocus
               value={query}
@@ -515,11 +531,10 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
           <>
             {animations.length > 0 && (
               <>
-                <AnimationPicker game names={[T_POSE, ...animations]} current={current} onPick={pick} />
+                <AnimationPicker game names={[T_POSE, ...animations]} current={current} onPick={pick} speed={speed} speeds={SPEEDS} onSpeed={setSpeed} />
                 <button onClick={() => setPaused(!paused)} data-sound="click" aria-label={paused ? "Play" : "Pause"} title={paused ? "Play" : "Pause"} className={GAME_BUTTON}>
                   {paused ? <Play className="mx-[4px] size-[20px]" /> : <Pause className="mx-[4px] size-[20px]" />}
                 </button>
-                <GamePills label="Animation speed" value={speed} onChange={setSpeed} options={SPEEDS.map((value) => ({ value, label: `${value}×` }))} />
               </>
             )}
             {hero && !item && (

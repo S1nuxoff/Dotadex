@@ -29,6 +29,10 @@ const loader = new GLTFLoader();
 const SOURCE_TO_METRES = 0.0254;
 // Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
 const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
+// The models drawn into the shadow map as the game draws them: depth pushed back by the slope of the
+// surface (client.dll's mat_slopescaledepthbias_shadowmap, 4); its constant mat_depthbias_shadowmap
+// (0.0005) is the light's shadow.bias. Without it a surface facing the light shadows itself in stripes
+const shadowDepthMaterial = new THREE.MeshDepthMaterial({ polygonOffset: true, polygonOffsetFactor: 4, polygonOffsetUnits: 0 });
 
 // The effects models start on their own, as the game's pedestal does its ground fog
 // (particles/model-effects.json: { "<model>.vmdl": [{ system, config }] }), loaded once
@@ -828,6 +832,7 @@ export class Stage {
         for (const material of [node.material, node.userData.dota, node.userData.pbr].flat()) {
           if (material) material.shadowSide = THREE.DoubleSide;
         }
+        node.customDepthMaterial = shadowDepthMaterial;
       }
       if (node.isBone) {
         node.userData.rest = { position: node.position.clone(), quaternion: node.quaternion.clone(), scale: node.scale.clone() };
@@ -1061,7 +1066,7 @@ export class Stage {
       this.portraitSun.castShadow = true;
       this.portraitSun.shadow.camera = new THREE.PerspectiveCamera(63, 1, 10 * SOURCE_TO_METRES, 1000 * SOURCE_TO_METRES);
       this.portraitSun.shadow.mapSize.set(256, 256);
-      this.portraitSun.shadow.bias = -0.00005;
+      this.portraitSun.shadow.bias = -0.0005;
       this.portraitSun.shadow.normalBias = SOURCE_TO_METRES;
       this.scene.add(this.portraitSun, this.portraitSun.target);
     }

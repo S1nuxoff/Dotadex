@@ -718,6 +718,15 @@ export class Stage {
         console.warn("Cloth not set up", error);
       }
     }
+    // A bone one cloth moves is left to the last that moves it: the bones are shared here, while in
+    // the game each model moves its own, so a worn part's cloth (Tidehunter's fish) moves the bones
+    // its mesh hangs on and the hero's own cloth, which has the same chain, must not move them too
+    const claimed = new Set();
+    for (let k = this.cloths.length - 1; k >= 0; k--) {
+      const cloth = this.cloths[k];
+      cloth.driven = cloth.driven.filter((driven) => !claimed.has(driven.bone));
+      cloth.driven.forEach((driven) => claimed.add(driven.bone));
+    }
     this.modelUrls = entries.map((entry) => entry.url);
     this.particles?.setModel(group, this.modelUrls);
     if (this.veilTarget === 1) {

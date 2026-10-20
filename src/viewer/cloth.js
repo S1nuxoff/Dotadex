@@ -313,6 +313,14 @@ export class Cloth {
         parent[offset.nCtrlChild] = offset.nCtrlParent;
       }
     }
+    // A side node hangs off the node it is kept beside, when nothing else says (76 models give no
+    // m_SkelParents: Tidehunter's fish had its side nodes in the model's space by his feet, and
+    // its rods pulled the fish down and stretched it)
+    for (const offset of fe.m_CtrlOsOffsets ?? []) {
+      if (offset.nCtrlChild < n && offset.nCtrlParent < n && parent[offset.nCtrlChild] < 0) {
+        parent[offset.nCtrlChild] = offset.nCtrlParent;
+      }
+    }
     // The bone whose animation carries each node (its own, or the nearest one up its parents),
     // and where the node is in that bone's space
     this.frames = [];

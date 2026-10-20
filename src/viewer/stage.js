@@ -34,6 +34,56 @@ const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(S
 // (0.0005) is the light's shadow.bias. Without it a surface facing the light shadows itself in stripes
 const shadowDepthMaterial = new THREE.MeshDepthMaterial({ polygonOffset: true, polygonOffsetFactor: 4, polygonOffsetUnits: 0 });
 
+// The shadow caster for a material: an alpha-tested one (hair cards, fringes) is cut by its color's
+// alpha as in its own pass, else it casts its whole quads; a blended one (F_TRANSLUCENT,
+// F_ADDITIVE_BLEND) writes no depth and casts nothing. null: no shadow
+function shadowDepthFor(material) {
+  if (!material || material.transparent) {
+    return null;
+  }
+  const main = material.uniforms;
+  if (main?.uAlphaTest) {
+    if (!(main.uAlphaTest.value > 0)) {
+      return shadowDepthMaterial;
+    }
+    const depth = shadowDepthMaterial.clone();
+    depth.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, {
+        tColor: main.tColor,
+        uBaseUv: main.uBaseUv,
+        uAlphaUv: main.uAlphaUv,
+        uSeparateAlpha: main.uSeparateAlpha,
+        uAlphaTest: main.uAlphaTest,
+      });
+      shader.vertexShader = shader.vertexShader
+        .replace("void main() {", "varying vec2 vShadowUv;\nvoid main() {\n  vShadowUv = uv;");
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "void main() {",
+        /* glsl */ `uniform sampler2D tColor;
+uniform mat3 uBaseUv;
+uniform mat3 uAlphaUv;
+uniform float uSeparateAlpha;
+uniform float uAlphaTest;
+varying vec2 vShadowUv;
+void main() {
+  float shadowAlpha = texture2D(tColor, (uBaseUv * vec3(vShadowUv, 1.0)).xy).a;
+  if (uSeparateAlpha > 0.5) shadowAlpha = texture2D(tColor, (uAlphaUv * vec3(vShadowUv, 1.0)).xy).a;
+  if (shadowAlpha < uAlphaTest) discard;`
+      );
+    };
+    depth.customProgramCacheKey = () => "dota-alpha-test-shadow";
+    return depth;
+  }
+  if (material.alphaTest > 0 && material.map) {
+    // three's own depth pass cuts by map and alphaTest
+    const depth = shadowDepthMaterial.clone();
+    depth.map = material.map;
+    depth.alphaTest = material.alphaTest;
+    return depth;
+  }
+  return shadowDepthMaterial;
+}
+
 // The effects models start on their own, as the game's pedestal does its ground fog
 // (particles/model-effects.json: { "<model>.vmdl": [{ system, config }] }), loaded once
 let modelEffects = null;
@@ -824,7 +874,8 @@ export class Stage {
     group.traverse((node) => {
       // The model's shadow falls on the rocks
       if (node.isMesh) {
-        node.castShadow = true;
+        const depth = shadowDepthFor(node.userData.dota ?? node.material);
+        node.castShadow = depth !== null;
         node.receiveShadow = true;
         // Both faces into the shadow map: three draws only the back faces by default, so a
         // one-sided sheet turned to the light (hair, a cape) cast no shadow at all; the normal
@@ -832,7 +883,7 @@ export class Stage {
         for (const material of [node.material, node.userData.dota, node.userData.pbr].flat()) {
           if (material) material.shadowSide = THREE.DoubleSide;
         }
-        node.customDepthMaterial = shadowDepthMaterial;
+        if (depth) node.customDepthMaterial = depth;
       }
       if (node.isBone) {
         node.userData.rest = { position: node.position.clone(), quaternion: node.quaternion.clone(), scale: node.scale.clone() };

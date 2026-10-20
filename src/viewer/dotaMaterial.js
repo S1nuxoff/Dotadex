@@ -3,7 +3,7 @@ import { materialPrograms, runProgram } from "./materialPrograms.js";
 
 // Dota's hero.vfx shader, after its compiled pixel shader. The textures and parameters come from the
 // material's vmat data that Source2Viewer keeps in the glTF extras:
-//   Masks1: R detail, G diffuse warp, B metalness, A self-illuminati
+//   Masks1: R detail, G diffuse warp, B metalness, A self-illumination
 //   Masks2: R specular intensity, G rim intensity, B tint specular by base color, A specular exponent
 //   DiffuseWarp: light ramp by half-Lambert, FresnelWarp: R color, G rim, B specular by view angle
 // Lighting is a fixed studio rig in view space, the rim light is tinted per item.
@@ -26,7 +26,7 @@ const sunShadowChunk = /* glsl */ `
     #define SUN_OFF 1.0
   #endif
   #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0 && defined( SHADOWMAP_TYPE_PCF )
-    // hero.vfx's soft path (cb2[18].w > 0, the scene's highqualityshadows): 25 bilinear compares 
+    // hero.vfx's soft path (cb2[18].w > 0, the scene's highqualityshadows): 25 bilinear compares on
     // a Poisson disk of 5 texels radius, 0.0007 nearer the light, a tap off the map counting as shadow
     const vec2 SUN_DISK[25] = vec2[25](
       vec2(-0.978698, -0.088412), vec2(-0.841121, 0.521165), vec2(-0.717460, -0.503220), vec2(-0.702933, 0.903134), vec2(-0.663198, 0.154820),
@@ -498,7 +498,7 @@ export function createDotaMaterial(original, vmat, textures) {
       tMasks2: { value: pick("g_tMasks2") },
       tDiffuseWarp: { value: pick("g_tDiffuseWarp") },
       tFresnelWarp: { value: pick("g_tFresnelWarp") },
-      // The whole cube, once its faces are in (cubemaps/), else no reflecti
+      // The whole cube, once its faces are in (cubemaps/), else no reflection
       tCubeMap: { value: null },
       uHasNormal: { value: pick("g_tNormal") ? 1 : 0 },
       // A mask the material has is used, whether or not its flag made it into the data

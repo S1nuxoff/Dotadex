@@ -1127,6 +1127,9 @@ export class Stage {
     if (this.loadout) {
       this.setShadows(Boolean(this.portraitLit));
     }
+    if (import.meta.env.DEV && window.location.search.includes("shadowview")) {
+      console.info("[shadowview] game light", on, "portrait", Boolean(this.portrait), "light data", Boolean(this.portrait?.light), "scene look", Boolean(this.sceneLook), "loadout", Boolean(this.loadout), "shadows", this.renderer.shadowMap.enabled);
+    }
   }
 
   // Shadows on or off; lit materials compile again with or without them (the hero's own, kept

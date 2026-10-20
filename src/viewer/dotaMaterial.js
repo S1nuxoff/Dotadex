@@ -17,7 +17,11 @@ const sunShadowChunk = /* glsl */ `
   #ifdef SHADOW_VIEW
     #define SUN_OUTSIDE -1.0
     #define SUN_OFF -2.0
+    #define SUN_NO_LIGHT -3.0
+    #define SUN_NOT_PCF -4.0
   #else
+    #define SUN_NO_LIGHT 1.0
+    #define SUN_NOT_PCF 1.0
     #define SUN_OUTSIDE 1.0
     #define SUN_OFF 1.0
   #endif
@@ -36,8 +40,12 @@ const sunShadowChunk = /* glsl */ `
       #undef SUN_TAP
       return mix(1.0, shadow, light.shadowIntensity);
     }
-  #else
+  #elif !defined( USE_SHADOWMAP )
     float sunShadow() { return SUN_OFF; }
+  #elif NUM_DIR_LIGHT_SHADOWS == 0
+    float sunShadow() { return SUN_NO_LIGHT; }
+  #else
+    float sunShadow() { return SUN_NOT_PCF; }
   #endif
 `;
 
@@ -286,7 +294,7 @@ const fragmentShader = /* glsl */ `
     gl_FragColor = vec4(outColor, uOpaque > 0.5 ? 1.0 : alpha);
     #ifdef SHADOW_VIEW
       // White lit, black shadowed; blue outside the shadow map, red with no shadow map
-      gl_FragColor = shadow == -2.0 ? vec4(1.0, 0.0, 0.0, 1.0) : shadow == -1.0 ? vec4(0.0, 0.3, 1.0, 1.0) : vec4(vec3(shadow), 1.0);
+      gl_FragColor = shadow == -2.0 ? vec4(1.0, 0.0, 0.0, 1.0) : shadow == -3.0 ? vec4(1.0, 0.0, 1.0, 1.0) : shadow == -4.0 ? vec4(1.0, 1.0, 0.0, 1.0) : shadow == -1.0 ? vec4(0.0, 0.3, 1.0, 1.0) : vec4(vec3(shadow), 1.0);
     #endif
     #include <colorspace_fragment>
   }
@@ -704,7 +712,7 @@ const litSimpleFragment = /* glsl */ `
     gl_FragColor = vec4(light * albedo, 1.0);
     #ifdef SHADOW_VIEW
       // White lit, black shadowed; blue outside the shadow map, red with no shadow map
-      gl_FragColor = shadow == -2.0 ? vec4(1.0, 0.0, 0.0, 1.0) : shadow == -1.0 ? vec4(0.0, 0.3, 1.0, 1.0) : vec4(vec3(shadow), 1.0);
+      gl_FragColor = shadow == -2.0 ? vec4(1.0, 0.0, 0.0, 1.0) : shadow == -3.0 ? vec4(1.0, 0.0, 1.0, 1.0) : shadow == -4.0 ? vec4(1.0, 1.0, 0.0, 1.0) : shadow == -1.0 ? vec4(0.0, 0.3, 1.0, 1.0) : vec4(vec3(shadow), 1.0);
     #endif
     #include <colorspace_fragment>
   }

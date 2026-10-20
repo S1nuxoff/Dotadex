@@ -266,6 +266,9 @@ const fragmentShader = /* glsl */ `
     // The stage's shadows (rocks, the model's own arms and weapons), as the game darkens
     // its sun with its shadow map before the warp ramp
     float shadow = sunShadow();
+    #ifdef NO_SUN_SHADOW
+      shadow = 1.0;
+    #endif
     float halfLambert = (nl * 0.5 + 0.5) * shadow;
     vec3 warped = uHasDiffuseWarp > 0.5 ? texture2D(tDiffuseWarp, vec2(halfLambert, warpMask)).rgb : vec3(halfLambert);
     vec3 diffuseLight = mix(vec3(halfLambert), warped, uWarpSelectsRow > 0.5 ? 1.0 : warpMask) * uKeyColor;
@@ -605,6 +608,8 @@ export function createDotaMaterial(original, vmat, textures) {
     const search = window.location.search;
     if (search.includes("shadowview")) material.defines = { ...material.defines, SHADOW_VIEW: "" };
     if (search.includes("shadow9")) material.defines = { ...material.defines, SHADOW_9TAP: "" };
+    // ?noshadow: the hero lit as if nothing shadowed it, to tell a shadow from the rest
+    if (search.includes("noshadow")) material.defines = { ...material.defines, NO_SUN_SHADOW: "" };
     if (search.includes("nospec")) material.uniforms.uSpecularScale.value = 0;
     if (search.includes("noenv")) material.uniforms.uCubeMapScale.value = 0;
     if (search.includes("norim")) material.uniforms.uRimLightScale.value = 0;

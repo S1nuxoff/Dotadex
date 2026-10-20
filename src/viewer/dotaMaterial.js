@@ -13,13 +13,21 @@ import { materialPrograms, runProgram } from "./materialPrograms.js";
 // compare; outside the shadow map lit (its sampler's border is 1). The point is pushed out along its
 // normal before it is projected (the light's normalBias)
 const sunShadowChunk = /* glsl */ `
+  // ?shadowview tells apart a point outside the shadow map (-1) and no shadow map at all (-2)
+  #ifdef SHADOW_VIEW
+    #define SUN_OUTSIDE -1.0
+    #define SUN_OFF -2.0
+  #else
+    #define SUN_OUTSIDE 1.0
+    #define SUN_OFF 1.0
+  #endif
   #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0 && defined( SHADOWMAP_TYPE_PCF )
     float sunShadow() {
       DirectionalLightShadow light = directionalLightShadows[ 0 ];
       vec4 coord = vDirectionalShadowCoord[ 0 ];
       coord.xyz /= coord.w;
       coord.z += light.shadowBias;
-      if (coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 || coord.z > 1.0) return 1.0;
+      if (coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 || coord.z > 1.0) return SUN_OUTSIDE;
       float s = 1.0 / light.shadowMapSize.x;
       #define SUN_TAP(x, y) texture( directionalShadowMap[ 0 ], vec3( coord.xy + vec2(x, y) * s, coord.z ) )
       float corners = SUN_TAP(1.0, 1.0) + SUN_TAP(-1.0, 1.0) + SUN_TAP(1.0, -1.0) + SUN_TAP(-1.0, -1.0);
@@ -29,7 +37,7 @@ const sunShadowChunk = /* glsl */ `
       return mix(1.0, shadow, light.shadowIntensity);
     }
   #else
-    float sunShadow() { return 1.0; }
+    float sunShadow() { return SUN_OFF; }
   #endif
 `;
 
@@ -277,7 +285,8 @@ const fragmentShader = /* glsl */ `
     float alpha = color.a * mix(1.0, 1.0 - clamp(abs(nv), 0.0, 1.0), uFresnelAlpha);
     gl_FragColor = vec4(outColor, uOpaque > 0.5 ? 1.0 : alpha);
     #ifdef SHADOW_VIEW
-      gl_FragColor = vec4(vec3(shadow), 1.0);
+      // White lit, black shadowed; blue outside the shadow map, red with no shadow map
+      gl_FragColor = shadow == -2.0 ? vec4(1.0, 0.0, 0.0, 1.0) : shadow == -1.0 ? vec4(0.0, 0.3, 1.0, 1.0) : vec4(vec3(shadow), 1.0);
     #endif
     #include <colorspace_fragment>
   }
@@ -694,7 +703,8 @@ const litSimpleFragment = /* glsl */ `
     light += particleLights(n, -vViewPosition);
     gl_FragColor = vec4(light * albedo, 1.0);
     #ifdef SHADOW_VIEW
-      gl_FragColor = vec4(vec3(shadow), 1.0);
+      // White lit, black shadowed; blue outside the shadow map, red with no shadow map
+      gl_FragColor = shadow == -2.0 ? vec4(1.0, 0.0, 0.0, 1.0) : shadow == -1.0 ? vec4(0.0, 0.3, 1.0, 1.0) : vec4(vec3(shadow), 1.0);
     #endif
     #include <colorspace_fragment>
   }

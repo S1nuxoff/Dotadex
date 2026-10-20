@@ -2193,21 +2193,27 @@ DEFS.C_OP_SetControlPointFromObjectScale = (def) => {
   };
 };
 
-// Children's control points at this system's particles
+// One control point of each child in group m_nChildGroupID, in the order the file lists them: the
+// k-th child's m_nChildControlPoint at this system's control point m_nFirstSourcePoint + k, for
+// m_nNumControlPoints children; turned too with m_bSetOrientation. A "dual" effect (Lina's
+// lina_flame_hand_dual: the same child twice, CP0 and CP1 at her two hands) puts one on each
 DEFS.C_OP_SetParentControlPointsToChildCP = (def) => {
+  const group = def.m_nChildGroupID ?? 0;
   const childPoint = def.m_nChildControlPoint ?? 0;
   const count = def.m_nNumControlPoints ?? 1;
   const first = def.m_nFirstSourcePoint ?? 0;
+  const orient = Boolean(def.m_bSetOrientation);
   return {
     update(system) {
-      for (const child of system.children) {
-        if (!child.system) continue;
-        for (let k = 0; k < count; k++) {
-          const from = system.controlPoint(first + k);
-          const point = child.system.ownControlPoint(childPoint + k);
-          point.position.copy(from.position);
-          point.quaternion.copy(from.quaternion);
-        }
+      const children = system.children.filter((child) => (child.def.m_nGroupID ?? 0) === group);
+      for (let k = 0; k < Math.min(count, children.length); k++) {
+        const child = children[k].system;
+        if (!child) continue;
+        const from = system.controlPoint(first + k);
+        const point = child.ownControlPoint(childPoint);
+        point.previous.copy(point.position);
+        point.position.copy(from.position);
+        if (orient) point.quaternion.copy(from.quaternion);
       }
     },
   };

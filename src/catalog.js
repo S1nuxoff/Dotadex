@@ -162,8 +162,14 @@ function dressedSlots(hero, outfit, persona) {
 export function heroSlots(catalog, heroId, persona = 0) {
   const slots = new Map();
   const hero = catalog.heroesById[heroId];
+  // The game's slots of the hero first (ItemSlots, in order), then any other an item or default is in
+  for (const slot of hero?.slots ?? []) {
+    slots.set(slot, { slot, defaultItem: null, count: 0 });
+  }
   for (const entry of hero?.defaults ?? []) {
-    slots.set(entry.slot, { slot: entry.slot, defaultItem: catalog.itemsById[entry.id] ?? null, count: 0 });
+    // A default with no model of its own is not among the items: its name and icon stand in
+    const item = catalog.itemsById[entry.id] ?? (entry.icon ? { id: entry.id, name: entry.name, icon: entry.icon, slot: entry.slot, rarity: "default", models: [] } : null);
+    slots.set(entry.slot, { ...(slots.get(entry.slot) ?? { slot: entry.slot, count: 0 }), defaultItem: item });
   }
   for (const item of catalog.itemsByHero[heroId] ?? []) {
     if (!slots.has(item.slot)) {
@@ -173,9 +179,17 @@ export function heroSlots(catalog, heroId, persona = 0) {
       slots.get(item.slot).count += 1;
     }
   }
+  const order = hero?.slots ?? [];
+  const rank = (slot) => (order.includes(slot) ? order.indexOf(slot) : order.length + slotRank(slot));
   return [...slots.values()]
     .filter((entry) => personaOf(entry.slot) === persona)
-    .sort((a, b) => slotRank(a.slot) - slotRank(b.slot) || a.slot.localeCompare(b.slot));
+    .sort((a, b) => rank(a.slot) - rank(b.slot) || a.slot.localeCompare(b.slot));
+}
+
+// What an empty slot's tile shows, as the game's loadout does: the effigy's stand, else the
+// crossed out figure of "no item"
+export function emptySlotIcon(slot) {
+  return itemIcon({ icon: /^hero_effigy/.test(slot) ? "econ/default_hero_effigy" : "econ/default_no_item" });
 }
 
 export function itemsForSlot(catalog, heroId, slot) {

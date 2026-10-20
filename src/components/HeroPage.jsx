@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Maximize2, Minimize2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Minimize2, X } from "lucide-react";
 import { abilityIcon, useGameData } from "../gamedata.js";
 import { useUiLayout } from "./ui.jsx";
 import HeroInfo from "./HeroInfo.jsx";
@@ -442,7 +442,7 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
           ))}
         </span>
         <span className="mr-[16px] flex items-center">
-          <Label>Attack type:</Label>
+          <Label>Attack Type:</Label>
           <span
             title={ranged ? "Ranged" : "Melee"}
             className="-mr-[2px] size-[30px] bg-[#8b989e] hover:bg-[#b0bcc2]"
@@ -504,8 +504,12 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
       {info && <StatsSummary base={base} info={info} />}
       {/* The full screen button; the game's demo button beside it has nothing to open here */}
       <div className="mt-[24px] flex">
-        <DarkButton label="Preview" onClick={onPreview}>
-          <Maximize2 className="mx-[4px] size-[20px]" strokeWidth={2.25} />
+        <DarkButton label="Fullscreen hero" onClick={onPreview}>
+          {/* The game's control_icons/24px/full_screen, 20 square, washed LightestGrey */}
+          <span
+            className="mx-[4px] size-[20px] bg-[#dae2e5] drop-shadow-[0_1px_4px_rgb(0_0_0/0.3)]"
+            style={mask(`${base}images/control_icons/24px/full_screen.svg`)}
+          />
         </DarkButton>
       </div>
     </div>
@@ -538,14 +542,15 @@ function StatsSummary({ base, info }) {
       "Armor",
       round(number("ArmorPhysical") + agility * ARMOR_PER_AGILITY),
     ],
-    ["icon_speed_psd", "Movement speed", number("MovementSpeed")],
-    ["icon_attack_speed_psd", "Base attack time", number("AttackRate")],
+    ["icon_speed_psd", "Movement Speed", number("MovementSpeed")],
+    // hero_stat_icons: BaseAttackTimeIcon is the clock, BaseAttackSpeedIcon its third picture
+    ["icon_attack_speed2_psd", "Base Attack Time", number("AttackRate")],
     [
-      "icon_attack_speed2_psd",
-      "Attack speed",
+      "icon_attack_speed3_psd",
+      "Attack Speed",
       number("BaseAttackSpeed", 100) + agility,
     ],
-    ["icon_attack_range_psd", "Attack range", number("AttackRange")],
+    ["icon_attack_range_psd", "Attack Range", number("AttackRange")],
   ];
   const attributes = [
     ["Strength", "strength", strength, number("AttributeStrengthGain")],
@@ -559,13 +564,13 @@ function StatsSummary({ base, info }) {
   ];
   const pools = [
     [
-      "Health",
+      "Max Health",
       number("StatusHealth", 120) + strength * HEALTH_PER_STRENGTH,
       round(number("StatusHealthRegen") + strength * HEALTH_REGEN_PER_STRENGTH),
       "from-[#5aa15e] to-[#406c55]",
     ],
     [
-      "Mana",
+      "Max Mana",
       number("StatusMana", 75) + intelligence * MANA_PER_INTELLIGENCE,
       round(
         number("StatusManaRegen") + intelligence * MANA_REGEN_PER_INTELLIGENCE,
@@ -616,9 +621,11 @@ function StatsSummary({ base, info }) {
               title={label}
               className="flex flex-1 flex-col items-center"
             >
-              <span
-                className="size-[20px] bg-[#dae2e5]"
-                style={mask(image(base, `hud/reborn/${icon}`))}
+              {/* The picture itself, washed LightestGrey (#dae2e5 multiplies it, about 0.88) */}
+              <img
+                src={image(base, `hud/reborn/${icon}`)}
+                alt=""
+                className="size-[20px] object-contain brightness-[0.88]"
               />
               <span className="mt-[2px] h-[18px] text-[16px] leading-[18px] whitespace-nowrap text-[#dae2e5]/80 tabular-nums">
                 {value}
@@ -704,6 +711,50 @@ function Stats({ info }) {
   );
 }
 
+// DOTAPersonaSelector: the hero's own look ("Classic") and each persona by its cosmetic group's
+// name, with their icons, in the game's pill tab group; only for heroes with personas
+function PersonaSelector({ base, heroKey, info, texts, persona, onPersona }) {
+  const personas = Object.entries(info?.Persona ?? {}).sort(([a], [b]) => a - b);
+  if (!personas.length) {
+    return null;
+  }
+  const options = [
+    [0, "Classic", heroKey],
+    ...personas.map(([index, entry]) => [
+      Number(index),
+      texts[(entry.cosmetic_group_name ?? "").replace(/^#/, "")] ?? `Persona ${index}`,
+      entry.name ?? `${heroKey}_persona${index}`,
+    ]),
+  ];
+  return (
+    <div className="-ml-[8px] mb-[20px] flex self-start rounded-full border border-black/20 bg-black/70 py-[2px]">
+      {options.map(([value, label, icon]) => (
+        <button
+          key={value}
+          role="tab"
+          aria-selected={persona === value}
+          onClick={() => persona !== value && onPersona(value)}
+          data-sound="toptab"
+          className={`mx-[2px] flex items-center rounded-full border px-[20px] py-[6px] outline-none text-[16px] leading-[20px] tracking-[1px] uppercase ${
+            persona === value
+              ? "border-white/[0.07] bg-gradient-to-b from-[#445055] to-[#2f363a] text-white shadow-[0_2px_4px_rgb(0_0_0/0.2)] [text-shadow:0_0_12px_rgb(197_222_255/0.3)]"
+              : "border-transparent text-[#768e8d] hover:text-[#dae2e5]"
+          }`}
+        >
+          {/* Radiance's capitals sit 1.4 above the middle of a 20 line; moved down onto it */}
+          <span className="translate-y-[1.5px]">{label}</span>
+          <img
+            src={image(base, `heroes/icons/${icon}_png`)}
+            alt=""
+            className="-my-[2px] ml-[8px] size-[24px]"
+            onError={(event) => (event.currentTarget.style.display = "none")}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // The row under the top bar: the previous hero, the page's tabs, the next hero
 function HeroNav({ hero, base, tab, onTab, previous, next, onOpen }) {
   const side = (other, forward) =>
@@ -769,6 +820,8 @@ export default function HeroPage({
   previous,
   next,
   onOpen,
+  persona,
+  onPersona,
 }) {
   const [tab, setTab] = useState("loadout");
   // The hero alone on the whole screen, as the game's preview button does
@@ -902,6 +955,20 @@ export default function HeroPage({
           <div className="relative min-h-0 flex-1">{wardrobe}</div>
         ) : (
           <>
+            {/* .EquippedBackgroundShard: 800 by 300 from the page's middle, skewed -16° and moved
+                750 right, 196 down from the screen's top (the NoTier place: no hero level here;
+                700 right on 16:10); white edge and fill fading out, all at 5% */}
+            {tab === "loadout" && (
+              <div
+                aria-hidden
+                className="absolute top-[-61px] left-[calc(50%-400px)] h-[300px] w-[800px] border border-transparent opacity-5"
+                style={{
+                  transform: `skewX(-16deg) translateX(${aspect === "16x10" ? 700 : 750}px) translateY(196px)`,
+                  background:
+                    "linear-gradient(144.6deg, #ffffff27, #ffffff00 221px) padding-box, linear-gradient(156deg, #ffffff, #ffffff00 197px) border-box",
+                }}
+              />
+            )}
             <div className="pointer-events-auto">
               <HeroNav
                 hero={hero}
@@ -935,7 +1002,15 @@ export default function HeroPage({
                   />
                 </div>
                 {tab === "loadout" && (
-                  <div className="pointer-events-auto absolute top-[111px] right-(--side) w-[422px]">
+                  <div className="pointer-events-auto absolute top-[111px] right-(--side) flex w-[422px] flex-col">
+                    <PersonaSelector
+                      base={catalog.modelsBase}
+                      heroKey={`npc_dota_hero_${hero.id}`}
+                      info={info}
+                      texts={data?.texts ?? {}}
+                      persona={persona}
+                      onPersona={onPersona}
+                    />
                     {summary}
                   </div>
                 )}

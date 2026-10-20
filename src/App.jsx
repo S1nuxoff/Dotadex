@@ -472,6 +472,8 @@ export default function App() {
               onClose={() => setWardrobe(false)}
             />
           }
+          persona={outfit.persona ?? 0}
+          onPersona={choosePersona}
           wardrobeOpen={wardrobe}
           onCloseWardrobe={() => setWardrobe(false)}
           previous={heroOrder[(heroIndex - 1 + heroOrder.length) % heroOrder.length]}

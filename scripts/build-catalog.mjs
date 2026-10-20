@@ -176,13 +176,20 @@ for (const [id, entry] of Object.entries(index.items)) {
   idByName.set(entry.name, id);
 }
 
-// What a hero wears by default, so a hero shows up complete; a persona's are in its own slots
+// What a hero wears by default, so a hero shows up complete; a persona's are in its own slots.
+// A default without a model of its own (Anti-Mage's shoulders, part of his body; ambient effects)
+// still fills its slot's tile in the game, so it comes with its name and icon.
 for (const [id, item] of Object.entries(gameItems)) {
-  if (item.prefab !== "default_item" || item.item_slot === "persona_selector" || !index.items[id]) {
+  if (item.prefab !== "default_item" || item.item_slot === "persona_selector") {
     continue;
   }
-  for (const key of Object.keys(item.used_by_heroes ?? {})) {
-    heroes[heroIdOf(key)]?.defaults.push({ id, slot: item.item_slot ?? "weapon", models: index.items[id].models });
+  const entry = index.items[id]
+    ? { id, slot: item.item_slot ?? "weapon", models: index.items[id].models }
+    : item.image_inventory
+    ? { id, slot: item.item_slot ?? "weapon", models: [], name: localize(item.item_name) ?? item.name, icon: item.image_inventory }
+    : null;
+  for (const key of entry ? Object.keys(item.used_by_heroes ?? {}) : []) {
+    heroes[heroIdOf(key)]?.defaults.push(entry);
   }
 }
 
@@ -221,12 +228,25 @@ for (const item of items) {
 
 // Shop items and treasure chests from the dataset's game data, when it is there
 const gameData = async (file) => getJson(`${MODELS_BASE}data/${file}`, null);
-const [shopData, treasureData, englishTexts, library] = await Promise.all([
+const [shopData, treasureData, englishTexts, library, heroData] = await Promise.all([
   gameData("items.json"),
   gameData("treasures.json"),
   gameData("i18n/english.json"),
   gameData("audio-library.json"),
+  gameData("heroes.json"),
 ]);
+
+// The slots a hero's loadout shows, in the game's order: its ItemSlots by SlotIndex, but those
+// with DisplayInLoadout 0 (ability effects) and the persona switch
+for (const hero of Object.values(heroes)) {
+  const slots = Object.values(heroData?.[`npc_dota_hero_${hero.id}`]?.ItemSlots ?? {})
+    .filter((slot) => slot?.SlotName && slot.DisplayInLoadout !== "0" && slot.SlotName !== "persona_selector")
+    .sort((a, b) => Number(a.SlotIndex) - Number(b.SlotIndex))
+    .map((slot) => slot.SlotName);
+  if (slots.length) {
+    hero.slots = slots;
+  }
+}
 
 // Announcer and music packs: "announcer_dlc_bastion" -> "Bastion"
 const packName = (folder) =>

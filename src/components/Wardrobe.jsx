@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ChevronLeft, ChevronRight, Layers, RotateCcw, Search, Shuffle, X } from "lucide-react";
 import {
+  emptySlotIcon,
   SORTS,
   formatPrice,
   heroPortrait,
@@ -352,8 +353,8 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
             {slots.map((slot) => {
               const chosen = outfit.slots[slot.slot];
               const item = chosen ? catalog.itemsById[chosen.id] : slot.defaultItem;
-              // Some default pieces have no picture in the game: the hero's portrait stands in
-              const image = item?.icon ? itemIcon(item) : heroCrop(hero);
+              // An empty slot shows the game's "no item" picture
+              const image = item?.icon ? itemIcon(item) : emptySlotIcon(slot.slot);
               return <LoadoutTile key={slot.slot} label={slotName(slot.slot)} image={image} onSelect={() => setSelected(slot.slot)} />;
             })}
           </div>
@@ -537,7 +538,7 @@ export function EquippedSummary({ catalog, outfit, onChange }) {
     // set's name in the title font, its rarity (LabelSmall)
     <div className="relative flex flex-col">
       <Layers className="absolute top-[2px] -left-[32px] size-[24px] text-[#dae2e5]" aria-hidden />
-      <h2 className="mb-[4px] text-[19px] leading-[24px] font-semibold tracking-[1.5px] text-[#dae2e5] uppercase">Selected</h2>
+      <h2 className="mb-[4px] text-[19px] leading-[24px] font-semibold tracking-[1.5px] text-[#dae2e5] uppercase">Equipped</h2>
       <p className="mt-[6px] font-display text-[24px] font-normal tracking-normal text-[#dae2e5]/90 normal-case">
         {worn ? worn.name : Object.keys(outfit.slots).length ? "Custom" : hero.name}
       </p>
@@ -555,7 +556,7 @@ export function EquippedSummary({ catalog, outfit, onChange }) {
             title={`${slotName(slot)}${item ? `: ${item.name}` : ""}`}
             className="group relative mr-[8px] mb-[8px] size-[76px] overflow-hidden border border-black/80 bg-gradient-to-b from-[#3a4250] to-[#232831] shadow-[0_2px_8px_rgb(0_0_0/0.5)] hover:brightness-125"
           >
-            <img src={item?.icon ? itemIcon(item) : heroCrop(hero)} alt="" loading="lazy" className="size-full object-cover" />
+            <img src={item?.icon ? itemIcon(item) : emptySlotIcon(slot)} alt="" loading="lazy" className="size-full object-cover" />
             <span aria-hidden className="absolute top-0 right-0 size-0 border-t-[12px] border-l-[12px] border-t-white/70 border-l-transparent" />
           </button>
         ))}
@@ -566,7 +567,7 @@ export function EquippedSummary({ catalog, outfit, onChange }) {
         data-sound="click"
         className="mt-[24px] h-[56px] self-start rounded-[3px] border border-white/[0.08] bg-gradient-to-b from-[#525f65] to-[#2f363a] px-[48px] text-[20px] leading-[24px] font-semibold tracking-[1.5px] text-white/80 uppercase shadow-[0_4px_24px_-2px_rgb(0_0_0/0.4)] [text-shadow:0_1px_4px_#000] hover:brightness-150 active:from-[#2f363a] active:to-[#525f65]"
       >
-        Change outfit
+        Customize
       </button>
     </div>
   );
@@ -594,7 +595,7 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
     ...slots.map((slot) => {
       const chosen = outfit.slots[slot.slot];
       const item = chosen ? catalog.itemsById[chosen.id] : slot.defaultItem;
-      return { id: slot.slot, name: slotName(slot.slot), image: item?.icon ? itemIcon(item) : heroCrop(hero) };
+      return { id: slot.slot, name: slotName(slot.slot), image: item?.icon ? itemIcon(item) : emptySlotIcon(slot.slot) };
     }),
   ];
 

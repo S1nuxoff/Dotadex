@@ -41,12 +41,23 @@ const sunShadowChunk = /* glsl */ `
       coord.xyz /= coord.w;
       coord.z += light.shadowBias - 0.0007;
       if (coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 || coord.z > 1.0) return SUN_OUTSIDE;
-      float radius = 5.0 / light.shadowMapSize.x;
-      float lit = 0.0;
-      for (int i = 0; i < 25; i++) {
-        vec2 uv = coord.xy + SUN_DISK[i] * radius;
-        if (uv.x >= 0.0 && uv.y >= 0.0 && uv.x <= 1.0 && uv.y <= 1.0) lit += texture( directionalShadowMap[ 0 ], vec3( uv, coord.z ) );
-      }
+      #ifdef SHADOW_9TAP
+        // The other path: 9 compares a texel apart, no extra offset
+        coord.z += 0.0007;
+        float s = 1.0 / light.shadowMapSize.x;
+        #define SUN_TAP(x, y) texture( directionalShadowMap[ 0 ], vec3( coord.xy + vec2(x, y) * s, coord.z ) )
+        float corners = SUN_TAP(1.0, 1.0) + SUN_TAP(-1.0, 1.0) + SUN_TAP(1.0, -1.0) + SUN_TAP(-1.0, -1.0);
+        float sides = SUN_TAP(1.0, 0.0) + SUN_TAP(-1.0, 0.0) + SUN_TAP(0.0, 1.0) + SUN_TAP(0.0, -1.0);
+        float lit = (corners * 0.074906 + sides * 0.123596 + SUN_TAP(0.0, 0.0) * 0.205993) * 25.0;
+        #undef SUN_TAP
+      #else
+        float radius = 5.0 / light.shadowMapSize.x;
+        float lit = 0.0;
+        for (int i = 0; i < 25; i++) {
+          vec2 uv = coord.xy + SUN_DISK[i] * radius;
+          if (uv.x >= 0.0 && uv.y >= 0.0 && uv.x <= 1.0 && uv.y <= 1.0) lit += texture( directionalShadowMap[ 0 ], vec3( uv, coord.z ) );
+        }
+      #endif
       return mix(1.0, lit * 0.04, light.shadowIntensity);
     }
   #elif !defined( USE_SHADOWMAP )
@@ -575,6 +586,7 @@ export function createDotaMaterial(original, vmat, textures) {
   if (import.meta.env.DEV) {
     const search = window.location.search;
     if (search.includes("shadowview")) material.defines = { ...material.defines, SHADOW_VIEW: "" };
+    if (search.includes("shadow9")) material.defines = { ...material.defines, SHADOW_9TAP: "" };
     if (search.includes("nospec")) material.uniforms.uSpecularScale.value = 0;
     if (search.includes("noenv")) material.uniforms.uCubeMapScale.value = 0;
     if (search.includes("norim")) material.uniforms.uRimLightScale.value = 0;
@@ -773,6 +785,7 @@ export function createLitSimpleMaterial(original, vmat, textures) {
   material.name = original.name;
   setUvLayer(material.uniforms.uBaseUv.value, (name) => paramValue(vmat, name), UV_LAYERS.uBaseUv);
   if (import.meta.env.DEV && window.location.search.includes("shadowview")) material.defines = { ...material.defines, SHADOW_VIEW: "" };
+  if (import.meta.env.DEV && window.location.search.includes("shadow9")) material.defines = { ...material.defines, SHADOW_9TAP: "" };
   return material;
 }
 

@@ -301,7 +301,7 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
         catalog.sets.filter((set) => set.hero === hero.id && matches(set.name)).map((set) => ({ ...set, rarity: catalog.itemsById[set.items[0]]?.rarity, date: catalog.itemsById[set.items[0]]?.date })),
         "newest"
       );
-      groups = [[null, sets.map((set) => ({ set }))]];
+      groups = [[null, sets.map((set) => ({ $set: set }))]];
     } else {
       size = TILE.item;
       const sorted = sortItems(items, "newest");
@@ -363,7 +363,7 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
     } else {
       title = "Treasures";
       const list = catalog.treasures.filter((entry) => matches(entry.name));
-      groups = [[null, sortItems(list, sortBy === "price" ? "newest" : sortBy).map((chest) => ({ chest }))]];
+      groups = [[null, sortItems(list, sortBy === "price" ? "newest" : sortBy).map((chest) => ({ $chest: chest }))]];
       controls = (
         <Labeled label="Sort by:">
           <DropDown value={sortBy === "price" ? "newest" : sortBy} options={SORT_BY.slice(0, 2)} onChange={setSortBy} label="Sort by" />
@@ -404,26 +404,26 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
     return (
       <Group key={`${name}-${index}`} title={name} count={list.length}>
         {part.map((entry) =>
-          entry.set ? (
+          entry.$set ? (
             <Tile
-              key={entry.set.id}
+              key={entry.$set.id}
               tall
               size={size}
-              image={entry.set.icon ? itemIcon(entry.set) : null}
-              name={entry.set.name}
-              look={rarity(entry.set)}
-              active={entry.set.items.every((id) => worn.has(id))}
-              onClick={() => openSet(entry.set)}
+              image={entry.$set.icon ? itemIcon(entry.$set) : null}
+              name={entry.$set.name}
+              look={rarity(entry.$set)}
+              active={entry.$set.items.every((id) => worn.has(id))}
+              onClick={() => openSet(entry.$set)}
             />
-          ) : entry.chest ? (
+          ) : entry.$chest ? (
             <Tile
-              key={entry.chest.id}
+              key={entry.$chest.id}
               size={size}
-              image={entry.chest.icon ? itemIcon(entry.chest) : null}
-              name={entry.chest.name}
-              detail={entry.chest.date?.slice(0, 4)}
-              look={rarity(entry.chest)}
-              onClick={() => setTreasure(entry.chest.id)}
+              image={entry.$chest.icon ? itemIcon(entry.$chest) : null}
+              name={entry.$chest.name}
+              detail={entry.$chest.date?.slice(0, 4)}
+              look={rarity(entry.$chest)}
+              onClick={() => setTreasure(entry.$chest.id)}
             />
           ) : (
             itemTile(entry, openItem, worn.has(entry.id), size)

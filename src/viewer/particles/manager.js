@@ -398,6 +398,13 @@ export class ParticleManager {
     const type = driver.m_iAttachType ?? "PATTACH_ABSORIGIN_FOLLOW";
     if (attachment && /POINT/.test(type) && attachmentTransform(attachment, this.bones, v1, q1)) {
       // At the attachment
+    } else if (type === "PATTACH_WORLDORIGIN" && (driver.m_iControlPoint ?? 0) !== 0) {
+      // The world's origin, unturned: a space for points other operators carry onto the model
+      // (Pumpkin Splitter's ring made round CP 3 and held on attach_saw by MovementRigidAttachToCP
+      // was turned and moved by the hero's own place). CP 0 stays on the hero: the game puts the
+      // effect itself there, whatever the editor's preview says
+      v1.set(0, 0, 0);
+      q1.identity();
     } else if (this.model) {
       this.model.updateWorldMatrix(true, false);
       this.model.matrixWorld.decompose(v1, q1, scale);

@@ -737,7 +737,11 @@ const ROPE_VERTEX = /* glsl */ `
   varying vec4 vColor;
   ${DEPTH_BIAS}
   void main() {
-    vUv = uv * uTexTransform.xy + uTexTransform.zw;
+    // Divided by the texture's final scale, then its offset, as the game's spritecard vertex shader
+    // places every texture (div by g_vecTextureControlsVertex_Base's scale): a scale of 2 draws
+    // the picture twice as large along the rope, not twice as often
+    vec2 texScale = vec2(uTexTransform.x == 0.0 ? 1.0 : uTexTransform.x, uTexTransform.y == 0.0 ? 1.0 : uTexTransform.y);
+    vUv = uv / texScale + uTexTransform.zw;
     vUvNext = vUv;
     vFrameBlend = 0.0;
     vLocal = uv;

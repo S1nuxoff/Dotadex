@@ -43,8 +43,8 @@ site to the game by its code and values. Each line says where it comes from. Unk
 | cb2[4].xyz, .w | second light direction, its scale | `PortraitAmbientDirection`, `PortraitAmbientScale` |
 | cb2[5].xyz | second light color (also the rim color in hero.vfx's vertex shader) | `PortraitAmbientColor` |
 | cb2[5].w | sky/ground scale in global_lit_simple | unknown |
-| cb2[6].xyz / cb2[17].xyz | sky / ground ambient colors, mixed by the normal's up | unknown (site: a share of the ambient color) |
-| cb2[6].w | sky/ground scale in hero.vfx | unknown |
+| cb2[6].xyz / cb2[17].xyz | sky / ground colors, mixed by the normal's up; in hero.vfx times max(1 − clouds, 1 − shadow) × g_flAmbientScale, so a fill of the shadow | site: `PortraitShadowColor` for both (by the names, fill code not found) |
+| cb2[6].w | sky/ground scale in hero.vfx | site: `PortraitShadowScale` (by the names) |
 | cb2[7], cb2[8].w | clouds texture (`g_tClouds`) offset and size; the sun is multiplied by min of two samples | none on the page (taken as 1) |
 | cb2[12..15], cb2[16].x | the sun's shadow matrix, PCF texel step (9 taps, weights 0.206 / 0.124 / 0.075) | three.js shadow map |
 | cb2[17].w | how much the sun's shadow also darkens the second light | unknown (taken as 0) |

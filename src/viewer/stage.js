@@ -1142,6 +1142,9 @@ export class Stage {
         sky: color(ambient.color, (ambient.scale ?? 1) * 0.1 * ambientTimes),
         ground: color(ambient.color, (ambient.scale ?? 1) * 0.05 * ambientTimes),
         fillFollows: Boolean(ambient.direction),
+        // hero.vfx's sky/ground term in the key light's shadow: PortraitShadowColor ×
+        // PortraitShadowScale (client.dll's defaults 89 89 89 and 1.5 when missing)
+        shadowFill: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.scale ?? 1.5),
       };
       // The second light from PortraitAmbientDirection: angles the light points along, as the key
       // light's (whose position lies the other way), so it comes from the opposite side

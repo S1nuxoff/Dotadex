@@ -165,6 +165,8 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uSkyColor;
   uniform vec3 uGroundColor;
   uniform float uFillScale;
+  uniform vec3 uShadowFill;
+  uniform float uShadowFillOn;
 
   // Lights particles cast (C_OP_RenderDeferredLight), as deferred_local_light_cs adds them:
   // color × N·L × smoothstep(saturate((1 - d / radius) / width)), diffuse only
@@ -269,7 +271,15 @@ const fragmentShader = /* glsl */ `
     vec3 diffuseLight = mix(vec3(halfLambert), warped, uWarpSelectsRow > 0.5 ? 1.0 : warpMask) * uKeyColor;
     // A second light that fills from another side, then the sky and the ground
     diffuseLight += clamp(dot(n, uFillDir), 0.0, 1.0) * uFillColor * uFillScale * uAmbientScale;
-    diffuseLight += mix(uGroundColor, uSkyColor, worldN.y * 0.5 + 0.5) * uAmbientScale;
+    // hero.vfx's sky/ground term: lerp(cb2[17], cb2[6], N.z * 0.5 + 0.5) × cb2[6].w ×
+    // max(1 - clouds, 1 - shadow) × g_flAmbientScale (gloss/f_d0.asm). On the hero page that is
+    // the shadow's fill, PortraitShadowColor × PortraitShadowScale, only where the key light's
+    // shadow falls (no clouds there); elsewhere the studio's sky and ground as before
+    if (uShadowFillOn > 0.5) {
+      diffuseLight += uShadowFill * (1.0 - shadow) * uAmbientScale;
+    } else {
+      diffuseLight += mix(uGroundColor, uSkyColor, worldN.y * 0.5 + 0.5) * uAmbientScale;
+    }
     // Lamps on the stage: fires and the like light the side of the model turned to them
     #if NUM_POINT_LIGHTS > 0
       for (int i = 0; i < NUM_POINT_LIGHTS; i++) {
@@ -330,7 +340,11 @@ const stage = {
   fillColor: new THREE.Color(0.42, 0.47, 0.58),
   skyColor: new THREE.Color(0.2, 0.22, 0.27),
   groundColor: new THREE.Color(0.07, 0.065, 0.065),
+  // The hero page's shadow fill (PortraitShadowColor × PortraitShadowScale), black without one
+  shadowFill: new THREE.Color(0, 0, 0),
 };
+// 1 where the light has a shadow fill: hero.vfx's sky/ground term then shows only in the shadow
+const shadowFillOn = { value: 0 };
 
 const studio = {
   keyColor: stage.keyColor.clone(),
@@ -376,6 +390,8 @@ export function setDotaLighting(light) {
   stage.fillColor.copy(light?.fill ?? studio.fillColor);
   stage.skyColor.copy(light?.sky ?? studio.skyColor);
   stage.groundColor.copy(light?.ground ?? studio.groundColor);
+  stage.shadowFill.copy(light?.shadowFill ?? new THREE.Color(0, 0, 0));
+  shadowFillOn.value = light?.shadowFill ? 1 : 0;
   if (!light) {
     stage.keyDir.copy(studioKeyDir);
   }
@@ -562,6 +578,8 @@ export function createDotaMaterial(original, vmat, textures) {
       uFillColor: { value: stage.fillColor },
       uSkyColor: { value: stage.skyColor },
       uGroundColor: { value: stage.groundColor },
+      uShadowFill: { value: stage.shadowFill },
+      uShadowFillOn: shadowFillOn,
       uFillScale: fillScale,
       ...particleLightUniforms,
       uOpaque: { value: translucent ? 0 : 1 },
@@ -777,6 +795,8 @@ export function createLitSimpleMaterial(original, vmat, textures) {
       uFillColor: { value: stage.fillColor },
       uSkyColor: { value: stage.skyColor },
       uGroundColor: { value: stage.groundColor },
+      uShadowFill: { value: stage.shadowFill },
+      uShadowFillOn: shadowFillOn,
       uFillScale: fillScale,
       ...particleLightUniforms,
     },

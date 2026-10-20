@@ -33,6 +33,16 @@ site to the game by its code and values. Each line says where it comes from. Unk
 
 ## The global light constant buffer (`DotaGlobalParams_t`, cb2 in hero.vfx and global_lit_simple.vfx)
 
+Filled by client.dll 0x182224610 from the global light's render state (entity + 0x150), which
+0x181762f90 fills from `CGlobalLightBase` (schema offsets): every Color through an sRGB-to-linear
+table (0x18384f430, table at 0x18501e200), so all light colors reach the shaders linear.
+cb2[0] = −`m_ShadowDirection` (0x2c) normalized and rotated (0x18173e8e0); cb2[1] = `m_LightColor`
+(0x6c) × `m_flLightScale` (0xbc), .w the scale; cb2[4] = `m_AmbientDirection` (0x38), .w =
+`m_flAmbientScale1` (0xb0) × a convar; cb2[5] = `m_AmbientColor1` (0x70), .w = `m_flGroundScale`
+(0xb8) × a convar; cb2[6] = `m_AmbientColor2` (0x74), .w = `m_flAmbientScale2` (0xb4); cb2[17] =
+`m_AmbientColor3` (0x78); cb2[12..15] the shadow matrix; cb2[18].w high quality shadows.
+The table below is the older reading, kept for the parts not re-read.
+
 | Slot | Meaning | On the hero page |
 | --- | --- | --- |
 | cb2[0].xyz | sun direction (the way it shines; −cb2[0] is towards the light) | from `PortraitLightPosition` |

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   Check,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import { Stage, T_POSE } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName, wornOnHero } from "../catalog.js";
-import { IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
+import { GAME_BUTTON, GamePills, IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
 import { playSound, soundsBase } from "./Voice.jsx";
 import { ATTRIBUTES, abilityIcon, useGameData } from "../gamedata.js";
 import { unlockSound } from "../viewer/soundPlayer.js";
@@ -46,11 +47,57 @@ function loadSoundData(modelsBase) {
 
 const SPEEDS = [0.5, 1, 1.5];
 
-function AnimationPicker({ names, current, onPick }) {
+function AnimationPicker({ names, current, onPick, game = false }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const ref = useDismiss(open, setOpen);
   const shown = names.filter((name) => name.toLowerCase().includes(query.trim().toLowerCase()));
+  if (game) {
+    // The game's DropDown (a dark gradient, a 2px edge, 18 labels) and its menu in #3d4448
+    return (
+      <div ref={ref} className="relative">
+        <button
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          aria-label="Animation"
+          title="Animation"
+          data-sound="click"
+          className="flex h-[34px] w-[240px] items-center border-2 border-[#5e686966] bg-gradient-to-b from-[#292e2e] to-[#191e1e] px-[8px] text-left shadow-[0_0_1px_3px_#00000055] hover:from-[#393e3e] hover:to-[#292e2e]"
+        >
+          <span className={`ml-[6px] flex-1 truncate text-[18px] ${open ? "text-white" : "text-[#b0bcc2]"}`}>{current ?? "No animation"}</span>
+          <span className="mr-[6px] text-[14px] text-[#8b989e] tabular-nums">{names.length}</span>
+          <ChevronUp className={`size-[18px] shrink-0 text-[#b0bcc2] ${open ? "" : "rotate-180"}`} />
+        </button>
+        {open && (
+          <div className="absolute top-full left-0 z-30 w-[320px] bg-[#3d4448] shadow-[0_0_6px_#00000066]">
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Find an animation"
+              className="w-full border-b border-black/40 bg-[#2a2f33] px-[16px] py-[8px] text-[18px] text-white outline-none placeholder:text-white/40"
+            />
+            <ul className="max-h-[444px] overflow-y-auto scrollbar-thin">
+              {shown.map((name) => (
+                <li key={name}>
+                  <button
+                    onClick={() => {
+                      onPick(name);
+                      setOpen(false);
+                    }}
+                    className={`w-full truncate border-y border-black/40 pt-[6px] pb-[2px] pl-[16px] text-left text-[18px] hover:bg-[#585e62] ${name === current ? "text-white" : "text-white/60"}`}
+                  >
+                    {name}
+                  </button>
+                </li>
+              ))}
+              {shown.length === 0 && <li className="px-[16px] py-[8px] text-[18px] text-white/40">No animation is called that.</li>}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div ref={ref} className="relative min-w-0">
@@ -317,6 +364,16 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
     stageRef.current.setFrameShift(frameShift);
   }, [frameShift]);
   const mask = useSceneMask(catalog.modelsBase, armory);
+  // The hero page's row of buttons, once it is on the page
+  const [gameSlot, setGameSlot] = useState(null);
+  useEffect(() => {
+    const slot = loadout && !armory ? document.getElementById("hero-model-controls") : null;
+    if (slot !== gameSlot) {
+      setGameSlot(slot);
+    }
+  });
+  const [freeCamera, setFreeCamera] = useState(() => getViewSettings().freeCamera);
+  useEffect(() => onViewSettings((settings) => setFreeCamera(settings.freeCamera)), []);
   // Everything but a scene of the Scenes section stands in the game's loadout scene (its pedestal
   // and light); off the hero page the model is framed by us, the game's cameras being the page's
   const staged = !scene;
@@ -452,9 +509,49 @@ export default function Viewer({ catalog, language, hideTitle = false, frameShif
         </div>
       )}
 
+      {/* On the hero page the model's controls join the game's row of buttons in the left column */}
+      {gameSlot &&
+        createPortal(
+          <>
+            {animations.length > 0 && (
+              <>
+                <AnimationPicker game names={[T_POSE, ...animations]} current={current} onPick={pick} />
+                <button onClick={() => setPaused(!paused)} data-sound="click" aria-label={paused ? "Play" : "Pause"} title={paused ? "Play" : "Pause"} className={GAME_BUTTON}>
+                  {paused ? <Play className="mx-[4px] size-[20px]" /> : <Pause className="mx-[4px] size-[20px]" />}
+                </button>
+                <GamePills label="Animation speed" value={speed} onChange={setSpeed} options={SPEEDS.map((value) => ({ value, label: `${value}×` }))} />
+              </>
+            )}
+            {hero && !item && (
+              <GamePills
+                label="Outfit"
+                value={outfit.bare ? "bare" : "dressed"}
+                onChange={(value) => onBare(value === "bare")}
+                options={[
+                  { value: "dressed", label: "Dressed" },
+                  { value: "bare", label: "Bare" },
+                ]}
+              />
+            )}
+            {downloads.map((model) => (
+              <a key={model} href={catalog.modelsBase + model} download title={model} data-sound="click" className={GAME_BUTTON}>
+                <Download className="mr-[8px] size-[20px]" />
+                {downloads.length > 1 ? model.split("/").pop() : "GLB"}
+              </a>
+            ))}
+            {freeCamera && (
+              <button onClick={() => stageRef.current.frameModel()} data-sound="click" aria-label="Fit to view" title="Fit to view" className={GAME_BUTTON}>
+                <Focus className="mx-[4px] size-[20px]" />
+              </button>
+            )}
+          </>,
+          gameSlot
+        )}
+
       {/* Playback, outfit and view controls in one row at the bottom */}
       {/* On a hero's page they sit under the model, between the page's two columns */}
       <div
+        hidden={loadout && !armory}
         className={`viewer-controls pointer-events-auto absolute flex flex-wrap items-center gap-2 ${
           loadout ? `bottom-6 ${frameShift > 0 ? "left-[24%]" : "left-1/2"} max-w-[40%] -translate-x-1/2 justify-center` : `bottom-4 left-4 ${hideTitle ? "w-[calc(55%-2rem)]" : "right-4"}`
         }`}

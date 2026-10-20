@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Minimize2, X } from "lucide-react";
 import { abilityIcon, useGameData } from "../gamedata.js";
-import { useUiLayout } from "./ui.jsx";
+import { GAME_BUTTON, useUiLayout } from "./ui.jsx";
 import HeroInfo from "./HeroInfo.jsx";
 import Voice from "./Voice.jsx";
 import ChatWheel from "./ChatWheel.jsx";
@@ -363,16 +363,10 @@ function Label({ children }) {
   );
 }
 
-// ButtonPrimary DarkGrey with an icon: 34 high, 16 to the sides, a dark gradient, a faint edge
+// ButtonPrimary DarkGrey with an icon
 function DarkButton({ label, onClick, children }) {
   return (
-    <button
-      onClick={onClick}
-      data-sound="click"
-      aria-label={label}
-      title={label}
-      className="flex h-[34px] items-center rounded-[3px] border border-white/[0.02] bg-gradient-to-b from-[#262c30] to-[#121719] px-[16px] text-[#dae2e5] shadow-[0_2px_8px_rgb(0_0_0/0.3)] hover:brightness-150 active:from-[#121719] active:to-[#262c30]"
-    >
+    <button onClick={onClick} data-sound="click" aria-label={label} title={label} className={GAME_BUTTON}>
       {children}
     </button>
   );
@@ -502,8 +496,9 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
         <ChatWheel modelsBase={base} heroId={hero.id} />
       </div>
       {info && <StatsSummary base={base} info={info} />}
-      {/* The full screen button; the game's demo button beside it has nothing to open here */}
-      <div className="mt-[24px] flex">
+      {/* The full screen button; the game's demo button beside it has nothing to open here. The
+          model's own controls (animation, speed, outfit, download) join the row */}
+      <div className="mt-[24px] flex flex-wrap gap-[8px]">
         <DarkButton label="Fullscreen hero" onClick={onPreview}>
           {/* The game's control_icons/24px/full_screen, 20 square, washed LightestGrey */}
           <span
@@ -511,6 +506,7 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
             style={mask(`${base}images/control_icons/24px/full_screen.svg`)}
           />
         </DarkButton>
+        <div id="hero-model-controls" className="contents" />
       </div>
     </div>
   );

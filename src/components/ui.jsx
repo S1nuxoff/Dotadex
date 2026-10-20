@@ -45,6 +45,34 @@ export function useUiLayout() {
   return layout;
 }
 
+// The game's ButtonPrimary DarkGrey: 34 high, 16 to the sides, a dark gradient, a faint edge
+export const GAME_BUTTON =
+  "flex h-[34px] shrink-0 items-center rounded-[3px] border border-white/[0.02] bg-gradient-to-b from-[#262c30] to-[#121719] px-[16px] text-[16px] leading-[20px] tracking-[1.5px] text-white/80 uppercase shadow-[0_2px_8px_rgb(0_0_0/0.3)] [text-shadow:0_1px_4px_#000] hover:brightness-150 active:from-[#121719] active:to-[#262c30]";
+
+// The game's pill tab group (.TabGroupContainer / .TabItem), small enough for a row of buttons
+export function GamePills({ options, value, onChange, label }) {
+  return (
+    <div role="group" aria-label={label} className="flex h-[34px] shrink-0 items-center rounded-full border border-black/20 bg-black/70 py-[2px]">
+      {options.map((option) => (
+        <button
+          key={String(option.value)}
+          onClick={() => onChange(option.value)}
+          data-sound="toptab"
+          disabled={option.disabled}
+          title={option.title}
+          className={`mx-[2px] h-full rounded-full border px-[12px] text-[14px] tracking-[1px] uppercase outline-none disabled:opacity-40 ${
+            value === option.value
+              ? "border-white/[0.07] bg-gradient-to-b from-[#445055] to-[#2f363a] text-white shadow-[0_2px_4px_rgb(0_0_0/0.2)]"
+              : "border-transparent text-[#768e8d] hover:text-[#dae2e5]"
+          }`}
+        >
+          <span className="inline-block translate-y-px">{option.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function useUiScale() {
   return useUiLayout().scale;
 }

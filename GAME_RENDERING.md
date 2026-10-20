@@ -105,6 +105,22 @@ Also per entry: `PortraitLightPosition`, `PortraitLightAngles`, `PortraitLightFO
 (`PortraitLightShadowRenderer`, `PortraitLightShadowDepthTexture_%d_%d`). The page is drawn in the
 deferred path (`rtGBufferAlbedo`, `rtGBufferNormalWs`, `rtGBufferLightingTerms`).
 
+### The page's shadow
+
+- Cast from a spot light: client.dll 0x1821e0f00 builds `portrait_world_light` and a depth texture
+  `PortraitLightShadowDepthTexture_<n>_<n>` with n = `r_dota_spotlight_shadows_resolution` rounded up to a
+  power of two (convar default 256).
+- hero.vfx (forward, gloss/f_d0.asm): the world position plus the unit normal (1 game unit) times the
+  shadow matrix cb2[12..15], divided by w; then either 9 bilinear compares a texel (cb2[16].x) apart,
+  weights 0.205993 middle, 0.123596 sides, 0.074906 corners, no constant bias; or, when cb2[18].w > 0,
+  25 Poisson-disk taps over 5 texels with a bias of 0.0007. The shadow multiplies the half-Lambert before
+  the warp ramp (or the warped diffuse when the material's cb0[1].w is set) and the specular.
+- cb2[18].w is 1 when the scene has `highqualityshadows` (a DOTAScenePanel attribute) and
+  `r_dota_allow_highquality_shadows` (default on) is set (0x182224b7c writes it); whether the hero page's
+  scene sets it was not found, the site uses the 9 taps.
+- `PortraitShadowColor` / `PortraitShadowScale` become the global light's `m_ShadowColor` / `m_ShadowScale`;
+  where the shaders use them was not found.
+
 ## The pedestal (`models/heroes/pedestal/loadout_pedestal_2023.vmdl`)
 
 - Two materials, both `global_lit_simple.vfx`: `loadout_pedestal_bricks` (F_NORMAL_MAP, F_SPECULAR,

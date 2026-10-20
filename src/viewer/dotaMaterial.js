@@ -8,6 +8,31 @@ import { materialPrograms, runProgram } from "./materialPrograms.js";
 //   DiffuseWarp: light ramp by half-Lambert, FresnelWarp: R color, G rim, B specular by view angle
 // Lighting is a fixed studio rig in view space, the rim light is tinted per item.
 
+// The sun's shadow as hero.vfx and global_lit_simple.vfx read it: 9 comparisons a texel apart
+// round the point (weights 0.206 the middle, 0.124 the sides, 0.075 the corners), each a bilinear
+// compare; outside the shadow map lit (its sampler's border is 1). The point is pushed out along its
+// normal before it is projected (the light's normalBias)
+const sunShadowChunk = /* glsl */ `
+  #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0 && defined( SHADOWMAP_TYPE_PCF )
+    float sunShadow() {
+      DirectionalLightShadow light = directionalLightShadows[ 0 ];
+      vec4 coord = vDirectionalShadowCoord[ 0 ];
+      coord.xyz /= coord.w;
+      coord.z += light.shadowBias;
+      if (coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 || coord.z > 1.0) return 1.0;
+      float s = 1.0 / light.shadowMapSize.x;
+      #define SUN_TAP(x, y) texture( directionalShadowMap[ 0 ], vec3( coord.xy + vec2(x, y) * s, coord.z ) )
+      float corners = SUN_TAP(1.0, 1.0) + SUN_TAP(-1.0, 1.0) + SUN_TAP(1.0, -1.0) + SUN_TAP(-1.0, -1.0);
+      float sides = SUN_TAP(1.0, 0.0) + SUN_TAP(-1.0, 0.0) + SUN_TAP(0.0, 1.0) + SUN_TAP(0.0, -1.0);
+      float shadow = corners * 0.074906 + sides * 0.123596 + SUN_TAP(0.0, 0.0) * 0.205993;
+      #undef SUN_TAP
+      return mix(1.0, shadow, light.shadowIntensity);
+    }
+  #else
+    float sunShadow() { return 1.0; }
+  #endif
+`;
+
 const vertexShader = /* glsl */ `
   #include <common>
   #include <morphtarget_pars_vertex>
@@ -43,6 +68,7 @@ const fragmentShader = /* glsl */ `
   #include <packing>
   #include <lights_pars_begin>
   #include <shadowmap_pars_fragment>
+  ${sunShadowChunk}
   uniform sampler2D tColor;
   uniform mat3 uBaseUv;
   uniform mat3 uNormalUv;
@@ -201,12 +227,7 @@ const fragmentShader = /* glsl */ `
     float nl = dot(n, uKeyDir);
     // The stage's shadows (rocks, the model's own arms and weapons), as the game darkens
     // its sun with its shadow map before the warp ramp
-    float shadow = 1.0;
-    #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
-      DirectionalLightShadow sunShadow = directionalLightShadows[ 0 ];
-      shadow = getShadow( directionalShadowMap[ 0 ], sunShadow.shadowMapSize, sunShadow.shadowIntensity, sunShadow.shadowBias, sunShadow.shadowRadius, vDirectionalShadowCoord[ 0 ] );
-      shadow = mix(1.0, shadow, 0.85);
-    #endif
+    float shadow = sunShadow();
     float halfLambert = (nl * 0.5 + 0.5) * shadow;
     vec3 warped = uHasDiffuseWarp > 0.5 ? texture2D(tDiffuseWarp, vec2(halfLambert, warpMask)).rgb : vec3(halfLambert);
     vec3 diffuseLight = mix(vec3(halfLambert), warped, uWarpSelectsRow > 0.5 ? 1.0 : warpMask) * uKeyColor;
@@ -590,6 +611,7 @@ const litSimpleFragment = /* glsl */ `
   #include <packing>
   #include <lights_pars_begin>
   #include <shadowmap_pars_fragment>
+  ${sunShadowChunk}
   uniform sampler2D tColor;
   uniform sampler2D tNormal;
   uniform mat3 uBaseUv;
@@ -660,11 +682,7 @@ const litSimpleFragment = /* glsl */ `
       n = perturbNormal(n, -vViewPosition, uv, normalize(mapN));
     }
 
-    float shadow = 1.0;
-    #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
-      DirectionalLightShadow sunShadow = directionalLightShadows[ 0 ];
-      shadow = getShadow( directionalShadowMap[ 0 ], sunShadow.shadowMapSize, sunShadow.shadowIntensity, sunShadow.shadowBias, sunShadow.shadowRadius, vDirectionalShadowCoord[ 0 ] );
-    #endif
+    float shadow = sunShadow();
     float key = shadow * clamp(dot(n, uKeyDir), 0.0, 1.0);
     vec3 light = key * uKeyColor;
     light += clamp(dot(n, uFillDir), 0.0, 1.0) * uFillColor * uFillScale;

@@ -1047,13 +1047,16 @@ export class Stage {
   updatePortraitLight() {
     const on = Boolean(this.loadout && this.portrait?.light && !this.sceneLook);
     if (on && !this.portraitSun) {
+      // The game casts the page's shadow from a spot light (client.dll's PortraitLightShadowRenderer):
+      // at PortraitLightPosition, aimed by PortraitLightAngles, PortraitLightFOV wide, into a
+      // shadow map r_dota_spotlight_shadows_resolution (256) square; the shaders push each point
+      // 1 unit out along its normal before reading it. The light itself still shades as a sun
       this.portraitSun = new THREE.DirectionalLight(0xffffff, 0);
       this.portraitSun.castShadow = true;
-      this.portraitSun.shadow.mapSize.set(2048, 2048);
-      this.portraitSun.shadow.bias = -0.0005;
-      this.portraitSun.shadow.normalBias = 0.02;
-      Object.assign(this.portraitSun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 0.1, far: 40 });
-      this.portraitSun.target.position.set(0, 1, 0);
+      this.portraitSun.shadow.camera = new THREE.PerspectiveCamera(63, 1, 10 * SOURCE_TO_METRES, 1000 * SOURCE_TO_METRES);
+      this.portraitSun.shadow.mapSize.set(256, 256);
+      this.portraitSun.shadow.bias = -0.00005;
+      this.portraitSun.shadow.normalBias = SOURCE_TO_METRES;
       this.scene.add(this.portraitSun, this.portraitSun.target);
     }
     if (this.portraitSun) {
@@ -1085,9 +1088,20 @@ export class Stage {
       }
       setDotaLighting(look);
       this.portraitDir = sourceToScene(light.position).normalize();
+      this.portraitSpot = sourceToScene(light.position);
+      if (light.angles?.length === 3) {
+        const [pitch, yaw] = light.angles.map(THREE.MathUtils.degToRad);
+        this.portraitAim = sourceToScene([Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)]).normalize();
+      } else {
+        this.portraitAim = this.portraitDir.clone().negate();
+      }
+      const shadowCamera = this.portraitSun.shadow.camera;
+      shadowCamera.fov = light.fov ?? 63;
+      shadowCamera.far = Math.max(1000, (light.distance ?? 0) * 2) * SOURCE_TO_METRES;
+      shadowCamera.updateProjectionMatrix();
       this.portraitSun.color.copy(look.key);
       this.portraitSun.intensity = 2;
-      this.portraitSun.position.copy(this.portraitDir).multiplyScalar(15).add(this.portraitSun.target.position);
+      this.placePortraitSpot(new THREE.Quaternion());
       this.key.intensity = 0;
       this.hemi.color.copy(look.sky);
       this.hemi.groundColor.copy(look.ground);
@@ -1103,6 +1117,13 @@ export class Stage {
       this.hemi.intensity = 1.2;
       this.scene.environmentIntensity = 0.6;
     }
+  }
+
+  // The shadow's spot light where the game has it, turned round the hero with the free camera
+  placePortraitSpot(turn) {
+    this.portraitSun.position.copy(this.portraitSpot).applyQuaternion(turn);
+    this.portraitSun.target.position.copy(this.portraitAim).applyQuaternion(turn).add(this.portraitSun.position);
+    this.portraitSun.target.updateMatrixWorld();
   }
 
   // On a hero's page the camera stays where the game puts it and a drag turns the hero round, as
@@ -1712,7 +1733,7 @@ export class Stage {
       const keyDir = this.portraitDir.clone().applyQuaternion(turn);
       setDotaKeyDir(keyDir.clone().transformDirection(this.camera.matrixWorldInverse));
       if (this.portraitFillDir) setDotaFillDir(this.portraitFillDir.clone().applyQuaternion(turn).transformDirection(this.camera.matrixWorldInverse));
-      this.portraitSun.position.copy(keyDir).multiplyScalar(15).add(this.portraitSun.target.position);
+      this.placePortraitSpot(turn);
     }
     if (this.pedestal?.visible) {
       // The carved mark is shaded by the light that lights the hero: the game's, or the key from the camera

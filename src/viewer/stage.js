@@ -30,9 +30,12 @@ const SOURCE_TO_METRES = 0.0254;
 // Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
 const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(SOURCE_TO_METRES);
 // The models drawn into the shadow map as the game draws them: depth pushed back by the slope of the
-// surface (client.dll's mat_slopescaledepthbias_shadowmap, 4); its constant mat_depthbias_shadowmap
-// (0.0005) is the light's shadow.bias. Without it a surface facing the light shadows itself in stripes
-const shadowDepthMaterial = new THREE.MeshDepthMaterial({ polygonOffset: true, polygonOffsetFactor: 4, polygonOffsetUnits: 0 });
+// surface only. The sun shadow renderer (client.dll 0x182214590) hands hero.vfx r_dota_depthbias
+// (0.001) and r_dota_slopescaledepthbias (4.5) as its DepthBias and SlopeScaleDepthBias; DepthBias
+// is an integer render state (the shader's variable type 5, as CullMode), so 0.001 becomes 0 and
+// only the slope bias is left. The lights' shadow.bias is therefore 0. Without the slope bias a
+// surface facing the light shadows itself in stripes
+const shadowDepthMaterial = new THREE.MeshDepthMaterial({ polygonOffset: true, polygonOffsetFactor: 4.5, polygonOffsetUnits: 0 });
 
 // The shadow caster for a material: an alpha-tested one (hair cards, fringes) is cut by its color's
 // alpha as in its own pass, else it casts its whole quads; a blended one (F_TRANSLUCENT,
@@ -1122,7 +1125,7 @@ export class Stage {
       this.portraitSun.castShadow = true;
       this.portraitSun.shadow.camera = new THREE.PerspectiveCamera(15, 1, 4 * SOURCE_TO_METRES, 250 * SOURCE_TO_METRES);
       this.portraitSun.shadow.mapSize.set(2048, 2048);
-      this.portraitSun.shadow.bias = -0.0005;
+      this.portraitSun.shadow.bias = 0;
       this.portraitSun.shadow.normalBias = SOURCE_TO_METRES;
       this.scene.add(this.portraitSun, this.portraitSun.target);
     }

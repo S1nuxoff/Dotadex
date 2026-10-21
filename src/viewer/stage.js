@@ -1163,13 +1163,14 @@ export class Stage {
       }
       setDotaLighting(look);
       // The direction towards the light. hero.vfx's sun direction and the shadow's are the global
-      // light's m_ShadowDirection (client.dll 0x18173e8e0), which an env_global_light takes from
-      // its angles (angles_vector, 0x181763890): so the way PortraitLightAngles point, not the
-      // direction of PortraitLightPosition (for 135 of the 201 entries the two agree within 5
-      // degrees; for Wei's they are 35 apart, and the angles put the hat's shadow on her eyes as
-      // in the game). ?sunposition takes the position instead
+      // light's m_ShadowDirection (client.dll 0x18173e8e0); which portrait key fills it is not
+      // found in the code. For 135 of the 201 entries PortraitLightAngles point from
+      // PortraitLightPosition at the hero within 5 degrees; for Wei's they are 35 apart, and the
+      // game's shot of her decides: the whole face under the hat's shadow and a matte thigh fit a
+      // light 45 degrees up (the position: the brim's shadow 15 units long, the thigh's highlight
+      // 0.2), not 11 (the angles: 3 units, 0.9). So the position; ?sunangles takes the angles
       this.portraitDir = sourceToScene(light.position).normalize();
-      if (!search?.has("sunposition") && light.angles?.length === 3) {
+      if (search?.has("sunangles") && light.angles?.length === 3) {
         const [pitch, yaw] = light.angles.map(THREE.MathUtils.degToRad);
         this.portraitDir = sourceToScene([Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)]).normalize().negate();
       }

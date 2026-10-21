@@ -1152,12 +1152,7 @@ export class Stage {
         sky: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.ground ?? 1.5),
         ground: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.ground ?? 1.5),
         fillFollows: Boolean(ambient.direction),
-        // The hero's shadow fill: PortraitShadowColor at the global light's own m_flAmbientScale2,
-        // 1 (CGlobalLightBase's constructor, 0x181736e00; the copy of PortraitShadowScale into it
-        // is not found). Measured on the game's shot of Wei: her face under the hat is 0.15 to 0.3
-        // of its albedo, as this gives (0.11 with the second light), while 143 x 8 gave about 0.5
-        // and made shadows brighter than lit skin turned from the light. ?shadowscale takes the scale
-        shadowFill: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], search?.has("shadowscale") ? this.portrait.shadow?.scale ?? 1.5 : 1),
+        shadowFill: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.scale ?? 1.5),
       };
       // The second light from PortraitAmbientDirection: angles the light points along, as the key
       // light's (whose position lies the other way), so it comes from the opposite side

@@ -1173,12 +1173,11 @@ export class Stage {
       // light keys only PortraitLightPosition is one; the copy itself is not found. For 135 of the
       // 201 entries PortraitLightAngles point from the position at the hero within 5 degrees; for
       // Wei's they are 35 apart (light 11 degrees up by the angles, 45 by the position). The
-      // position it is: with the angles the light came from behind the camera, every shadow hid
-      // behind what cast it and showed as a rim, and her thigh shone; with the position her whole
-      // face lies under the hat's shadow as in the game (the band over her eyes there is the
-      // am_female_sdhow_eye sheet, not a shadow). ?sunangles takes the angles
+      // game's own frame of her decides: the hat's shadow ends at her eyes, nose and chin lit,
+      // as a light 11 degrees up casts it (the position's 45 put the whole face in shadow). So
+      // the angles; ?sunposition takes the position
       this.portraitDir = sourceToScene(light.position).normalize();
-      if (search?.has("sunangles") && light.angles?.length === 3) {
+      if (!search?.has("sunposition") && light.angles?.length === 3) {
         const [pitch, yaw] = light.angles.map(THREE.MathUtils.degToRad);
         this.portraitDir = sourceToScene([Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)]).normalize().negate();
       }

@@ -463,10 +463,13 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
     stageRef.current.setWatermark(getViewSettings().watermark);
     return onViewSettings((settings) => stageRef.current?.setWatermark(settings.watermark));
   }, []);
-  // The hero's size on its page, as the game takes it: LoadoutScale, else ModelScale
+  // The hero's size on its page, as the game takes it: LoadoutScale, else ModelScale; a persona
+  // has its own ModelScale (Wei's 1.05 against Anti-Mage's 0.9), which the portrait world's unit
+  // takes when the persona is shown
   const { data: heroData } = useGameData(catalog.modelsBase, ["heroes.json"]);
   const heroEntry = outfit?.hero ? heroData?.heroes?.[`npc_dota_hero_${outfit.hero}`] : null;
-  const heroScale = Number(heroEntry?.LoadoutScale ?? heroEntry?.ModelScale ?? 1);
+  const personaEntry = outfit?.persona ? heroEntry?.Persona?.[String(outfit.persona)] : null;
+  const heroScale = Number(personaEntry?.ModelScale ?? heroEntry?.LoadoutScale ?? heroEntry?.ModelScale ?? 1);
   useEffect(() => {
     stageRef.current.setHeroScale(heroScale);
   }, [heroScale]);

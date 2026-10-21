@@ -300,7 +300,7 @@ DEFS.C_INIT_CreateWithinSphereTransform = (def) => withinSphere(def, true);
 // moving out from the centre (in, when its speed is below nothing)
 DEFS.C_INIT_CreateSpiralSphere = (def) => {
   const point = def.m_nOverrideCP >= 0 ? def.m_nOverrideCP : def.m_nControlPointNumber ?? 0;
-  const radius = def.m_flInitialRadius ?? 1;
+  const radius = def.m_flInitialRadius ?? 0;
   const speedMin = def.m_flInitialSpeedMin ?? 0;
   const speedMax = def.m_flInitialSpeedMax ?? 0;
   const golden = Math.PI * (3 - Math.sqrt(5));
@@ -704,7 +704,7 @@ const fromSnapshot = (def, point) => {
 };
 // m_bRigid (set in nearly every file) has the game carry a point by its strongest bone alone
 // instead of the bones' blend: the vertex it is bound to here moves all but the same way
-DEFS.C_INIT_InitSkinnedPositionFromCPSnapshot = (def) => fromSnapshot(def, def.m_nSnapshotControlPointNumber ?? 0);
+DEFS.C_INIT_InitSkinnedPositionFromCPSnapshot = (def) => fromSnapshot(def, def.m_nSnapshotControlPointNumber ?? 1);
 
 // A snapshot whose points are in a control point's own space (a blade's points along the bone
 // the weapon's attachment hangs on, a crown's round the head's): each point put where that
@@ -742,10 +742,12 @@ const snapshotInSpace = (def, point, space) => {
 // takes the points as given too: they are offsets in that control point's space (Timbersaw's saw
 // outline round attach_saw), which binding them to the model's nearest vertices moved a second time
 DEFS.C_INIT_InitFromCPSnapshot = (def, system) => {
-  if ((def.m_nAttributeToRead ?? 0) !== 0) return onModel();
+  // The stream it reads; -1 (the default) reads the one it writes, the position unless it names another
+  const read = def.m_nAttributeToRead ?? -1;
+  if ((read === -1 ? def.m_nAttributeToWrite ?? 0 : read) !== 0) return onModel();
   const point = def.m_nControlPointNumber ?? 0;
   const space = def.m_nLocalSpaceCP ?? -1;
-  const rigid = (system?.def?.m_Operators ?? []).some((op) => op?._class === "C_OP_MovementRigidAttachToCP" && !op.m_bDisableOperator && (op.m_nFieldInput ?? 0) === 0);
+  const rigid = (system?.def?.m_Operators ?? []).some((op) => op?._class === "C_OP_MovementRigidAttachToCP" && !op.m_bDisableOperator && (op.m_nFieldInput ?? 2) === 2);
   return space >= 0 || rigid ? snapshotInSpace(def, point, space) : fromSnapshot(def, point);
 };
 DEFS.C_INIT_CreateOnModelAtHeight = onModel;
@@ -1309,7 +1311,7 @@ DEFS.C_OP_InterpolateRadius = (def) => {
   const from = def.m_flStartScale ?? 1;
   const to = def.m_flEndScale ?? 1;
   const ease = Boolean(def.m_bEaseInAndOut);
-  const amount = def.m_flBias ?? 0;
+  const amount = def.m_flBias ?? 0.5;
   // Only within its window of the particle's life (particles.dll 0x1801f0c60: life > 0 and
   // start ≤ age / life ≤ end, a window shorter than the step widened to it); outside it the radius
   // is left to the other operators (Broodmother's page web pulses by OscillateScalar once grown)
@@ -1413,11 +1415,11 @@ DEFS.C_OP_PositionLock = (def) => lockToCP(def, Boolean(def.m_bLockRot));
 // snapshot, drawn round the origin, is carried onto the weapon's attachment.
 DEFS.C_OP_MovementRigidAttachToCP = (def, system) => {
   const point = cpOf(def);
-  const input = def.m_nFieldInput ?? 0;
+  // The default input (2) is the particles' own place: the one each was made at, kept from now on
+  const input = def.m_nFieldInput ?? 2;
   const output = def.m_nFieldOutput ?? 0;
   const local = def.m_bOffsetLocal ?? true;
-  // The place each particle was made at, kept from now on
-  const offsets = input === 0 ? system.initialVector(0) : null;
+  const offsets = input === 2 ? system.initialVector(0) : null;
   return {
     update(system) {
       const cp = system.controlPoint(point);
@@ -1581,7 +1583,7 @@ DEFS.C_OP_LerpEndCapScalar = (def) => {
 };
 
 DEFS.C_OP_EndCapTimedDecay = (def) => {
-  const time = def.m_flDecayTime ?? 1;
+  const time = def.m_flDecayTime ?? 0;
   return {
     update(system) {
       if (system.endcap && system.endcapAge >= time) for (let i = 0; i < system.count; i++) system.kill(i);
@@ -1644,10 +1646,10 @@ DEFS.C_OP_OscillateVector = (def) => {
 };
 
 DEFS.C_OP_VectorNoise = (def) => {
-  const field = def.m_nFieldOutput ?? 0;
+  const field = def.m_nFieldOutput ?? 6;
   const min = arr(def.m_vecOutputMin, [0, 0, 0]);
   const max = arr(def.m_vecOutputMax, [1, 1, 1]);
-  const scale = def.m_fl4NoiseScale ?? 0;
+  const scale = def.m_fl4NoiseScale ?? 0.1;
   const additive = Boolean(def.m_bAdditive);
   const timeScale = def.m_flNoiseAnimationTimeScale ?? 0;
   return {
@@ -1673,7 +1675,7 @@ DEFS.C_OP_Noise = (def) => {
   const field = def.m_nFieldOutput ?? 3;
   const min = def.m_flOutputMin ?? 0;
   const max = def.m_flOutputMax ?? 1;
-  const scale = def.m_fl4NoiseScale ?? 0.001;
+  const scale = def.m_fl4NoiseScale ?? 0.1;
   const additive = Boolean(def.m_bAdditive);
   return {
     update(system, dt) {
@@ -1724,7 +1726,7 @@ DEFS.C_OP_DistanceBetweenVecs = (def) => {
   const first = compileVector(def.m_vecPoint1, [0, 0, 0]);
   const second = compileVector(def.m_vecPoint2, [0, 0, 0]);
   const inMin = compileFloat(def.m_flInputMin, 0);
-  const inMax = compileFloat(def.m_flInputMax, 1);
+  const inMax = compileFloat(def.m_flInputMax, 128);
   const outMin = compileFloat(def.m_flOutputMin, 0);
   const outMax = compileFloat(def.m_flOutputMax, 1);
   const perSecond = Boolean(def.m_bDeltaTime);
@@ -1913,7 +1915,7 @@ DEFS.C_OP_MaxVelocity = (def) => {
 DEFS.C_OP_RemapSpeed = (def) => {
   const field = def.m_nFieldOutput ?? 3;
   const inMin = def.m_flInputMin ?? 0;
-  const inMax = def.m_flInputMax ?? 128;
+  const inMax = def.m_flInputMax ?? 1;
   const outMin = def.m_flOutputMin ?? 0;
   const outMax = def.m_flOutputMax ?? 1;
   return {
@@ -1928,7 +1930,7 @@ DEFS.C_OP_RemapSpeed = (def) => {
 DEFS.C_OP_AttractToControlPoint = (def) => {
   const point = cpOf(def);
   const amount = compileFloat(def.m_fForceAmount, 100);
-  const falloff = def.m_fFalloffPower ?? 0;
+  const falloff = def.m_fFalloffPower ?? 2;
   const scale = arr(def.m_vecComponentScale, [1, 1, 1]);
   return {
     force(system) {
@@ -2169,7 +2171,7 @@ DEFS.C_OP_SetControlPointPositions = (def) => {
 };
 
 DEFS.C_OP_SetControlPointOrientation = (def) => {
-  const target = def.m_nCP ?? 0;
+  const target = def.m_nCP ?? 1;
   const rotation = arr(def.m_vecRotation, [0, 0, 0]);
   const euler = new THREE.Euler();
   return {
@@ -2249,7 +2251,7 @@ DEFS.C_OP_SetPerChildControlPoint = (def) => {
   const step = def.m_nParticleIncrement ?? 1;
   const byCount = Boolean(def.m_bNumBasedOnParticleCount);
   const orient = Boolean(def.m_bSetOrientation);
-  const field = def.m_nOrientationField ?? -1;
+  const field = def.m_nOrientationField ?? 19;
   const forward = new THREE.Vector3(1, 0, 0);
   return {
     update(system) {
@@ -2526,11 +2528,12 @@ DEFS.C_OP_StopAfterCPDuration = (def) => {
 // A control point's speed into another's value (a trail shown only when a weapon swings fast)
 DEFS.C_OP_RemapSpeedtoCP = (def) => {
   const input = def.m_nInControlPointNumber ?? 0;
-  const output = def.m_nOutControlPointNumber ?? 1;
+  const output = def.m_nOutControlPointNumber ?? -1;
   const component = def.m_nField ?? 0;
   const [inMin, inMax, outMin, outMax] = [def.m_flInputMin ?? 0, def.m_flInputMax ?? 1, def.m_flOutputMin ?? 0, def.m_flOutputMax ?? 1];
   return {
     update(system) {
+      if (output < 0) return;
       const value = remap(system.controlPoint(input).speed ?? 0, inMin, inMax, outMin, outMax);
       system.ownControlPoint(output).value.setComponent(component, value);
     },

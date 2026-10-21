@@ -6,6 +6,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ControlPoint, ParticleSystem } from "./system.js";
 import { attachmentTransform, bonesOf, quaternionToSource, toSource, UNIT } from "./math.js";
 import { unsupported } from "./operators.js";
+import { loadSchema, withDefaults } from "./schema.js";
 import { sheetTextureOf } from "./render.js";
 
 const systemCache = new Map();
@@ -81,10 +82,15 @@ export class ParticleManager {
     };
   }
 
+  // A system with the engine's defaults for what its file leaves out (schema.js)
+  withSchema(system) {
+    return Promise.all([system, loadSchema(this.base)]).then(([def]) => withDefaults(def));
+  }
+
   loadSystem(path) {
     const key = path.toLowerCase().replace(/\.vpcf$/, "");
     if (!systemCache.has(key)) {
-      systemCache.set(key, fetchJson(`${this.base}${key}.json`));
+      systemCache.set(key, this.withSchema(fetchJson(`${this.base}${key}.json`)));
     }
     return systemCache.get(key);
   }
@@ -97,7 +103,7 @@ export class ParticleManager {
       const bundle = await fetchJson(`${this.base}particles/bundles/${key.replace(/^particles\//, "")}.json`);
       for (const [file, system] of Object.entries(bundle ?? {})) {
         const name = file.toLowerCase().replace(/\.vpcf$/, "");
-        if (!systemCache.has(name)) systemCache.set(name, Promise.resolve(system));
+        if (!systemCache.has(name)) systemCache.set(name, this.withSchema(system));
       }
     }
     return this.loadSystem(path);

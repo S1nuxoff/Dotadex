@@ -3,9 +3,12 @@
 //   - operator classes it has no code for, or only a stub that does nothing
 //   - parameters the files give that its code never reads, by class
 //   - kinds of input values (PF_TYPE_*, PVEC_TYPE_*, PF_MAP_TYPE_*) it does not know
+//   - against the engine's schema (particles/schema.json): its classes the site has no code for,
+//     and the operators its defaults do not reach (files older than the class, or of a class the
+//     engine no longer has)
 // What the viewer knows is read from the text of src/viewer/particles, so nothing is imported.
 // The bundles are kept in node_modules/.cache/particle-bundles and fetched again only when changed.
-//   npm run particles:coverage [-- --top 40] [-- --json out.json]
+//   npm run particles:coverage [-- --top 40] [-- --json out.json] [-- --schema schema.json]
 import fs from "fs";
 import path from "path";
 
@@ -157,6 +160,21 @@ function countParams(owner, params, seen) {
   }
 }
 
+// The engine's classes, from the dataset or a file (--schema); null when there is none
+async function loadSchema() {
+  const file = arg("--schema");
+  if (file) return JSON.parse(fs.readFileSync(file, "utf8"));
+  const res = await fetch(`${BASE}particles/schema.json`).catch(() => null);
+  return res?.ok ? res.json() : null;
+}
+const fieldsOf = (schema, name) => {
+  const fields = new Set();
+  for (let c = schema.classes[name]; c; c = schema.classes[c.base]) Object.keys(c.fields).forEach((field) => fields.add(field));
+  return fields;
+};
+
+const schema = await loadSchema();
+const older = new Map(); // class -> systems with an operator of it older than the class's fields
 const systems = await loadBundles();
 for (const def of systems.values()) {
   const seen = new Set();
@@ -168,6 +186,13 @@ for (const def of systems.values()) {
       if (!op?._class || op.m_bDisableOperator) continue;
       countOnce(classes, op._class, seen);
       countParams(op._class, op, seen);
+      if (schema?.classes[op._class]) {
+        const fields = fieldsOf(schema, op._class);
+        if (Object.keys(op).some((key) => key !== "_class" && !fields.has(key)) && !seen.has(`older:${op._class}`)) {
+          seen.add(`older:${op._class}`);
+          older.set(op._class, (older.get(op._class) ?? 0) + 1);
+        }
+      }
     }
   }
   countTypes(def, seen);
@@ -206,6 +231,18 @@ const unknownTypes = [...types].filter(([type]) => !knownTypes.has(type)).sort((
 print();
 print(`Kinds of input values the inputs do not know (systems):`);
 for (const [type, count] of unknownTypes.slice(0, TOP)) print(`${share(count)}  ${type}`);
+
+if (schema) {
+  const engine = Object.keys(schema.classes).filter((name) => /^C_(OP|INIT)_/.test(name));
+  const unused = engine.filter((name) => !classes.has(name));
+  const notInEngine = [...classes].filter(([name]) => !schema.classes[name]).sort((a, b) => b[1] - a[1]);
+  print();
+  print(`Engine schema (build ${schema.source?.build ?? "?"}): ${engine.length} operator classes, ${engine.filter((name) => handled.has(name) && !stubs.has(name)).length} done here, ${unused.length} used by no file here`);
+  print(`Classes the files use that the engine no longer has (no defaults for them; systems):`);
+  for (const [name, count] of notInEngine.slice(0, TOP)) print(`${share(count)}  ${name}`);
+  print(`Classes with operators older than the engine's fields (no defaults for those; systems):`);
+  for (const [name, count] of [...older].sort((a, b) => b[1] - a[1]).slice(0, TOP)) print(`${share(count)}  ${name}`);
+}
 
 console.log(lines.join("\n"));
 const out = arg("--json");

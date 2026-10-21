@@ -1117,12 +1117,7 @@ export class Stage {
       // before reading it. The light itself still shades as a sun
       this.portraitSun = new THREE.DirectionalLight(0xffffff, 0);
       this.portraitSun.castShadow = true;
-      // Near and far as CGlobalLightBase's constructor leaves them (client.dll 0x181736e00:
-      // m_flNearZ 4, m_flFarZ 10000; the page sets neither): the spot's projection takes them as
-      // they are (0x181760147). With a near plane of 4 the depth biases, which are in depth units,
-      // span many units a little way off the light, so a part close in front of another (a hat's
-      // brim over the face, cloth over a leg) casts nothing on it, as in the game
-      this.portraitSun.shadow.camera = new THREE.PerspectiveCamera(63, 1, 4 * SOURCE_TO_METRES, 10000 * SOURCE_TO_METRES);
+      this.portraitSun.shadow.camera = new THREE.PerspectiveCamera(63, 1, 10 * SOURCE_TO_METRES, 1000 * SOURCE_TO_METRES);
       this.portraitSun.shadow.mapSize.set(2048, 2048);
       this.portraitSun.shadow.bias = -0.0005;
       this.portraitSun.shadow.normalBias = SOURCE_TO_METRES;
@@ -1185,6 +1180,7 @@ export class Stage {
       }
       const shadowCamera = this.portraitSun.shadow.camera;
       shadowCamera.fov = light.fov ?? 63;
+      shadowCamera.far = Math.max(1000, (light.distance ?? 0) * 2) * SOURCE_TO_METRES;
       shadowCamera.updateProjectionMatrix();
       this.portraitSun.color.copy(look.key);
       this.portraitSun.intensity = 2;

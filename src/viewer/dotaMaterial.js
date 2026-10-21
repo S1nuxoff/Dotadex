@@ -335,6 +335,10 @@ const fragmentShader = /* glsl */ `
     // surface turns away from the eye (a rim light laid over a model, as the prismatic sets')
     float alpha = color.a * mix(1.0, 1.0 - clamp(abs(nv), 0.0, 1.0), uFresnelAlpha);
     gl_FragColor = vec4(outColor, uOpaque > 0.5 ? 1.0 : alpha);
+    #ifdef SHOW_TRANSLUCENT
+      // ?showtranslucent: a blended material drawn solid red with its alpha as brightness
+      if (uOpaque < 0.5) gl_FragColor = vec4(alpha, 0.0, 0.0, 1.0);
+    #endif
     #ifdef SHADOW_VIEW
       // White lit, black shadowed; blue outside the shadow map, red with no shadow map
       gl_FragColor = shadow == -2.0 ? vec4(1.0, 0.0, 0.0, 1.0) : shadow == -3.0 ? vec4(1.0, 0.0, 1.0, 1.0) : shadow == -4.0 ? vec4(1.0, 1.0, 0.0, 1.0) : shadow == -1.0 ? vec4(0.0, 0.3, 1.0, 1.0) : vec4(vec3(shadow), 1.0);
@@ -622,6 +626,7 @@ export function createDotaMaterial(original, vmat, textures) {
     if (search.includes("shadow25")) material.defines = { ...material.defines, SHADOW_25TAP: "" };
     // ?noshadow: the hero lit as if nothing shadowed it, to tell a shadow from the rest
     if (search.includes("noshadow")) material.defines = { ...material.defines, NO_SUN_SHADOW: "" };
+    if (search.includes("showtranslucent")) material.defines = { ...material.defines, SHOW_TRANSLUCENT: "" };
     if (search.includes("nospec")) material.uniforms.uSpecularScale.value = 0;
     if (search.includes("noenv")) material.uniforms.uCubeMapScale.value = 0;
     if (search.includes("norim")) material.uniforms.uRimLightScale.value = 0;

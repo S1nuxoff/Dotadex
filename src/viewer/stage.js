@@ -1172,6 +1172,12 @@ export class Stage {
       } else {
         this.portraitAim = this.portraitDir.clone().negate();
       }
+      // hero.vfx's sun direction is the global light's m_ShadowDirection (client.dll 0x18173e8e0),
+      // not its spot origin; which portrait key fills it is not found yet. ?sunangles shades by
+      // PortraitLightAngles (the way the spot points) instead of the direction of its position
+      if (search?.has("sunangles") && light.angles?.length === 3) {
+        this.portraitDir = this.portraitAim.clone().negate();
+      }
       const shadowCamera = this.portraitSun.shadow.camera;
       shadowCamera.fov = light.fov ?? 63;
       shadowCamera.far = Math.max(1000, (light.distance ?? 0) * 2) * SOURCE_TO_METRES;

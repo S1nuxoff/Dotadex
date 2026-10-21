@@ -1146,7 +1146,11 @@ export class Stage {
       // While developing, ?key=<times> and ?amb=<times> scale them (V-13)
       const search = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null;
       const keyTimes = Number(search?.get("key") ?? 1);
-      const ambientTimes = Number(search?.get("amb") ?? 1);
+      // The second light's scale and the ground's reach the shaders times r_dota_shadow_ambient_light
+      // (client.dll 0x1822249ad: cb2[4].w = it × m_flAmbientScale1; 0x1822249eb: cb2[5].w = it ×
+      // m_flGroundScale), a development-only convar, so always its default, 1.5
+      const SHADOW_AMBIENT_LIGHT = 1.5;
+      const ambientTimes = Number(search?.get("amb") ?? 1) * SHADOW_AMBIENT_LIGHT;
       const look = {
         key: color(light.color, (light.scale ?? 1) * keyTimes),
         fill: color(ambient.color, 1),
@@ -1157,8 +1161,8 @@ export class Stage {
         // (m_flAmbientScale2: PortraitShadowScale) and shows it only in the key light's shadow;
         // global_lit_simple (the pedestal) by cb2[5].w (m_flGroundScale: PortraitGroundShadowScale)
         // where the key does not reach. client.dll's defaults: 89 89 89, 1.5, 1.5
-        sky: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.ground ?? 1.5),
-        ground: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.ground ?? 1.5),
+        sky: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], (this.portrait.shadow?.ground ?? 1.5) * SHADOW_AMBIENT_LIGHT),
+        ground: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], (this.portrait.shadow?.ground ?? 1.5) * SHADOW_AMBIENT_LIGHT),
         fillFollows: Boolean(ambient.direction),
         shadowFill: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.scale ?? 1.5),
       };

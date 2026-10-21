@@ -11,7 +11,9 @@ import { materialPrograms, runProgram } from "./materialPrograms.js";
 // The sun's shadow as hero.vfx and global_lit_simple.vfx read it. The point is pushed out along
 // its normal before it is projected (the light's normalBias); outside the shadow map it is lit
 // (its sampler's border is 1). hero.vfx has a 9-tap path (a texel apart, 0.206 / 0.124 / 0.075)
-// and a soft 25-tap one; the hero page's shadow is soft in the game, so the soft one is drawn
+// and a soft 25-tap one taken only when the view's highqualityshadows is set (client.dll
+// 0x182224b7c, from the scene panel's attribute, which no layout sets and the hero page's
+// DOTAUIEconSetPreview leaves false), so the 9-tap one is drawn; ?shadow25 draws the other
 const sunShadowChunk = /* glsl */ `
   // ?shadowview tells apart a point outside the shadow map (-1) and no shadow map at all (-2)
   #ifdef SHADOW_VIEW
@@ -41,8 +43,8 @@ const sunShadowChunk = /* glsl */ `
       coord.xyz /= coord.w;
       coord.z += light.shadowBias - 0.0007;
       if (coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0 || coord.z > 1.0) return SUN_OUTSIDE;
-      #ifdef SHADOW_9TAP
-        // The other path: 9 compares a texel apart, no extra offset
+      #ifndef SHADOW_25TAP
+        // The usual path: 9 compares a texel apart, no extra offset
         coord.z += 0.0007;
         float s = 1.0 / light.shadowMapSize.x;
         #define SUN_TAP(x, y) texture( directionalShadowMap[ 0 ], vec3( coord.xy + vec2(x, y) * s, coord.z ) )
@@ -296,10 +298,12 @@ const fragmentShader = /* glsl */ `
     #endif
     diffuseLight += particleLights(n, -vViewPosition);
 
-    // Specular: Phong, sharpness from Masks2 A, plus the cube map unless metal masks it
+    // Specular: Phong, sharpness from Masks2 A, plus the cube map unless metal masks it. The
+    // shadow darkens the diffuse only: hero.vfx multiplies the highlight by saturate(N·L) and the
+    // key color alone (gloss/f_d0.asm and f_d4.asm)
     vec3 r = reflect(-v, n);
     float exponent = exponentMask * uSpecularExponent;
-    float phong = pow(max(clamp(dot(r, uKeyDir), 0.0, 1.0), 0.001), max(exponent, 1.0)) * clamp(nl, 0.0, 1.0) * shadow;
+    float phong = pow(max(clamp(dot(r, uKeyDir), 0.0, 1.0), 0.001), exponent) * clamp(nl, 0.0, 1.0);
     vec3 env = vec3(0.0);
     if (uHasCubeMap > 0.5) {
       // Read by the reflection in the world, in the game's axes (the scene's x, y, z are the
@@ -614,7 +618,7 @@ export function createDotaMaterial(original, vmat, textures) {
   if (import.meta.env.DEV) {
     const search = window.location.search;
     if (search.includes("shadowview")) material.defines = { ...material.defines, SHADOW_VIEW: "" };
-    if (search.includes("shadow9")) material.defines = { ...material.defines, SHADOW_9TAP: "" };
+    if (search.includes("shadow25")) material.defines = { ...material.defines, SHADOW_25TAP: "" };
     // ?noshadow: the hero lit as if nothing shadowed it, to tell a shadow from the rest
     if (search.includes("noshadow")) material.defines = { ...material.defines, NO_SUN_SHADOW: "" };
     if (search.includes("nospec")) material.uniforms.uSpecularScale.value = 0;
@@ -817,7 +821,7 @@ export function createLitSimpleMaterial(original, vmat, textures) {
   material.name = original.name;
   setUvLayer(material.uniforms.uBaseUv.value, (name) => paramValue(vmat, name), UV_LAYERS.uBaseUv);
   if (import.meta.env.DEV && window.location.search.includes("shadowview")) material.defines = { ...material.defines, SHADOW_VIEW: "" };
-  if (import.meta.env.DEV && window.location.search.includes("shadow9")) material.defines = { ...material.defines, SHADOW_9TAP: "" };
+  if (import.meta.env.DEV && window.location.search.includes("shadow25")) material.defines = { ...material.defines, SHADOW_25TAP: "" };
   return material;
 }
 

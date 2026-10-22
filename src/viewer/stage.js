@@ -22,19 +22,12 @@ import * as perf from "./perf.js";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-// ?fade, to compare: models change by the whole picture fading out to the page and back in,
-// not behind the fog. On for the rest of the tab once opened with it; ?fade=off ends it
-function readFadeSwitch() {
-  const value = new URLSearchParams(window.location.search).get("fade");
-  try {
-    if (value === "off") sessionStorage.removeItem("fade");
-    else if (value !== null) sessionStorage.setItem("fade", "1");
-    return sessionStorage.getItem("fade") === "1";
-  } catch {
-    return value !== null && value !== "off";
-  }
-}
-const fadeInstead = readFadeSwitch();
+// The game's hero page changes models as CDOTA_UI_LargeModelLoadout does: two EconSetPreview
+// panels, the next model loading in one while the other is on show, then the shown one fading out
+// as the next fades in (large_model_loadout.css: .EconSetPreview.Fade, opacity over 0.25 s)
+const CROSSFADE = "opacity 0.25s ease";
+// The longest a new model waits for its cloth to settle before it is shown anyway
+const HOLD_LIMIT_MS = 2000;
 
 // Loaded models are kept, switching back and forth does not download them again
 const cache = new Map();
@@ -779,6 +772,7 @@ export class Stage {
     this.resizeObserver.observe(canvas.parentElement);
     this.resize();
     this.warmPostprocessing();
+    this.setFogTransition(false);
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
@@ -819,8 +813,9 @@ export class Stage {
   // takes the place of the hero base.
   // An url may end with #skin=N for a material variant of the model.
   async show(urls, onProgress) {
-    // A model on show is veiled in fog while the next one loads
-    if (this.group && !reducedMotion.matches) {
+    // A model on show is veiled in fog while the next one loads, when the fog is chosen; else it
+    // stays on show until the next is ready
+    if (this.useFog && this.group && !reducedMotion.matches) {
       if (this.veilTarget !== 1) {
         playUiSound("veil-in", 0.8);
       }
@@ -1004,6 +999,13 @@ export class Stage {
       }
     }
     mark("waiting for the fog to close");
+    // Without the fog, the picture on show is kept over the new model until it is ready, then fades
+    if (!this.useFog && this.group && !reducedMotion.matches) {
+      await this.holdPicture();
+      if (request !== this.request) {
+        return null;
+      }
+    }
     this.sequences = sequences[rootIndex];
     this.replace(group, gltfs[rootIndex].animations);
     mark("swap in");
@@ -1049,6 +1051,7 @@ export class Stage {
     this.veilTarget = 0;
     // Told once the fog has parted enough to see the model, not when it is swapped in behind it
     this.pendingShow = true;
+    this.pendingSince = performance.now();
     try {
       this.measureTint(group);
     } catch {}
@@ -1972,6 +1975,59 @@ export class Stage {
   }
 
   // Draws the halos of the model's glowing materials into the glow composer, when it has any
+  // The fog between models (a setting), or the game's crossfade
+  setFogTransition(on) {
+    this.useFog = Boolean(on);
+    if (this.group) return;
+    // Before the first model: the fog opens over it, or the picture fades in
+    const veil = this.veil.material.uniforms;
+    veil.uCover.value = this.useFog ? 1 : 0;
+    this.veilTarget = this.useFog ? 1 : 0;
+    this.canvas.style.transition = "none";
+    this.canvas.style.opacity = this.useFog || reducedMotion.matches ? "1" : "0";
+  }
+
+  // A copy of the picture on show, kept over the canvas while the next model is made ready
+  holdPicture() {
+    if (!this.picture) {
+      this.picture = document.createElement("canvas");
+      this.picture.className = this.canvas.className;
+      this.picture.style.pointerEvents = "none";
+      this.picture.setAttribute("aria-hidden", "true");
+      this.canvas.after(this.picture);
+    }
+    return new Promise((resolve) => {
+      this.pictureWanted = resolve;
+    });
+  }
+
+  // Right after a frame is drawn, while the canvas still holds it
+  capturePicture() {
+    const picture = this.picture;
+    picture.width = this.canvas.width;
+    picture.height = this.canvas.height;
+    const context = picture.getContext("2d");
+    context.clearRect(0, 0, picture.width, picture.height);
+    context.drawImage(this.canvas, 0, 0);
+    picture.style.transition = "none";
+    picture.style.opacity = "1";
+    const resolve = this.pictureWanted;
+    this.pictureWanted = null;
+    resolve();
+  }
+
+  // The new model comes into view: the held picture fades off it, or the canvas fades in
+  reveal() {
+    if (this.picture && this.picture.style.opacity !== "0") {
+      this.picture.style.transition = reducedMotion.matches ? "none" : CROSSFADE;
+      this.picture.style.opacity = "0";
+    }
+    if (this.canvas.style.opacity === "0") {
+      this.canvas.style.transition = reducedMotion.matches ? "none" : CROSSFADE;
+      this.canvas.style.opacity = "1";
+    }
+  }
+
   // Compiles an object's shaders in parallel where the browser can, as they are drawn: into the
   // composer's target, which sets the programs' tone mapping and output colors. Compiled for the
   // screen, every program was made again on its first frame (27 for Void Spirit's page, 500 ms)
@@ -2141,16 +2197,13 @@ export class Stage {
     veil.uCover.value = THREE.MathUtils.clamp(cover + Math.sign(this.veilTarget - cover) * delta * speed, 0, 1);
     veil.uTime.value += delta;
     veil.uAspect.value = this.canvas.parentElement.clientWidth / Math.max(this.canvas.parentElement.clientHeight, 1);
-    if (fadeInstead) {
-      // The same timing as the fog's, the picture fading instead (smoothed at both ends)
-      const cover = veil.uCover.value;
-      this.veil.visible = false;
-      this.canvas.style.opacity = String(1 - cover * cover * (3 - 2 * cover));
-    } else {
-      this.veil.visible = veil.uCover.value > 0.01;
-    }
-    if (this.pendingShow && veil.uCover.value < 0.35) {
+    this.veil.visible = veil.uCover.value > 0.01;
+    // Shown once the fog has parted enough to see it (or at once, without the fog) and its cloth
+    // has settled, which it does over its first frames
+    const settled = (this.cloths ?? []).every((cloth) => cloth.started && !(cloth.settling > 0));
+    if (this.pendingShow && veil.uCover.value < 0.35 && (settled || performance.now() - this.pendingSince > HOLD_LIMIT_MS)) {
       this.pendingShow = false;
+      this.reveal();
       this.onShow?.();
     }
     this.rockStage.flash = this.flash;
@@ -2264,6 +2317,7 @@ export class Stage {
     this.composer.render();
     perf.gpuEnd(gpu);
     perf.add("cpu: frame draw", at);
+    if (this.pictureWanted) this.capturePicture();
     perf.frameEnd(this.renderer);
     if (import.meta.env.DEV && this.probeRequested) {
       this.probeRequested = false;

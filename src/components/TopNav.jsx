@@ -144,6 +144,7 @@ function SettingsMenu({ language, onLanguage }) {
         <VolumeSliders />
         <SettingToggle name="freeCamera" label="Free camera" hint="Turn, zoom and pan on hero pages" />
         <SettingToggle name="particles" label="Particles" hint="The game's effects on heroes and items" />
+        <SettingToggle name="fog" label="Fog between heroes" hint="Drifting fog instead of the game's crossfade" />
         <p className="border-t border-line pt-3 text-[11px] leading-snug text-ash/80">{VALVE_NOTICE}</p>
       </Popover>
     </div>

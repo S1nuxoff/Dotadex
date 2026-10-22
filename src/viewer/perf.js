@@ -143,7 +143,19 @@ function report(renderer) {
     const nameOf = (program) => program.name || (/^[a-z]+$/.test(program.cacheKey?.split(",")[0] ?? "") ? program.cacheKey.split(",")[0] : "custom");
     for (const program of made) kinds.set(nameOf(program), (kinds.get(nameOf(program)) ?? 0) + 1);
     const list = [...kinds].map(([name, count]) => `${name || "unnamed"}${count > 1 ? ` x${count}` : ""}`).join(", ");
-    log(`[perf] long frame ${Math.round(whole)} ms${made.length ? ` (${made.length} new shader programs: ${list})` : ""}: ${named.join(", ")}, other ${Math.round(whole - [...parts].reduce((sum, [name, ms]) => (name === "cpu: whole frame" ? sum : sum + ms), 0))}`);
+    // How each new program's key differs from the nearest one made before (same shader, as many
+    // parts), by the part's place counted from the end, where three.js puts its parameters
+    const keyDiffs = made.slice(0, 6).map((program) => {
+      const key = program.cacheKey.split(",");
+      const near = [...programsBefore]
+        .map((other) => other.cacheKey.split(","))
+        .filter((other) => other[0] === key[0] && other.length === key.length)
+        .map((other) => ({ other, diff: key.map((part, i) => (part === other[i] ? null : `[-${key.length - i}] ${other[i]} -> ${part}`)).filter(Boolean) }))
+        .sort((p, q) => p.diff.length - q.diff.length)[0];
+      return `    ${nameOf(program)}: ${near ? near.diff.join("; ") || "same key" : "no program like it before"}`;
+    });
+    const other = Math.round(whole - [...parts].reduce((sum, [name, ms]) => (name === "cpu: whole frame" ? sum : sum + ms), 0));
+    log([`[perf] long frame ${Math.round(whole)} ms${made.length ? ` (${made.length} new shader programs: ${list})` : ""}: ${named.join(", ")}, other ${other}`, ...keyDiffs].join("\n"));
   }
   if (timer) collectQueries();
   const elapsed = performance.now() - since;

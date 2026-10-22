@@ -712,7 +712,7 @@ export class Stage {
     this.glowComposer.renderToScreen = false;
     this.glowComposer.addPass(new RenderPass(this.scene, this.camera, null, new THREE.Color(0, 0, 0), 0));
     this.glowComposer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.65, 0.3, 0));
-    this.glowBlack = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    this.glowBlack = new THREE.MeshBasicMaterial({ name: "glow pass black", color: 0x000000 });
     this.glowMix = new ShaderPass({
       uniforms: { tDiffuse: { value: null }, tGlow: { value: null } },
       vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -874,6 +874,12 @@ export class Stage {
         drawn.push([node, node.material]);
         node.material = node.userData.dota?.userData?.glow ?? this.glowBlack;
       }
+    });
+    await this.compileAsDrawn(group, this.scene);
+    // A mesh with a glow can be drawn black too (renderGlow draws a hidden one's glow black), and
+    // the black's programs differ by skinning and morphs from mesh to mesh
+    group.traverse((node) => {
+      if (node.isMesh) node.material = this.glowBlack;
     });
     await this.compileAsDrawn(group, this.scene);
     // And as they are drawn into the shadow map: each caster's depth material given what three.js's
@@ -1547,6 +1553,16 @@ export class Stage {
             // Its shaders compiled before it is on screen, as the hero's (show)
             const pedestal = this.pedestal;
             await this.compileAsDrawn(pedestal, this.scene);
+            // And black, as the glow pass draws it
+            const own = [];
+            pedestal.traverse((node) => {
+              if (node.isMesh) {
+                own.push([node, node.material]);
+                node.material = this.glowBlack;
+              }
+            });
+            await this.compileAsDrawn(pedestal, this.scene);
+            for (const [node, material] of own) node.material = material;
             if (this.pedestal !== pedestal) {
               return;
             }

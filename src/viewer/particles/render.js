@@ -532,6 +532,8 @@ const FLAT = /* glsl */ `
 
 function material(def, vertexShader, orientation) {
   const result = new THREE.ShaderMaterial({
+    // Named for ?perf's lists of shader programs
+    name: "particle",
     vertexShader,
     fragmentShader: flat ? FLAT : FRAGMENT,
     uniforms: {

@@ -877,6 +877,8 @@ function createGlowMaterial(vmat, textures, main, side, animated) {
     return null;
   }
   return new THREE.ShaderMaterial({
+    // Named for ?perf's lists of shader programs
+    name: `${main.name || "material"} glow`,
     vertexShader,
     fragmentShader: /* glsl */ `
       uniform sampler2D tColor;

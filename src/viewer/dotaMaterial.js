@@ -305,6 +305,10 @@ const fragmentShader = /* glsl */ `
     vec3 r = reflect(-v, n);
     float exponent = exponentMask * uSpecularExponent;
     float phong = pow(max(clamp(dot(r, uKeyDir), 0.0, 1.0), 0.001), exponent) * clamp(nl, 0.0, 1.0);
+    // Dev switch ?specshadow: the highlight darkened by the shadow, as before cc2a2c9, to compare
+    #ifdef SPEC_SHADOWED
+      phong *= shadow;
+    #endif
     vec3 env = vec3(0.0);
     if (uHasCubeMap > 0.5) {
       // Read by the reflection in the world, in the game's axes (the scene's x, y, z are the
@@ -626,6 +630,7 @@ export function createDotaMaterial(original, vmat, textures) {
     if (search.includes("shadow25")) material.defines = { ...material.defines, SHADOW_25TAP: "" };
     // ?noshadow: the hero lit as if nothing shadowed it, to tell a shadow from the rest
     if (search.includes("noshadow")) material.defines = { ...material.defines, NO_SUN_SHADOW: "" };
+    if (search.includes("specshadow")) material.defines = { ...material.defines, SPEC_SHADOWED: "" };
     if (search.includes("showtranslucent")) material.defines = { ...material.defines, SHOW_TRANSLUCENT: "" };
     if (search.includes("nospec")) material.uniforms.uSpecularScale.value = 0;
     if (search.includes("noenv")) material.uniforms.uCubeMapScale.value = 0;

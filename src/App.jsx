@@ -430,7 +430,9 @@ export default function App() {
   // entries for a courier, a ward or anything else
   const shownItem = route?.type === "item" ? catalog.itemsById[route.id] : null;
   // A persona has its own entry (npc_dota_hero_antimage_persona1: its light, shadow and cameras)
-  const personaKey = outfit?.persona ? `npc_dota_hero_${outfit.hero}_persona${outfit.persona}` : null;
+  // (dev switch ?herolight: the hero's entry for a persona too, as before 6c9ef56, to compare)
+  const heroLight = import.meta.env.DEV && window.location.search.includes("herolight");
+  const personaKey = outfit?.persona && !heroLight ? `npc_dota_hero_${outfit.hero}_persona${outfit.persona}` : null;
   const portraitKey = outfit?.hero
     ? (personaKey && portraits[personaKey] ? personaKey : `npc_dota_hero_${outfit.hero}`)
     : shownItem?.kind === "courier"

@@ -55,6 +55,7 @@ const parts = new Map();
 const LONG_FRAME_MS = 50;
 let frames = 0;
 let frameStarted = 0;
+let programsBefore = 0;
 let since = performance.now();
 let gl = null;
 let timer;
@@ -112,6 +113,7 @@ export function frameStart(renderer) {
   renderer.info.autoReset = false;
   renderer.info.reset();
   parts.clear();
+  programsBefore = renderer.info.programs?.length ?? 0;
   frameStarted = performance.now();
 }
 
@@ -134,7 +136,8 @@ function report(renderer) {
   if (whole > LONG_FRAME_MS) {
     // The draw includes compiling shaders first used and uploading new textures
     const named = [...parts].filter(([name]) => name !== "cpu: whole frame").map(([name, ms]) => `${name.replace("cpu: ", "")} ${Math.round(ms)}`);
-    log(`[perf] long frame ${Math.round(whole)} ms: ${named.join(", ")}, other ${Math.round(whole - [...parts].reduce((sum, [name, ms]) => (name === "cpu: whole frame" ? sum : sum + ms), 0))}`);
+    const compiled = (renderer.info.programs?.length ?? 0) - programsBefore;
+    log(`[perf] long frame ${Math.round(whole)} ms${compiled ? ` (${compiled} new shader programs)` : ""}: ${named.join(", ")}, other ${Math.round(whole - [...parts].reduce((sum, [name, ms]) => (name === "cpu: whole frame" ? sum : sum + ms), 0))}`);
   }
   if (timer) collectQueries();
   const elapsed = performance.now() - since;
@@ -155,6 +158,12 @@ function report(renderer) {
   sums.clear();
   frames = 0;
   since = performance.now();
+}
+
+// A change that makes every material compile again (lights, shadows), with when it came
+export function note(text) {
+  if (!perfOn) return;
+  log(`[perf] ${text} at ${Math.round(performance.now())} ms`);
 }
 
 // The stages of opening a model, one a line: [[name, ms], ...]

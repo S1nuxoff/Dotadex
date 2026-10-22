@@ -883,6 +883,7 @@ export class Stage {
       return null;
     }
     mark("shaders");
+    perf.note("the model's shaders compiled");
     // The swap happens behind the fog once it has closed over the view
     while (this.veilTarget === 1 && this.veil.material.uniforms.uCover.value < 0.95) {
       await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -1240,8 +1241,10 @@ export class Stage {
       this.portraitSun.shadow.bias = 0;
       this.portraitSun.shadow.normalBias = SOURCE_TO_METRES;
       this.scene.add(this.portraitSun, this.portraitSun.target);
+      perf.note("the page's sun added: every lit material compiles again");
     }
     if (this.portraitSun) {
+      if (this.portraitSun.visible !== on) perf.note(`the page's sun ${on ? "shown" : "hidden"}: every lit material compiles again`);
       this.portraitSun.visible = on;
     }
     if (on) {
@@ -1333,6 +1336,7 @@ export class Stage {
       return;
     }
     this.renderer.shadowMap.enabled = on;
+    perf.note(`shadows ${on ? "on" : "off"}: every material compiles again`);
     this.scene.traverse((node) => {
       if (node.isMesh) {
         for (const material of [node.material, node.userData.dota, node.userData.pbr].flat()) {

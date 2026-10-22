@@ -2,9 +2,8 @@
 // viewer needs to list, filter and show them. Which models are exported so far is read
 // from the dataset's index.json in the browser, so new ones show up without a rebuild.
 import fs from "node:fs";
+import { MODELS_BASE } from "./dataset.mjs";
 
-const DATASET = process.env.HF_DATASET || "Sqls1/dota2-models";
-const MODELS_BASE = `https://huggingface.co/datasets/${DATASET}/resolve/main/`;
 const FILES = "https://raw.githubusercontent.com/S1nuxoff/dota2-file-tracker/main/static";
 const PRICES_URL = "https://raw.githubusercontent.com/S1nuxoff/dota2-price-tacker/main/static/prices/latest.json";
 const OUT = "public/catalog.json";

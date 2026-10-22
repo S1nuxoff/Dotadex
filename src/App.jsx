@@ -196,13 +196,17 @@ export default function App() {
   const catalog = useMemo(() => base && exported && withExported(base, exported), [base, exported]);
 
   useEffect(() => {
+    // The list of exported models and the page scenes (the pedestal waits on them) are asked for
+    // with the catalog, from the dataset the site is built for, not after it
+    const portraitsFrom = (modelsBase) => fetchData(`${modelsBase}data/loadout_portraits.json`).then((res) => (res.ok ? res.json() : {}));
+    const early = { exported: loadExported(__MODELS_BASE__), portraits: portraitsFrom(__MODELS_BASE__) };
+    early.exported.catch(() => {});
+    early.portraits.catch(() => {});
     loadCatalog()
       .then(async (loaded) => {
-        // Alongside the list of exported models, not after it: the pedestal waits on it
-        fetchData(`${loaded.modelsBase}data/loadout_portraits.json`)
-          .then((res) => (res.ok ? res.json() : {}))
-          .then(setPortraits, () => {});
-        const done = await loadExported(loaded.modelsBase);
+        const same = loaded.modelsBase === __MODELS_BASE__;
+        (same ? early.portraits : portraitsFrom(loaded.modelsBase)).then(setPortraits, () => {});
+        const done = await (same ? early.exported : loadExported(loaded.modelsBase));
         const ready = withExported(loaded, done);
         const fromLink = parseRoute(window.location);
         const known = isKnown(ready, fromLink);

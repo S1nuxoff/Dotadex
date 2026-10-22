@@ -284,7 +284,12 @@ const fragmentShader = /* glsl */ `
     // the shadow's fill, PortraitShadowColor × PortraitShadowScale, only where the key light's
     // shadow falls (no clouds there); elsewhere the studio's sky and ground as before
     if (uShadowFillOn > 0.5) {
-      diffuseLight += uShadowFill * (1.0 - shadow) * uAmbientScale;
+      // Dev switch ?fillall: the fill everywhere, as with clouds of 0 (max(1 - 0, 1 - shadow) = 1)
+      #ifdef FILL_ALL
+        diffuseLight += uShadowFill * uAmbientScale;
+      #else
+        diffuseLight += uShadowFill * (1.0 - shadow) * uAmbientScale;
+      #endif
     } else {
       diffuseLight += mix(uGroundColor, uSkyColor, worldN.y * 0.5 + 0.5) * uAmbientScale;
     }
@@ -631,6 +636,7 @@ export function createDotaMaterial(original, vmat, textures) {
     // ?noshadow: the hero lit as if nothing shadowed it, to tell a shadow from the rest
     if (search.includes("noshadow")) material.defines = { ...material.defines, NO_SUN_SHADOW: "" };
     if (search.includes("specshadow")) material.defines = { ...material.defines, SPEC_SHADOWED: "" };
+    if (search.includes("fillall")) material.defines = { ...material.defines, FILL_ALL: "" };
     if (search.includes("showtranslucent")) material.defines = { ...material.defines, SHOW_TRANSLUCENT: "" };
     if (search.includes("nospec")) material.uniforms.uSpecularScale.value = 0;
     if (search.includes("noenv")) material.uniforms.uCubeMapScale.value = 0;

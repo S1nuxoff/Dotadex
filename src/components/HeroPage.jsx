@@ -255,6 +255,9 @@ function drawBackdrop(canvas, w, h, look, picture, mask) {
 
 export function Backdrop({ base, heroId }) {
   const canvasRef = useRef(null);
+  // The last hero's backdrop over the new one, fading out (drawn anew, the picture changed at once)
+  const previousRef = useRef(null);
+  const drawnKey = useRef(null);
   const [all, setAll] = useState(null);
   const [images, setImages] = useState({ key: null, picture: null, mask: null });
   const [screen, setScreen] = useState(() => [window.innerWidth, window.innerHeight]);
@@ -293,6 +296,22 @@ export function Backdrop({ base, heroId }) {
     if (!canvasRef.current || !all || images.key !== key) {
       return;
     }
+    const previous = previousRef.current;
+    const changed = drawnKey.current !== null && drawnKey.current !== key;
+    drawnKey.current = key;
+    if (changed && previous) {
+      previous.width = canvasRef.current.width;
+      previous.height = canvasRef.current.height;
+      previous.getContext("2d").drawImage(canvasRef.current, 0, 0);
+      previous.style.transition = "none";
+      previous.style.opacity = "1";
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          previous.style.transition = "opacity 0.6s ease-out";
+          previous.style.opacity = "0";
+        })
+      );
+    }
     try {
       drawBackdrop(canvasRef.current, screen[0], screen[1], look, images.picture, images.mask);
     } catch {
@@ -307,6 +326,12 @@ export function Backdrop({ base, heroId }) {
         ref={canvasRef}
         className="absolute inset-x-0 bottom-0 h-[100vh] w-full"
         style={{ transform: "scale(1.04)" }}
+      />
+      <canvas
+        ref={previousRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[100vh] w-full"
+        style={{ transform: "scale(1.04)", opacity: 0 }}
       />
     </div>
   );

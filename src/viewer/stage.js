@@ -779,6 +779,11 @@ export class Stage {
     const quad = new THREE.PlaneGeometry(2, 2).deleteAttribute("normal");
     for (const material of materials) scene.add(new THREE.Mesh(quad, material));
     this.compileAsDrawn(scene, scene).then(() => quad.dispose());
+    // And their targets (the bloom's ten, the glow pass's) made with one pass over the empty
+    // stage, drawn black as the glow pass draws it
+    this.scene.overrideMaterial = this.glowBlack;
+    this.glowComposer.render();
+    this.scene.overrideMaterial = null;
   }
 
   resize() {
@@ -2006,6 +2011,12 @@ export class Stage {
       node.userData.compiling = true;
       node.layers.set(HELD_LAYER);
       this.compileAsDrawn(node, root).then(() => {
+          // Its textures onto the GPU too before it shows (they went up on its first frame)
+          for (const material of materials) {
+            for (const value of [...Object.values(material), ...Object.values(material.uniforms ?? {}).map((uniform) => uniform?.value)]) {
+              if (value?.isTexture && value.image) this.renderer.initTexture(value);
+            }
+          }
           materials.forEach((material) => this.compiledMaterials.add(material));
           node.layers.set(0);
           node.userData.compiling = false;
@@ -2697,6 +2708,9 @@ export class Stage {
   }
 
   dispose() {
+    // A model still on its way is dropped: drawn after this, a disposed renderer was handed the
+    // shared models' materials and textures (WebGL errors)
+    this.request++;
     this.renderer.setAnimationLoop(null);
     this.timer.dispose();
     this.resizeObserver.disconnect();

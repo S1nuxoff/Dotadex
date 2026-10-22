@@ -40,15 +40,17 @@
 
       /* One piece of the logo, clipped out of it (--d is its delay): D O T A are typed one by one,
          then DEX flies in whole and slams down. Under the plain face sits a white-hot copy that
-         fades as the piece appears */
+         fades as the piece appears. The cut-out (--clip) is on the inner .dx-cut and the glows on
+         the layers around it, so a glow spreads past the cut instead of being sliced off by it */
       .dx-l {
         position: absolute; inset: 0; opacity: 0;
         will-change: transform, opacity;
         animation: dx-type .14s ease-out var(--d) both;
       }
       .dx-l.red { animation: dx-slam-red .56s cubic-bezier(.17,.84,.32,1.12) var(--d) both; }
-      .dx-face, .dx-hot {
-        position: absolute; inset: 0;
+      .dx-face, .dx-hot, .dx-cut { position: absolute; inset: 0; }
+      .dx-cut {
+        clip-path: var(--clip);
         background: var(--dx-logo) center / 100% 100% no-repeat;
       }
       .dx-l.red .dx-face { filter: drop-shadow(0 0 8px rgba(255,70,20,.45)); }
@@ -173,13 +175,10 @@
         const els = LETTERS.map((L) => {
           const d = document.createElement("div");
           d.className = "dx-l" + (L.red ? " red" : "");
-          // push outer edges past the box so glows aren't cut off
-          const ex = (x) => (x === 0 ? -40 : x === W ? W + 40 : x);
-          const ey = (y) => (y === 0 ? -50 : y === H ? H + 50 : y);
-          d.style.clipPath = "polygon(" + L.poly.map(([x, y]) => pct(ex(x), W) + " " + pct(ey(y), H)).join(",") + ")";
+          d.style.setProperty("--clip", "polygon(" + L.poly.map(([x, y]) => pct(x, W) + " " + pct(y, H)).join(",") + ")");
           d.style.transformOrigin = pct(L.cx, W) + " 60%";
           d.style.setProperty("--d", L.at + "ms");
-          d.innerHTML = '<div class="dx-face"></div><div class="dx-hot"></div>';
+          d.innerHTML = '<div class="dx-face"><div class="dx-cut"></div></div><div class="dx-hot"><div class="dx-cut"></div></div>';
           logo.insertBefore(d, logo.querySelector(".dx-flash"));
           return d;
         });

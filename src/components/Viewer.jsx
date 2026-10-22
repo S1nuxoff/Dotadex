@@ -458,11 +458,6 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
     stageRef.current.setFreeCamera(getViewSettings().freeCamera);
     return onViewSettings((settings) => stageRef.current?.setFreeCamera(settings.freeCamera));
   }, []);
-  // The logo carved into the pedestal, unless turned off in the settings
-  useEffect(() => {
-    stageRef.current.setWatermark(getViewSettings().watermark);
-    return onViewSettings((settings) => stageRef.current?.setWatermark(settings.watermark));
-  }, []);
   // The hero's size on its page, as the game takes it: LoadoutScale, else ModelScale
   const { data: heroData } = useGameData(catalog.modelsBase, ["heroes.json"]);
   const heroEntry = outfit?.hero ? heroData?.heroes?.[`npc_dota_hero_${outfit.hero}`] : null;

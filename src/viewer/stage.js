@@ -12,7 +12,6 @@ import { colorParam, createDotaMaterial, createLitSimpleMaterial, loadCubeMaps, 
 import { loadMaterialPrograms } from "./materialPrograms.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
-import { createWatermark } from "./watermark.js";
 import { ParticleManager } from "./particles/manager.js";
 import { Cloth, loadCloth } from "./cloth.js";
 import { frameLights, SCENE_DEPTH } from "./particles/render.js";
@@ -102,53 +101,6 @@ const MAP_EFFECT_VALUES = { pedestal_fx: { 1: [0.25, 0.25, 0.25] } };
 // The hero page's portrait cameras are the exception: their PortraitFOV is the vertical angle
 // (so econ_set_preview frames each hero as large as the game shows it)
 const verticalFov = (fov) => THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov / 2)) * 0.75));
-
-// The height of the letters of the site's mark round the pedestal's edge, as a share of its radius
-const WATERMARK_BAND = 0.06;
-
-// heightAt(x, z): the height where a ray straight down first meets the object's surface, or
-// undefined, as a Raycaster finds it (faces turned away from the ray skipped for one-sided
-// materials). The triangles are put in place once: a Raycaster skins every vertex of a skinned
-// mesh on each ray, and the pedestal's thousand rays took seconds
-function surfaceHeights(object) {
-  const triangles = [];
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  const c = new THREE.Vector3();
-  object.traverse((node) => {
-    if (!node.isMesh) return;
-    const { index, attributes } = node.geometry;
-    const count = index ? index.count : attributes.position.count;
-    const material = Array.isArray(node.material) ? node.material[0] : node.material;
-    const side = material?.side ?? THREE.FrontSide;
-    const corner = (k, target) => node.getVertexPosition(index ? index.getX(k) : k, target).applyMatrix4(node.matrixWorld);
-    for (let k = 0; k + 2 < count; k += 3) {
-      corner(k, a);
-      corner(k + 1, b);
-      corner(k + 2, c);
-      // Seen from above: counter-clockwise (normal up) is the front for a ray going down
-      const up = (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x) < 0;
-      if ((side === THREE.FrontSide && !up) || (side === THREE.BackSide && up)) continue;
-      triangles.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
-    }
-  });
-  return (x, z) => {
-    let best;
-    for (let t = 0; t < triangles.length; t += 9) {
-      const ax = triangles[t], ay = triangles[t + 1], az = triangles[t + 2];
-      const bx = triangles[t + 3], by = triangles[t + 4], bz = triangles[t + 5];
-      const cx = triangles[t + 6], cy = triangles[t + 7], cz = triangles[t + 8];
-      const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
-      if (Math.abs(d) < 1e-12) continue;
-      const u = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
-      const v = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
-      if (u < 0 || v < 0 || u + v > 1) continue;
-      const y = u * ay + v * by + (1 - u - v) * cy;
-      if (best === undefined || y > best) best = y;
-    }
-    return best;
-  };
-}
 
 // Starts downloading models ahead of time (the pointer resting on a hero in the list), so
 // they are ready, or nearly, when picked. Only the files: parsing a model stalls the page, it
@@ -1402,14 +1354,6 @@ export class Stage {
     this.applyControls();
   }
 
-  // The logo carved into the pedestal, shown or not
-  setWatermark(on) {
-    this.watermarkOn = on;
-    if (this.watermark) {
-      this.watermark.visible = on;
-    }
-  }
-
   applyControls() {
     const locked = Boolean(this.loadout && this.portrait && !this.freeCamera);
     this.controls.enableRotate = !locked;
@@ -1478,7 +1422,6 @@ export class Stage {
       if (this.pedestal) {
         this.dropModel(this.pedestal);
         this.pedestal = null;
-        this.watermark = null;
         this.pedestalParticles?.setModel(null, []);
       }
       if (pedestalUrl) {
@@ -1493,8 +1436,6 @@ export class Stage {
             this.pedestal = gltf.scene.clone();
             this.pedestal.rotation.y = this.group?.rotation.y ?? 0;
             this.applyMaterials(this.pedestal, gltf.userData.textures);
-            const size = new THREE.Box3().setFromObject(this.pedestal).getSize(new THREE.Vector3());
-            const radius = Math.max(size.x, size.z) / 2;
             this.pedestal.traverse((node) => {
               if (node.isMesh) {
                 node.receiveShadow = true;
@@ -1507,7 +1448,6 @@ export class Stage {
               return;
             }
             this.scene.add(this.pedestal);
-            this.carveWatermark(this.pedestal, radius);
             this.updateShowcase();
             this.updatePedestalParticles();
           },
@@ -1522,41 +1462,6 @@ export class Stage {
     if (changed && this.group) {
       this.frameModel();
     }
-  }
-
-  // The site's mark carved in a ring along the edge of the pedestal's top, turning with the pedestal
-  async carveWatermark(pedestal, radius) {
-    // Where the flat top ends: down onto the pedestal along lines out from the center, the last
-    // point still at the center's height, the middle one of all the lines
-    pedestal.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(pedestal);
-    const heightAt = surfaceHeights(pedestal);
-    const top = heightAt(0, 0) ?? box.max.y;
-    const edges = [];
-    for (let line = 0; line < 16; line++) {
-      const angle = (line / 16) * Math.PI * 2;
-      let edge = 0;
-      for (let step = 1; step <= 80; step++) {
-        const r = (step / 80) * radius;
-        const y = heightAt(Math.cos(angle) * r, Math.sin(angle) * r);
-        if (y === undefined || Math.abs(y - top) > radius * 0.008) {
-          break;
-        }
-        edge = r;
-      }
-      edges.push(edge);
-    }
-    edges.sort((a, b) => a - b);
-    const ring = (edges[8] || radius * 0.7) - radius * 0.02;
-    const mark = await createWatermark(Math.min((radius * WATERMARK_BAND) / ring, 0.5));
-    if (!mark || this.pedestal !== pedestal) {
-      return;
-    }
-    mark.position.copy(pedestal.worldToLocal(new THREE.Vector3(0, top, 0)));
-    mark.scale.setScalar(ring / pedestal.scale.x);
-    this.watermark = mark;
-    mark.visible = this.watermarkOn !== false;
-    pedestal.add(mark);
   }
 
   // The pedestal and its smoke on their own; behind a model in a scene of the game, only the
@@ -1867,10 +1772,6 @@ export class Stage {
         glowing.push([node, glow]);
       }
     });
-    // The light in the carved mark on the pedestal
-    if (this.watermark?.visible && this.watermark.parent?.visible && this.watermark.parent.parent) {
-      glowing.push([this.watermark, this.watermark.userData.glowMaterial]);
-    }
     this.glowMix.enabled = glowing.length > 0;
     if (!glowing.length) {
       return;
@@ -1995,13 +1896,6 @@ export class Stage {
       setDotaKeyDir(keyDir.clone().transformDirection(this.camera.matrixWorldInverse));
       if (this.portraitFillDir) setDotaFillDir(this.portraitFillDir.clone().applyQuaternion(turn).transformDirection(this.camera.matrixWorldInverse));
       this.placePortraitSpot(turn);
-    }
-    if (this.pedestal?.visible) {
-      // The carved mark is shaded by the light that lights the hero: the game's, or the key from the camera
-      if (this.watermark) {
-        const light = this.portraitLit ? this.portraitDir.clone() : this.key.position.clone().transformDirection(this.camera.matrixWorld);
-        this.watermark.material.uniforms.uLight.value.copy(light.transformDirection(this.watermark.matrixWorld.clone().invert()));
-      }
     }
     stageRim.value.lerp(this.rimTarget, reducedMotion.matches ? 1 : Math.min(delta * 3, 1));
     if (this.tintTarget) {

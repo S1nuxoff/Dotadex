@@ -1,7 +1,6 @@
 // How the stage may be handled, kept on this device. On a hero's page the camera is fixed as in
 // the game and a drag turns the hero; freeCamera lets it orbit, zoom and pan everywhere.
-// watermark: the Dotadex logo carved into the hero's pedestal.
-const DEFAULTS = { freeCamera: false, particles: true, watermark: true };
+const DEFAULTS = { freeCamera: false, particles: true };
 
 function load() {
   try {

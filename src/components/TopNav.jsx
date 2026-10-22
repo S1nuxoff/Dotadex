@@ -144,7 +144,6 @@ function SettingsMenu({ language, onLanguage }) {
         <VolumeSliders />
         <SettingToggle name="freeCamera" label="Free camera" hint="Turn, zoom and pan on hero pages" />
         <SettingToggle name="particles" label="Particles" hint="The game's effects on heroes and items" />
-        <SettingToggle name="watermark" label="Pedestal logo" hint="The Dotadex logo carved under heroes" />
         <p className="border-t border-line pt-3 text-[11px] leading-snug text-ash/80">{VALVE_NOTICE}</p>
       </Popover>
     </div>

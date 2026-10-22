@@ -106,6 +106,50 @@ const verticalFov = (fov) => THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THR
 // The height of the letters of the site's mark round the pedestal's edge, as a share of its radius
 const WATERMARK_BAND = 0.06;
 
+// heightAt(x, z): the height where a ray straight down first meets the object's surface, or
+// undefined, as a Raycaster finds it (faces turned away from the ray skipped for one-sided
+// materials). The triangles are put in place once: a Raycaster skins every vertex of a skinned
+// mesh on each ray, and the pedestal's thousand rays took seconds
+function surfaceHeights(object) {
+  const triangles = [];
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  object.traverse((node) => {
+    if (!node.isMesh) return;
+    const { index, attributes } = node.geometry;
+    const count = index ? index.count : attributes.position.count;
+    const material = Array.isArray(node.material) ? node.material[0] : node.material;
+    const side = material?.side ?? THREE.FrontSide;
+    const corner = (k, target) => node.getVertexPosition(index ? index.getX(k) : k, target).applyMatrix4(node.matrixWorld);
+    for (let k = 0; k + 2 < count; k += 3) {
+      corner(k, a);
+      corner(k + 1, b);
+      corner(k + 2, c);
+      // Seen from above: counter-clockwise (normal up) is the front for a ray going down
+      const up = (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x) < 0;
+      if ((side === THREE.FrontSide && !up) || (side === THREE.BackSide && up)) continue;
+      triangles.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+    }
+  });
+  return (x, z) => {
+    let best;
+    for (let t = 0; t < triangles.length; t += 9) {
+      const ax = triangles[t], ay = triangles[t + 1], az = triangles[t + 2];
+      const bx = triangles[t + 3], by = triangles[t + 4], bz = triangles[t + 5];
+      const cx = triangles[t + 6], cy = triangles[t + 7], cz = triangles[t + 8];
+      const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+      if (Math.abs(d) < 1e-12) continue;
+      const u = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
+      const v = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
+      if (u < 0 || v < 0 || u + v > 1) continue;
+      const y = u * ay + v * by + (1 - u - v) * cy;
+      if (best === undefined || y > best) best = y;
+    }
+    return best;
+  };
+}
+
 // Starts downloading models ahead of time (the pointer resting on a hero in the list), so
 // they are ready, or nearly, when picked. Only the files: parsing a model stalls the page, it
 // is done once the model is picked
@@ -809,6 +853,16 @@ export class Stage {
 
     this.rootModel = entries[rootIndex].url.slice(entries[rootIndex].url.indexOf("/models/") + 1);
     this.rootUrl = entries[rootIndex].url;
+    // The materials' shaders compiled before the model is on screen, in parallel where the browser
+    // can (KHR_parallel_shader_compile): compiled by its first frame they stalled the page. The
+    // meshes take the shadows replace() gives them first, which the programs depend on
+    group.traverse((node) => {
+      if (node.isMesh) node.receiveShadow = true;
+    });
+    await this.renderer.compileAsync(group, this.camera, this.scene).catch(() => {});
+    if (request !== this.request) {
+      return null;
+    }
     // The swap happens behind the fog once it has closed over the view
     while (this.veilTarget === 1 && this.veil.material.uniforms.uCover.value < 0.95) {
       await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -1429,7 +1483,7 @@ export class Stage {
       }
       if (pedestalUrl) {
         loadModel(pedestalUrl).then(
-          (gltf) => {
+          async (gltf) => {
             if (this.pedestalUrl !== pedestalUrl) {
               return;
             }
@@ -1446,6 +1500,12 @@ export class Stage {
                 node.receiveShadow = true;
               }
             });
+            // Its shaders compiled before it is on screen, as the hero's (show)
+            const pedestal = this.pedestal;
+            await this.renderer.compileAsync(pedestal, this.camera, this.scene).catch(() => {});
+            if (this.pedestal !== pedestal) {
+              return;
+            }
             this.scene.add(this.pedestal);
             this.carveWatermark(this.pedestal, radius);
             this.updateShowcase();
@@ -1470,12 +1530,7 @@ export class Stage {
     // point still at the center's height, the middle one of all the lines
     pedestal.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(pedestal);
-    const ray = new THREE.Raycaster();
-    const down = new THREE.Vector3(0, -1, 0);
-    const heightAt = (x, z) => {
-      ray.set(new THREE.Vector3(x, box.max.y + 1, z), down);
-      return ray.intersectObject(pedestal, true)[0]?.point.y;
-    };
+    const heightAt = surfaceHeights(pedestal);
     const top = heightAt(0, 0) ?? box.max.y;
     const edges = [];
     for (let line = 0; line < 16; line++) {

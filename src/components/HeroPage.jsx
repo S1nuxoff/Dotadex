@@ -857,7 +857,13 @@ export default function HeroPage({
     return () => clearTimeout(timer);
   }, [hero.id]);
   const inView = shownHeroId === hero.id || waited === hero.id;
-  const backdropHero = inView || !shownHeroId ? hero.id : shownHeroId;
+  // Meanwhile the info is the hero in view's, with what it wears and its persona as they were
+  const shown = inView || !shownHeroId ? hero : (catalog.heroesById[shownHeroId] ?? hero);
+  const lastInView = useRef({ summary, persona });
+  if (shown === hero) lastInView.current = { summary, persona };
+  const shownSummary = shown === hero ? summary : lastInView.current.summary;
+  const shownPersona = shown === hero ? persona : lastInView.current.persona;
+  const backdropHero = shown.id;
   // The hero alone on the whole screen, as the game's preview button does
   const [preview, setPreview] = useState(false);
   const page = useRef(null);
@@ -867,7 +873,7 @@ export default function HeroPage({
     ["heroes.json", "abilities.json"],
     language,
   );
-  const info = data?.heroes[`npc_dota_hero_${hero.id}`];
+  const info = data?.heroes[`npc_dota_hero_${shown.id}`];
 
   // Casting: a click on an ability or its key sends its animation, sound and voice lines to the stage
   const cast = (ability) => {
@@ -879,7 +885,7 @@ export default function HeroPage({
         ).filter((name) => name && known[name])
       : [];
     loadAbilitySounds(catalog.modelsBase).then((all) => {
-      const entry = all[`npc_dota_hero_${hero.id}`]?.[ability] ?? {};
+      const entry = all[`npc_dota_hero_${shown.id}`]?.[ability] ?? {};
       window.dispatchEvent(
         new CustomEvent("dotadex:cast", {
           detail: {
@@ -1031,10 +1037,10 @@ export default function HeroPage({
                 style={{ "--side": `${SIDE[aspect] ?? 90}px` }}
               >
                 {/* The columns come in from the sides, again for each hero, once it is in view */}
-                {inView && <div key={`summary-${hero.id}`} className="enter-left pointer-events-auto absolute top-[99px] left-(--side) w-[540px]" style={{ "--enter-delay": "0.08s" }}>
+                <div key={`summary-${shown.id}`} className="enter-left pointer-events-auto absolute top-[99px] left-(--side) w-[540px]" style={{ "--enter-delay": "0.08s" }}>
                   <HeroSummary
                     catalog={catalog}
-                    hero={hero}
+                    hero={shown}
                     info={info}
                     data={data}
                     onAbout={() =>
@@ -1043,35 +1049,35 @@ export default function HeroPage({
                     onCast={cast}
                     onPreview={togglePreview}
                   />
-                </div>}
-                {inView && tab === "loadout" && (
-                  <div key={`loadout-${hero.id}`} className="enter-right pointer-events-auto absolute top-[111px] right-(--side) flex w-[422px] flex-col" style={{ "--enter-delay": "0.14s" }}>
+                </div>
+                {tab === "loadout" && (
+                  <div key={`loadout-${shown.id}`} className="enter-right pointer-events-auto absolute top-[111px] right-(--side) flex w-[422px] flex-col" style={{ "--enter-delay": "0.14s" }}>
                     <PersonaSelector
                       base={catalog.modelsBase}
-                      heroKey={`npc_dota_hero_${hero.id}`}
+                      heroKey={`npc_dota_hero_${shown.id}`}
                       info={info}
                       texts={data?.texts ?? {}}
-                      persona={persona}
+                      persona={shownPersona}
                       onPersona={onPersona}
                     />
-                    {summary}
+                    {shownSummary}
                   </div>
                 )}
               </div>
-              {inView && tab !== "loadout" ? (
+              {tab !== "loadout" ? (
                 <div key={tab} className="enter-right pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
                   <div className="h-full overflow-y-auto bg-black/55 p-[24px] pr-[48px] scrollbar-thin">
                     {tab === "voice" && (
                       <Voice
                         modelsBase={catalog.modelsBase}
-                        heroKey={`npc_dota_hero_${hero.id}`}
+                        heroKey={`npc_dota_hero_${shown.id}`}
                       />
                     )}
                     {tab === "stats" && <Stats info={info} />}
                     {tab === "about" && (
                       <HeroInfo
                         base={catalog.modelsBase}
-                        heroKey={`npc_dota_hero_${hero.id}`}
+                        heroKey={`npc_dota_hero_${shown.id}`}
                         language={language}
                       />
                     )}

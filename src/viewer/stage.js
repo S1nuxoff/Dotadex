@@ -876,6 +876,25 @@ export class Stage {
       }
     });
     await this.compileAsDrawn(group, this.scene);
+    // And as they are drawn into the shadow map: each caster's depth material given what three.js's
+    // WebGLShadowMap.getDepthMaterial gives it from the drawn one (its side for shadows, alpha
+    // test, map); compiled by their first frame, five programs
+    group.traverse((node) => {
+      if (!node.isMesh) return;
+      const main = node.userData.dota ?? node.material;
+      const depth = shadowDepthFor(main);
+      if (!depth) {
+        node.material = this.glowBlack;
+        return;
+      }
+      const probe = depth === shadowDepthMaterial ? shadowDepthMaterial.clone() : depth;
+      probe.side = THREE.DoubleSide;
+      probe.alphaMap = main.alphaMap;
+      probe.alphaTest = main.alphaToCoverage ? 0.5 : main.alphaTest;
+      probe.map = main.map;
+      node.material = probe;
+    });
+    await this.compileAsDrawn(group, this.scene);
     for (const [node, material] of drawn) {
       node.material = material;
     }

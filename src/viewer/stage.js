@@ -1252,28 +1252,39 @@ export class Stage {
       return;
     }
     const travel = this.portraitDir.clone().applyQuaternion(turn).negate();
-    const bounds = new THREE.Box3();
-    if (this.group) bounds.expandByObject(this.group);
-    if (this.pedestal?.visible) bounds.expandByObject(this.pedestal);
-    if (bounds.isEmpty()) {
-      return;
+    // The hero and the pedestal as an upright cylinder round the hero's axis, measured once per
+    // model: the box then stays the same however the hero is turned (fitted to the turning
+    // model's bounds, the hat's brim fell off its edge at some angles and its shadow came and went)
+    const key = `${this.group?.uuid}|${this.pedestal?.visible ? this.pedestal.uuid : ""}`;
+    if (this.shadowFitKey !== key) {
+      const bounds = new THREE.Box3();
+      if (this.group) bounds.expandByObject(this.group);
+      if (this.pedestal?.visible) bounds.expandByObject(this.pedestal);
+      if (bounds.isEmpty()) {
+        return;
+      }
+      const axis = this.group ? new THREE.Vector3().setFromMatrixPosition(this.group.matrixWorld) : new THREE.Vector3();
+      const radius = Math.max(...[bounds.min.x, bounds.max.x].flatMap((x) => [bounds.min.z, bounds.max.z].map((z) => Math.hypot(x - axis.x, z - axis.z))));
+      this.shadowFit = { axis, radius, y0: bounds.min.y, y1: bounds.max.y };
+      this.shadowFitKey = key;
     }
+    const { axis, radius, y0, y1 } = this.shadowFit;
     const up = new THREE.Vector3(0, 1, 0);
     const right = new THREE.Vector3().crossVectors(up, travel);
     if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
     right.normalize();
     const down = new THREE.Vector3().crossVectors(right, travel).normalize();
-    const lo = [Infinity, Infinity, Infinity];
-    const hi = [-Infinity, -Infinity, -Infinity];
-    const corner = new THREE.Vector3();
-    for (let k = 0; k < 8; k++) {
-      corner.set(k & 1 ? bounds.max.x : bounds.min.x, k & 2 ? bounds.max.y : bounds.min.y, k & 4 ? bounds.max.z : bounds.min.z);
-      const values = [corner.dot(right), corner.dot(down), corner.dot(travel)];
-      for (let a = 0; a < 3; a++) {
-        lo[a] = Math.min(lo[a], values[a]);
-        hi[a] = Math.max(hi[a], values[a]);
-      }
-    }
+    // The cylinder's reach along each of the box's axes, round its middle
+    const middleOfCylinder = new THREE.Vector3(axis.x, (y0 + y1) / 2, axis.z);
+    const lo = [];
+    const hi = [];
+    [right, down, travel].forEach((w, a) => {
+      const along = Math.abs(w.y);
+      const extent = along * (y1 - y0) / 2 + radius * Math.sqrt(Math.max(0, 1 - along * along));
+      const at = middleOfCylinder.dot(w);
+      lo[a] = at - extent;
+      hi[a] = at + extent;
+    });
     const step = 32 * SOURCE_TO_METRES;
     const half = (a) => (Math.ceil((hi[a] - lo[a]) / step) * step) / 2;
     const middle = (a) => (hi[a] + lo[a]) / 2;

@@ -7,6 +7,10 @@ export const perfOn = typeof window !== "undefined" && new URLSearchParams(windo
 
 const REPORT_MS = 2000;
 const sums = new Map();
+// This frame's parts, for a long frame's own line
+const parts = new Map();
+// A frame longer than this prints what it spent its time on
+const LONG_FRAME_MS = 50;
 let frames = 0;
 let frameStarted = 0;
 let since = performance.now();
@@ -20,7 +24,9 @@ export const now = () => (perfOn ? performance.now() : 0);
 // Adds the time since start to the part `name` of this report's frames
 export function add(name, start) {
   if (!perfOn) return;
-  sums.set(name, (sums.get(name) ?? 0) + performance.now() - start);
+  const ms = performance.now() - start;
+  sums.set(name, (sums.get(name) ?? 0) + ms);
+  parts.set(name, (parts.get(name) ?? 0) + ms);
 }
 
 // The GPU's time for what is drawn between gpuBegin and gpuEnd (one at a time)
@@ -56,6 +62,7 @@ export function frameStart(renderer) {
   if (!perfOn) return;
   renderer.info.autoReset = false;
   renderer.info.reset();
+  parts.clear();
   frameStarted = performance.now();
 }
 
@@ -64,6 +71,12 @@ export function frameEnd(renderer) {
   if (!perfOn) return;
   frames++;
   add("cpu: whole frame", frameStarted);
+  const whole = parts.get("cpu: whole frame");
+  if (whole > LONG_FRAME_MS) {
+    // The draw includes compiling shaders first used and uploading new textures
+    const named = [...parts].filter(([name]) => name !== "cpu: whole frame").map(([name, ms]) => `${name.replace("cpu: ", "")} ${Math.round(ms)}`);
+    console.log(`[perf] long frame ${Math.round(whole)} ms: ${named.join(", ")}, other ${Math.round(whole - [...parts].reduce((sum, [name, ms]) => (name === "cpu: whole frame" ? sum : sum + ms), 0))}`);
+  }
   if (timer) collectQueries();
   const elapsed = performance.now() - since;
   if (elapsed < REPORT_MS) return;
@@ -78,16 +91,15 @@ export function frameEnd(renderer) {
   report["geometries"] = renderer.info.memory.geometries;
   report["shader programs"] = renderer.info.programs?.length ?? 0;
   report["pixels drawn"] = `${renderer.domElement.width}x${renderer.domElement.height}`;
-  console.log("[perf] frame");
-  console.table(report);
+  // As text, to copy from the console as it is
+  console.log(["[perf] frame", ...Object.entries(report).map(([name, value]) => `  ${name}: ${value}`)].join("\n"));
   sums.clear();
   frames = 0;
   since = performance.now();
 }
 
-// The stages of opening a model, as a table: [[name, ms], ...]
+// The stages of opening a model, one a line: [[name, ms], ...]
 export function stages(title, list) {
   if (!perfOn) return;
-  console.log(`[perf] ${title}`);
-  console.table(Object.fromEntries(list.map(([name, ms]) => [name, { ms: Math.round(ms) }])));
+  console.log([`[perf] ${title}`, ...list.map(([name, ms]) => `  ${name}: ${Math.round(ms)} ms`)].join("\n"));
 }

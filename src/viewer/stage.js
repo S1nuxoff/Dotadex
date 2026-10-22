@@ -117,8 +117,39 @@ function loadModel(url, onProgress) {
     const promise = loadGlb(url, onProgress).then(prepareTextures);
     promise.catch(() => cache.delete(url));
     cache.set(url, promise);
+  } else {
+    // The most recently used last, for trimModels
+    const promise = cache.get(url);
+    cache.delete(url);
+    cache.set(url, promise);
   }
   return cache.get(url);
+}
+
+// Models kept loaded besides the ones on show; the least recently used past these are freed
+// (geometry, materials, textures): every hero opened stayed in memory and on the GPU
+const KEPT_MODELS = 20;
+function trimModels(inUse) {
+  const spare = [...cache.keys()].filter((url) => !inUse.has(url));
+  for (const url of spare.slice(0, Math.max(0, spare.length - KEPT_MODELS))) {
+    const promise = cache.get(url);
+    cache.delete(url);
+    promise.then(disposeGltf, () => {});
+  }
+}
+
+function disposeGltf(gltf) {
+  const textures = new Set(Object.values(gltf.userData.textures ?? {}));
+  gltf.scene.traverse((node) => {
+    if (!node.isMesh) return;
+    node.geometry?.dispose();
+    for (const material of [node.material].flat()) {
+      if (!material) continue;
+      for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+      material.dispose();
+    }
+  });
+  textures.forEach((texture) => texture.dispose());
 }
 
 // Textures by their vmat names, which is how the Dota materials refer to them.
@@ -855,6 +886,7 @@ export class Stage {
       cloth.driven.forEach((driven) => claimed.add(driven.bone));
     }
     this.modelUrls = entries.map((entry) => entry.url);
+    trimModels(new Set([...this.modelUrls, this.pedestalUrl]));
     this.particles?.setModel(group, this.modelUrls);
     if (this.veilTarget === 1) {
       playUiSound("veil-out", 0.7);
@@ -1517,10 +1549,12 @@ export class Stage {
   // Takes a model off the stage for good
   dropModel(group) {
     this.scene.remove(group);
+    // The materials made for this copy (the loaded model's geometry, textures and own materials
+    // stay with it)
     group.traverse((node) => {
-      if (node.isMesh && node.userData.dota !== node.userData.pbr) {
-        node.userData.dota.dispose();
-      }
+      if (!node.isMesh) return;
+      if (node.userData.dota !== node.userData.pbr) node.userData.dota.dispose();
+      if (node.customDepthMaterial && node.customDepthMaterial !== shadowDepthMaterial) node.customDepthMaterial.dispose();
     });
   }
 

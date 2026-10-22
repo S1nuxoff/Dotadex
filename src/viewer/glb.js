@@ -10,7 +10,7 @@ const loader = new GLTFLoader();
 // One download per model, whoever asks for it; a prefetched model is parsed only when shown
 const downloads = new Map();
 // Prefetched files kept for a while (the pointer rests on many heroes), the oldest dropped
-const KEPT_DOWNLOADS = 40;
+const KEPT_DOWNLOADS = 15;
 
 async function readWithProgress(res, entry) {
   entry.total = Number(res.headers.get("content-length")) || 0;

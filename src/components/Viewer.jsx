@@ -320,7 +320,7 @@ function portraitLine(rules, voices, speech, heroId) {
   return files.length ? files[Math.floor(Math.random() * files.length)] : null;
 }
 
-export default function Viewer({ catalog, language, hideTitle = false, controlsRight = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], activities = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona, onShown }) {
+export default function Viewer({ catalog, language, hideTitle = false, controlsRight = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], activities = [], unitModels = {}, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona, onShown }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -475,6 +475,12 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
   useEffect(() => {
     stageRef.current.setHeroScale(heroScale);
   }, [heroScale]);
+  // The units beside the hero in what it wears (a Golem's skin)
+  const unitModelsKey = JSON.stringify(unitModels);
+  useEffect(() => {
+    stageRef.current.setUnitModels(unitModels);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitModelsKey]);
   // The game's pedestal, light and (on the hero page) camera
   const staging = staged && portrait ? (loadout ? portrait : { ...portrait, cameras: {} }) : null;
   useEffect(

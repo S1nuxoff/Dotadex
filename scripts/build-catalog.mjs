@@ -189,6 +189,10 @@ for (const [id, entry] of Object.entries(index.items)) {
   if (entry.skin) {
     record.skin = entry.skin;
   }
+  const units = unitsOf(item);
+  if (units) {
+    record.units = units;
+  }
   const particles = particlesOf(item);
   if (particles) {
     record.particles = particles;
@@ -265,6 +269,21 @@ const [shopData, treasureData, englishTexts, library, heroData] = await Promise.
   gameData("audio-library.json"),
   gameData("heroes.json"),
 ]);
+
+// The models an item gives a unit instead of wearing them: its entity_model modifiers on a unit that
+// is not a hero (Warlock's Golem, Beastmaster's boar): { "<model>.glb": "npc_dota_warlock_golem" }
+function unitsOf(item) {
+  const units = {};
+  for (const [key, value] of Object.entries(item.visuals ?? {})) {
+    if (!key.startsWith("asset_modifier") || value?.type !== "entity_model") continue;
+    const unit = String(value.asset ?? "").toLowerCase();
+    const model = String(value.modifier ?? "").toLowerCase();
+    // npc_dota_loadout_generic is no unit of the hero's: a model the loadout shows on the hero
+    if (!unit.startsWith("npc_dota_") || unit.startsWith("npc_dota_hero") || unit === "npc_dota_loadout_generic" || !model.endsWith(".vmdl")) continue;
+    units[model.replace(/\.vmdl$/, ".glb")] = unit;
+  }
+  return Object.keys(units).length ? units : null;
+}
 
 // The slots a hero's loadout shows, in the game's order: its ItemSlots by SlotIndex, but those
 // with DisplayInLoadout 0 (ability effects) and the persona switch

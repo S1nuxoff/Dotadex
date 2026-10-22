@@ -779,7 +779,7 @@ export class Stage {
     this.resizeObserver.observe(canvas.parentElement);
     this.resize();
     this.warmPostprocessing();
-    this.holdNext(["setPortrait", "setParticles", "setHeroScale", "setRim"]);
+    this.holdNext(["setPortrait", "setParticles", "setHeroScale", "setRim", "setUnitModels"]);
     this.setFogTransition(false);
     this.renderer.setAnimationLoop(() => this.frame());
   }
@@ -2114,6 +2114,11 @@ export class Stage {
   // Warlock's Golem, Beastmaster's hawk and boar, ...), each its unit's model at its place from the
   // hero's origin (game units), turned by its yaw and scaled, standing in its loadout stance
   setSummons(list, base) {
+    this.summonList = list;
+    this.summonBase = base;
+    // In the look what the hero wears gives them (setUnitModels), else their own
+    const models = this.unitModels ?? {};
+    list = list.map((summon) => (models[summon.unit] ? { ...summon, url: models[summon.unit] } : summon));
     const key = JSON.stringify(list);
     if (key === this.summonsKey) return;
     this.summonsKey = key;
@@ -2123,19 +2128,24 @@ export class Stage {
       this.summonGroup.name = "summons";
       this.scene.add(this.summonGroup);
     }
+    // The last ones dither out (a new look of the same unit shows as a part put on does)
     for (const summon of this.summons ?? []) {
-      summon.mixer?.stopAllAction();
-      summon.object.removeFromParent();
-      this.dropModel(summon.object);
+      this.dither(summon.object, 1, 0, () => {
+        this.leavingSummons = this.leavingSummons.filter((leaving) => leaving !== summon);
+        summon.mixer?.stopAllAction();
+        summon.object.removeFromParent();
+        this.dropModel(summon.object);
+      });
     }
+    this.leavingSummons = [...(this.leavingSummons ?? []), ...(this.summons ?? [])];
     this.summons = [];
     // Kept in memory while on show (trimModels)
-    this.summonUrls = list.map((summon) => base + summon.model);
+    this.summonUrls = list.map((summon) => summon.url ?? base + summon.model);
     this.summonsLoading = list.length > 0;
     if (!list.length) return;
     Promise.all(
       list.map(async (summon) => {
-        const url = base + summon.model;
+        const url = summon.url ?? base + summon.model;
         const [gltf, sequences] = await Promise.all([loadModel(url), loadSequences(url)]);
         const object = cloneSkinned(gltf.scene);
         this.applyMaterials(object, gltf.userData.textures);
@@ -2179,13 +2189,22 @@ export class Stage {
           return;
         }
         this.summons = summons;
-        for (const summon of summons) this.summonGroup.add(summon.object);
+        for (const summon of summons) {
+          this.summonGroup.add(summon.object);
+          this.dither(summon.object, 0, 1);
+        }
         this.updateShowcase();
       })
       .catch((error) => console.warn("Summons not shown", error))
       .finally(() => {
         if (request === this.summonsRequest) this.summonsLoading = false;
       });
+  }
+
+  // The looks what the hero wears gives its units ({ unit: url }), for setSummons
+  setUnitModels(models) {
+    this.unitModels = models ?? {};
+    if (this.summonList) this.setSummons(this.summonList, this.summonBase);
   }
 
   // While a new model loads with the last still on show, what belongs to the next one (its page's
@@ -2429,7 +2448,7 @@ export class Stage {
     if (this.mixer && !this.paused && !held) {
       at = perf.now();
       this.mixer.update(delta * this.speed);
-      for (const summon of this.summons ?? []) summon.mixer?.update(delta * this.speed);
+      for (const summon of [...(this.summons ?? []), ...(this.leavingSummons ?? [])]) summon.mixer?.update(delta * this.speed);
       if (this.dithers?.length) {
         const now = performance.now();
         this.dithers = this.dithers.filter((fade) => {

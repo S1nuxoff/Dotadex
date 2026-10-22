@@ -139,6 +139,29 @@ function itemUrls(catalog, item, style) {
   return itemModels(item, style).map((model) => catalog.modelsBase + model + (skin ? `#skin=${skin}` : ""));
 }
 
+// The models of an item worn on the hero: not those it gives a unit (item.units)
+function wornUrls(catalog, item, style) {
+  return itemUrls(catalog, item, style).filter((url) => !item.units?.[url.slice(catalog.modelsBase.length).split("#")[0]]);
+}
+
+// The looks what a hero wears gives its units (a Golem's skin): { unit: url }, the page's summons
+// taking these models in place of their own
+export function outfitUnitModels(catalog, outfit) {
+  const hero = outfit?.hero && catalog.heroesById[outfit.hero];
+  if (!hero || outfit.bare) return {};
+  const persona = outfit.persona && hero.personas?.[outfit.persona - 1] ? outfit.persona : 0;
+  const result = {};
+  for (const slot of dressedSlots(hero, outfit, persona)) {
+    const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
+    if (!chosen?.units) continue;
+    for (const model of itemModels(chosen, outfit.slots[slot].style)) {
+      const unit = chosen.units[model];
+      if (unit) result[unit] = catalog.modelsBase + model;
+    }
+  }
+  return result;
+}
+
 // The persona a slot belongs to: "weapon_persona_1" -> 1, plain slots 0
 export function personaOf(slot) {
   return Number(slot?.match(/_persona_(\d+)$/)?.[1] ?? 0);
@@ -242,7 +265,7 @@ export function outfitUrls(catalog, outfit) {
   for (const slot of dressedSlots(hero, outfit, persona)) {
     const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
     if (chosen) {
-      urls.push(...itemUrls(catalog, chosen, outfit.slots[slot].style));
+      urls.push(...wornUrls(catalog, chosen, outfit.slots[slot].style));
     } else {
       urls.push(...hero.defaults.filter((entry) => entry.slot === slot).flatMap((entry) => entry.models).map((model) => catalog.modelsBase + model));
     }

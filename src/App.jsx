@@ -24,6 +24,7 @@ import {
   loadExported,
   outfitFor,
   outfitParticles,
+  outfitUnitModels,
   outfitActivities,
   outfitUrls,
   homePath,
@@ -328,6 +329,8 @@ export default function App() {
   }, [address]);
   const urls = useMemo(() => catalog && outfit && outfitUrls(catalog, outfit), [catalog, outfit]);
   const particles = useMemo(() => (catalog && outfit ? outfitParticles(catalog, outfit) : []), [catalog, outfit]);
+  // The looks what is worn gives the hero's units on its page (a Golem's skin)
+  const unitModels = useMemo(() => (catalog && outfit ? outfitUnitModels(catalog, outfit) : {}), [catalog, outfit]);
   const activities = useMemo(() => (catalog && outfit ? outfitActivities(catalog, outfit) : []), [catalog, outfit]);
 
   // A hero or item the pointer rests on starts downloading, after a moment so a sweep down
@@ -464,6 +467,7 @@ export default function App() {
       outfit={outfit}
       urls={urls}
       particles={particles}
+      unitModels={unitModels}
       activities={activities}
       onStyle={(style) => open({ ...route, style })}
       onAlone={(alone) => open({ ...route, alone })}

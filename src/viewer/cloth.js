@@ -924,31 +924,8 @@ export class Cloth {
         v1.fromArray(x, i * 3);
         const { distance, radius: r, point } = closest(v1, shape.c0, shape.r0 * unit, shape.c1, shape.r1 * unit);
         const reach = r + radius[i] * unit;
-        if (distance >= reach) {
-          continue;
-        }
-        // closest() hands back a shared vector; kept before it is called again
-        const at = onAxis.copy(point);
-        // A node that came in from outside this step (the hero turned fast) is put back out on
-        // the side it came from: pushed to the nearest side, one that crossed the capsule's axis
-        // would come out behind the leg and stay caught there
-        v2.fromArray(previous, i * 3);
-        const before = closest(v2, shape.c0, shape.r0 * unit, shape.c1, shape.r1 * unit);
-        if (before.distance >= before.radius + radius[i] * unit) {
-          v3.copy(shape.c1).sub(shape.c0);
-          const length = v3.length();
-          v2.sub(at);
-          if (length > 1e-9) {
-            v3.divideScalar(length);
-            v2.addScaledVector(v3, -v2.dot(v3));
-          }
-          if (v2.lengthSq() > 1e-18) {
-            v2.normalize().multiplyScalar(reach).add(at).toArray(x, i * 3);
-            continue;
-          }
-        }
-        if (distance > 1e-9) {
-          v1.sub(at).multiplyScalar(reach / distance).add(at).toArray(x, i * 3);
+        if (distance < reach && distance > 1e-9) {
+          v1.sub(point).multiplyScalar(reach / distance).add(point).toArray(x, i * 3);
         }
       }
     }
@@ -1072,7 +1049,6 @@ function mean(nodes, positions, out) {
 // radius there (a tapered capsule; a sphere when both are one)
 const segment = new THREE.Vector3();
 const nearest = new THREE.Vector3();
-const onAxis = new THREE.Vector3();
 function closest(point, c0, r0, c1, r1) {
   segment.subVectors(c1, c0);
   const lengthSq = segment.lengthSq();

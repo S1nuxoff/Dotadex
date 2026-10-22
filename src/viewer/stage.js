@@ -1252,21 +1252,39 @@ export class Stage {
       return;
     }
     const travel = this.portraitDir.clone().applyQuaternion(turn).negate();
-    // The hero and the pedestal as an upright cylinder round the hero's axis, measured once per
-    // model: the box then stays the same however the hero is turned (fitted to the turning
-    // model's bounds, the hat's brim fell off its edge at some angles and its shadow came and went)
+    // The hero and the pedestal as an upright cylinder round the hero's axis, measured over the
+    // model's first seconds: the box then stays the same however the hero is turned (fitted to the
+    // turning model's bounds, the hat's brim fell off its edge at some angles and its shadow came
+    // and went)
     const key = `${this.group?.uuid}|${this.pedestal?.visible ? this.pedestal.uuid : ""}`;
     if (this.shadowFitKey !== key) {
-      const bounds = new THREE.Box3();
-      if (this.group) bounds.expandByObject(this.group);
-      if (this.pedestal?.visible) bounds.expandByObject(this.pedestal);
-      if (bounds.isEmpty()) {
-        return;
-      }
-      const axis = this.group ? new THREE.Vector3().setFromMatrixPosition(this.group.matrixWorld) : new THREE.Vector3();
-      const radius = Math.max(...[bounds.min.x, bounds.max.x].flatMap((x) => [bounds.min.z, bounds.max.z].map((z) => Math.hypot(x - axis.x, z - axis.z))));
-      this.shadowFit = { axis, radius, y0: bounds.min.y, y1: bounds.max.y };
       this.shadowFitKey = key;
+      this.shadowFitBounds = new THREE.Box3();
+      this.shadowFitFrames = 0;
+      this.shadowFit = null;
+    }
+    // Measured on the vertices where the animation has them, a few times over the first seconds
+    // (the bones take their pose after the model is shown; a skinned mesh's own bounds are its
+    // bind pose's) and kept as the union: measured once at the start, Wei's head and hat were
+    // left above the box and had no shadow
+    if (this.shadowFitFrames <= 150 && this.shadowFitFrames % 30 === 0) {
+      const bounds = this.shadowFitBounds;
+      if (this.group) {
+        this.group.updateMatrixWorld(true);
+        this.group.traverse((node) => node.isSkinnedMesh && node.skeleton?.update());
+        bounds.expandByObject(this.group, true);
+      }
+      if (this.pedestal?.visible) bounds.expandByObject(this.pedestal);
+      if (!bounds.isEmpty()) {
+        const axis = this.group ? new THREE.Vector3().setFromMatrixPosition(this.group.matrixWorld) : new THREE.Vector3();
+        const radius = Math.max(...[bounds.min.x, bounds.max.x].flatMap((x) => [bounds.min.z, bounds.max.z].map((z) => Math.hypot(x - axis.x, z - axis.z))));
+        this.shadowFit = { axis, radius, y0: bounds.min.y, y1: bounds.max.y };
+        this.shadowFitLogged = false;
+      }
+    }
+    this.shadowFitFrames++;
+    if (!this.shadowFit) {
+      return;
     }
     const { axis, radius, y0, y1 } = this.shadowFit;
     const up = new THREE.Vector3(0, 1, 0);
@@ -1304,6 +1322,11 @@ export class Stage {
     camera.near = 0;
     camera.far = reach + (hi[2] - lo[2]) + step;
     camera.updateProjectionMatrix();
+    if (import.meta.env.DEV && !this.shadowFitLogged) {
+      this.shadowFitLogged = true;
+      const units = (v) => Math.round(v / SOURCE_TO_METRES);
+      console.info(`[shadow] box ${units(half(0) * 2)} x ${units(half(1) * 2)} units, deep ${units(camera.far)}; cylinder radius ${units(radius)}, height ${units(y0)}..${units(y1)} (the game: Anti-Mage 288 x 352, 2382 deep)`);
+    }
   }
 
   // On a hero's page the camera stays where the game puts it and a drag turns the hero round, as

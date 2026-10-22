@@ -380,6 +380,13 @@ export default function App() {
     open({ type: "hero", id: outfit.hero, slots, persona, bare: outfit.bare });
   };
 
+  // The splash from index.html leaves once the page has something to show
+  useEffect(() => {
+    if (catalog || error) {
+      window.DotadexLoader?.hide();
+    }
+  }, [catalog, error]);
+
   // The game's interface sounds for the whole page
   useEffect(() => {
     if (catalog) {
@@ -398,12 +405,9 @@ export default function App() {
     );
   }
 
+  // index.html's splash covers the page until then
   if (!catalog) {
-    return (
-      <main className="grid h-full place-items-center">
-        <p className="font-display text-xl text-ash">Loading the model list</p>
-      </main>
-    );
+    return null;
   }
 
   if (!route) {

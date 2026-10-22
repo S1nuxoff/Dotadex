@@ -2054,6 +2054,10 @@ export class Stage {
     context.drawImage(this.canvas, 0, 0);
     picture.style.transition = "none";
     picture.style.opacity = "1";
+    // The canvas hidden under it: the picture is see-through where the page's backdrop shows, and
+    // the next model, swapped in under it, showed there for a moment
+    this.canvas.style.transition = "none";
+    this.canvas.style.opacity = "0";
     const resolve = this.pictureWanted;
     this.pictureWanted = null;
     resolve();

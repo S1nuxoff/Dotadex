@@ -668,8 +668,7 @@ export class Stage {
     this.veil.material.uniforms.uCover.value = 1;
     this.veil.visible = true;
     this.veil.userData.skipGlow = true;
-    // Drawn last, over the particles too: drawn with the scene, a new hero's effects showed
-    // through the fog before the hero did
+    // Drawn last (veilPass)
     this.veilScene = new THREE.Scene();
     this.veilScene.add(this.veil);
     this.veilTarget = 1;
@@ -704,9 +703,6 @@ export class Stage {
     const particlePass = new RenderPass(this.particleScene, this.camera);
     particlePass.clear = false;
     this.composer.addPass(particlePass);
-    const veilPass = new RenderPass(this.veilScene, this.camera);
-    veilPass.clear = false;
-    this.composer.addPass(veilPass);
     // The materials' own halos (see createGlowMaterial): the model drawn again with only its
     // glow, everything else black so it still hides what is behind it, then blurred
     this.glowComposer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
@@ -724,6 +720,11 @@ export class Stage {
     this.glowMix.uniforms.tGlow.value = this.glowComposer.renderTarget2.texture;
     this.glowMix.enabled = false;
     this.composer.addPass(this.glowMix);
+    // The fog last, over the particles and the halos too: drawn before either, a new hero's
+    // effects and glowing parts showed through it before the hero did
+    const veilPass = new RenderPass(this.veilScene, this.camera);
+    veilPass.clear = false;
+    this.composer.addPass(veilPass);
     this.composer.addPass(new OutputPass());
     // The canvas is see-through over the page's backdrop, and the browser takes its pixels as
     // premultiplied: a color brighter than its alpha (what additive particles and halos leave

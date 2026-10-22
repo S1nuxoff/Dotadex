@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#121a24" />
     <title>Dotadex: the complete Dota 2 encyclopedia in 3D</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3 28 10v12L16 29 4 22V10z' fill='%23c9a45c'/%3E%3C/svg%3E" />
-    <link rel="preload" as="image" href="%BASE_URL%ui/dotadex-logo.png" />
+    <link rel="preload" as="image" type="image/webp" href="%BASE_URL%ui/dotadex-logo.webp" />
     <style>
       /* The splash: the logo slammed down letter by letter on a forge-lit floor, shown from the
          first paint until the app has its catalog (window.DotadexLoader.hide).
@@ -170,7 +170,7 @@
         const logo = document.getElementById("dx-logo");
         const cv = document.getElementById("dx-embers");
         const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-        loader.style.setProperty("--dx-logo", 'url("%BASE_URL%ui/dotadex-logo.png")');
+        loader.style.setProperty("--dx-logo", 'url("%BASE_URL%ui/dotadex-logo.webp")');
 
         const els = LETTERS.map((L) => {
           const d = document.createElement("div");

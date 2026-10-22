@@ -55,7 +55,7 @@ const parts = new Map();
 const LONG_FRAME_MS = 50;
 let frames = 0;
 let frameStarted = 0;
-let programsBefore = 0;
+let programsBefore = new Set();
 let since = performance.now();
 let gl = null;
 let timer;
@@ -113,7 +113,7 @@ export function frameStart(renderer) {
   renderer.info.autoReset = false;
   renderer.info.reset();
   parts.clear();
-  programsBefore = renderer.info.programs?.length ?? 0;
+  programsBefore = new Set(renderer.info.programs ?? []);
   frameStarted = performance.now();
 }
 
@@ -136,8 +136,14 @@ function report(renderer) {
   if (whole > LONG_FRAME_MS) {
     // The draw includes compiling shaders first used and uploading new textures
     const named = [...parts].filter(([name]) => name !== "cpu: whole frame").map(([name, ms]) => `${name.replace("cpu: ", "")} ${Math.round(ms)}`);
-    const compiled = (renderer.info.programs?.length ?? 0) - programsBefore;
-    log(`[perf] long frame ${Math.round(whole)} ms${compiled ? ` (${compiled} new shader programs)` : ""}: ${named.join(", ")}, other ${Math.round(whole - [...parts].reduce((sum, [name, ms]) => (name === "cpu: whole frame" ? sum : sum + ms), 0))}`);
+    // The programs made in this frame, by their materials' names and kinds
+    const made = (renderer.info.programs ?? []).filter((program) => !programsBefore.has(program));
+    const kinds = new Map();
+    // A material's name, else the kind of three.js shader (depth, basic, ...) or "custom"
+    const nameOf = (program) => program.name || (/^[a-z]+$/.test(program.cacheKey?.split(",")[0] ?? "") ? program.cacheKey.split(",")[0] : "custom");
+    for (const program of made) kinds.set(nameOf(program), (kinds.get(nameOf(program)) ?? 0) + 1);
+    const list = [...kinds].map(([name, count]) => `${name || "unnamed"}${count > 1 ? ` x${count}` : ""}`).join(", ");
+    log(`[perf] long frame ${Math.round(whole)} ms${made.length ? ` (${made.length} new shader programs: ${list})` : ""}: ${named.join(", ")}, other ${Math.round(whole - [...parts].reduce((sum, [name, ms]) => (name === "cpu: whole frame" ? sum : sum + ms), 0))}`);
   }
   if (timer) collectQueries();
   const elapsed = performance.now() - since;

@@ -3,7 +3,20 @@
 // time in each part of a frame, the GPU's in each pass (EXT_disjoint_timer_query_webgl2, where
 // the browser has it), and the draw calls and triangles. Off, every call here does nothing.
 
-export const perfOn = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("perf");
+// On for the rest of the tab once a page was opened with it (the site rewrites its address as
+// heroes and outfits change); ?perf=off turns it off
+function readPerfOn() {
+  if (typeof window === "undefined") return false;
+  const value = new URLSearchParams(window.location.search).get("perf");
+  try {
+    if (value === "off") sessionStorage.removeItem("perf");
+    else if (value !== null) sessionStorage.setItem("perf", "1");
+    return sessionStorage.getItem("perf") === "1";
+  } catch {
+    return value !== null && value !== "off";
+  }
+}
+export const perfOn = readPerfOn();
 
 const REPORT_MS = 2000;
 // What was printed, for Shift+Space to copy

@@ -149,8 +149,9 @@ function report(renderer) {
       const key = program.cacheKey.split(",");
       const near = [...programsBefore]
         .map((other) => other.cacheKey.split(","))
-        .filter((other) => other[0] === key[0] && other.length === key.length)
-        .map((other) => ({ other, diff: key.map((part, i) => (part === other[i] ? null : `[-${key.length - i}] ${other[i]} -> ${part}`)).filter(Boolean) }))
+        .filter((other) => other[0] === key[0])
+        // Lined up from the end, where the parameters are
+        .map((other) => ({ other, diff: key.map((part, i) => (part === other[other.length - key.length + i] ? null : `[-${key.length - i}] ${other[other.length - key.length + i]} -> ${part}`)).filter(Boolean) }))
         .sort((p, q) => p.diff.length - q.diff.length)[0];
       return `    ${nameOf(program)}: ${near ? near.diff.join("; ") || "same key" : "no program like it before"}`;
     });
@@ -179,9 +180,19 @@ function report(renderer) {
 }
 
 // A change that makes every material compile again (lights, shadows), with when it came
-export function note(text) {
+export function note(text, renderer = null) {
   if (!perfOn) return;
-  log(`[perf] ${text} at ${Math.round(performance.now())} ms`);
+  let programs = "";
+  if (renderer) {
+    const kinds = new Map();
+    for (const program of renderer.info.programs ?? []) {
+      const kind = program.name || program.cacheKey.split(",")[0];
+      const short = /^[a-z]+$/.test(kind) ? kind : program.name ? kind : "custom";
+      kinds.set(short, (kinds.get(short) ?? 0) + 1);
+    }
+    programs = ` (shader programs: ${[...kinds].map(([name, count]) => `${name} ${count}`).join(", ")})`;
+  }
+  log(`[perf] ${text} at ${Math.round(performance.now())} ms${programs}`);
 }
 
 // The stages of opening a model, one a line: [[name, ms], ...]

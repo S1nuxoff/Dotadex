@@ -883,7 +883,7 @@ export class Stage {
       return null;
     }
     mark("shaders");
-    perf.note("the model's shaders compiled");
+    perf.note("the model's shaders compiled", this.renderer);
     // The swap happens behind the fog once it has closed over the view
     while (this.veilTarget === 1 && this.veil.material.uniforms.uCover.value < 0.95) {
       await new Promise((resolve) => requestAnimationFrame(resolve));

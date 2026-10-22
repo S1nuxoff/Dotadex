@@ -255,7 +255,7 @@ function drawBackdrop(canvas, w, h, look, picture, mask) {
 
 export function Backdrop({ base, heroId }) {
   const canvasRef = useRef(null);
-  // The last hero's backdrop over the new one, fading out (drawn anew, the picture changed at once)
+  // The colors alone over the picture as it comes, fading out
   const previousRef = useRef(null);
   const drawnKey = useRef(null);
   const [all, setAll] = useState(null);
@@ -293,13 +293,15 @@ export function Backdrop({ base, heroId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, base]);
   useEffect(() => {
-    if (!canvasRef.current || !all || images.key !== key) {
+    if (!canvasRef.current || !all) {
       return;
     }
+    // As the game's page: the next hero's colors at once (its class sets the gradient), its picture
+    // over them once loaded (an Image panel shows when its texture has come), fading in here
+    const ready = images.key === key;
+    const state = `${heroId}|${ready ? "picture" : "colors"}`;
     const previous = previousRef.current;
-    const changed = drawnKey.current !== null && drawnKey.current !== key;
-    drawnKey.current = key;
-    if (changed && previous) {
+    if (ready && drawnKey.current === `${heroId}|colors` && previous) {
       previous.width = canvasRef.current.width;
       previous.height = canvasRef.current.height;
       previous.getContext("2d").drawImage(canvasRef.current, 0, 0);
@@ -307,18 +309,19 @@ export function Backdrop({ base, heroId }) {
       previous.style.opacity = "1";
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
-          previous.style.transition = "opacity 0.6s ease-out";
+          previous.style.transition = "opacity 0.3s ease-out";
           previous.style.opacity = "0";
         })
       );
     }
+    drawnKey.current = state;
     try {
-      drawBackdrop(canvasRef.current, screen[0], screen[1], look, images.picture, images.mask);
+      drawBackdrop(canvasRef.current, screen[0], screen[1], look, ready ? images.picture : null, ready ? images.mask : null);
     } catch {
       // a picture the browser will not let the page read: the gradient alone
       drawBackdrop(canvasRef.current, screen[0], screen[1], look, null, null);
     }
-  }, [all, look, images, key, screen]);
+  }, [all, look, images, key, screen, heroId]);
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#0d0e12]">
       {/* The game's panel covers the screen, under its top bar too; the page ends at the screen's bottom */}

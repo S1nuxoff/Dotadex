@@ -1,4 +1,5 @@
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { perfOn } from "./perf.js";
 
 // Models come from the dataset's site copies: <model>.glb.gz next to each <model>.glb, the same
 // model gzipped with the animation data that changes nothing taken out (the tracker's web-glb.js),
@@ -87,6 +88,9 @@ loader.register((parser) => ({
   },
 }));
 
+// ?perf: each model's times by url ({ download, parse, clips } in ms), for the stage's report
+export const loadTimes = new Map();
+
 const SLICE_MS = 8;
 const nextTask = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise((resolve) => setTimeout(resolve, 0)));
 
@@ -108,8 +112,14 @@ async function makeAnimations(gltf) {
 
 // The parsed glTF of a model; onProgress({ loaded, total }) as its file comes in
 export async function loadGlb(url, onProgress) {
+  const start = performance.now();
   const bytes = await download(url, onProgress);
   // Parsed once (the callers keep the result), the file is not needed any more
   downloads.delete(url);
-  return makeAnimations(await loader.parseAsync(await gunzip(bytes), url.slice(0, url.lastIndexOf("/") + 1)));
+  const downloaded = performance.now();
+  const gltf = await loader.parseAsync(await gunzip(bytes), url.slice(0, url.lastIndexOf("/") + 1));
+  const parsed = performance.now();
+  await makeAnimations(gltf);
+  if (perfOn) loadTimes.set(url, { download: downloaded - start, "gunzip and parse": parsed - downloaded, "clips (in slices)": performance.now() - parsed });
+  return gltf;
 }

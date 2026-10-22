@@ -17,7 +17,8 @@ import { Cloth, loadCloth } from "./cloth.js";
 import { frameLights, SCENE_DEPTH } from "./particles/render.js";
 import { playLoaded, playWhenReady, preloadSound } from "./soundPlayer.js";
 import { playUiSound } from "../uiSounds.js";
-import { loadGlb, prefetchGlb } from "./glb.js";
+import { loadGlb, loadTimes, prefetchGlb } from "./glb.js";
+import * as perf from "./perf.js";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -774,6 +775,15 @@ export class Stage {
       this.veilSince = performance.now();
     }
     const request = ++this.request;
+    // ?perf: the time each stage took, printed once the model is shown
+    let last = perf.now();
+    const timings = [];
+    const mark = (name) => {
+      if (!perf.perfOn) return;
+      const at = performance.now();
+      timings.push([name, at - last]);
+      last = at;
+    };
     const loaded = new Map();
     const report = () => {
       let done = 0;
@@ -810,6 +820,7 @@ export class Stage {
     if (request !== this.request) {
       return null;
     }
+    mark("files (download, parse, clips)");
 
     let rootIndex = 0;
     gltfs.forEach((gltf, index) => {
@@ -843,6 +854,7 @@ export class Stage {
 
     this.rootModel = entries[rootIndex].url.slice(entries[rootIndex].url.indexOf("/models/") + 1);
     this.rootUrl = entries[rootIndex].url;
+    mark("materials");
     // The materials' shaders compiled before the model is on screen, in parallel where the browser
     // can (KHR_parallel_shader_compile): compiled by its first frame they stalled the page. The
     // meshes take the shadows replace() gives them first, which the programs depend on
@@ -853,6 +865,7 @@ export class Stage {
     if (request !== this.request) {
       return null;
     }
+    mark("shaders");
     // The swap happens behind the fog once it has closed over the view
     while (this.veilTarget === 1 && this.veil.material.uniforms.uCover.value < 0.95) {
       await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -860,8 +873,10 @@ export class Stage {
         return null;
       }
     }
+    mark("waiting for the fog to close");
     this.sequences = sequences[rootIndex];
     this.replace(group, gltfs[rootIndex].animations);
+    mark("swap in");
     this.cloths = [];
     // The bones the hero's animations move, by name in lower case
     const animatedBones = new Set(gltfs[rootIndex].animations.flatMap((clip) => clip.tracks.map((track) => track.name.slice(0, track.name.lastIndexOf(".")).toLowerCase())));
@@ -885,6 +900,15 @@ export class Stage {
       const cloth = this.cloths[k];
       cloth.driven = cloth.driven.filter((driven) => !claimed.has(driven.bone));
       cloth.driven.forEach((driven) => claimed.add(driven.bone));
+    }
+    mark("cloth");
+    if (perf.perfOn) {
+      // Each file's own times inside the first stage (a file loaded before shows none)
+      for (const { url } of entries) {
+        const times = loadTimes.get(url);
+        if (times) timings.push(...Object.entries(times).map(([name, ms]) => [`  ${url.split("/").pop()}: ${name}`, ms]));
+      }
+      perf.stages(`showing ${this.rootModel}`, timings);
     }
     this.modelUrls = entries.map((entry) => entry.url);
     trimModels(new Set([...this.modelUrls, this.pedestalUrl]));
@@ -1871,6 +1895,8 @@ export class Stage {
   }
 
   frame() {
+    perf.frameStart(this.renderer);
+    let at = perf.now();
     this.timer.update();
     const delta = Math.min(this.timer.getDelta(), 0.1);
     // The cloth's bones back as the animation left them, before it moves them again
@@ -1881,7 +1907,9 @@ export class Stage {
     // what the spawn and its page start (Broodmother's web growing in) are seen from their start
     const held = Boolean(this.pendingShow);
     if (this.mixer && !this.paused && !held) {
+      at = perf.now();
       this.mixer.update(delta * this.speed);
+      perf.add("cpu: animation", at);
       this.playAnimationSounds();
       this.startClothEffects();
       this.startAnimationEffects();
@@ -1971,11 +1999,14 @@ export class Stage {
     }
 
     this.controls.update();
+    at = perf.now();
     this.updateCloth(delta);
+    perf.add("cpu: cloth", at);
     this.group?.updateMatrixWorld(true);
     this.hideParked();
     // The lights the particles cast this frame, gathered as their renderers run
     frameLights.length = 0;
+    const particlesAt = perf.now();
     this.particles?.update(held ? 0 : delta, this.camera);
     if (this.pedestalParticles) {
       this.pedestalParticles.group.visible = Boolean(this.pedestal?.visible);
@@ -1989,6 +2020,7 @@ export class Stage {
         manager.update(delta, this.camera);
       }
     }
+    perf.add("cpu: particles", particlesAt);
     this.camera.updateMatrixWorld();
     setParticleLights(frameLights, this.camera);
     // While developing, ?opaque draws the scene on black instead of see-through
@@ -2005,8 +2037,17 @@ export class Stage {
       this.renderer.autoClear = true;
       return;
     }
+    at = perf.now();
+    let gpu = perf.gpuBegin(this.renderer, "glow pass");
     this.renderGlow();
+    perf.gpuEnd(gpu);
+    perf.add("cpu: glow pass", at);
+    at = perf.now();
+    gpu = perf.gpuBegin(this.renderer, "frame (shadow, scene, particles, fog)");
     this.composer.render();
+    perf.gpuEnd(gpu);
+    perf.add("cpu: frame draw", at);
+    perf.frameEnd(this.renderer);
     if (import.meta.env.DEV && this.probeRequested) {
       this.probeRequested = false;
       this.probeParticles();

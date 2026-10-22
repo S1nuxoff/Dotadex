@@ -863,7 +863,7 @@ export class Stage {
     group.traverse((node) => {
       if (node.isMesh) node.receiveShadow = true;
     });
-    await this.renderer.compileAsync(group, this.camera, this.scene).catch(() => {});
+    await this.compileAsDrawn(group, this.scene);
     if (request !== this.request) {
       return null;
     }
@@ -875,7 +875,7 @@ export class Stage {
         node.material = node.userData.dota?.userData?.glow ?? this.glowBlack;
       }
     });
-    await this.renderer.compileAsync(group, this.camera, this.scene).catch(() => {});
+    await this.compileAsDrawn(group, this.scene);
     for (const [node, material] of drawn) {
       node.material = material;
     }
@@ -1527,7 +1527,7 @@ export class Stage {
             });
             // Its shaders compiled before it is on screen, as the hero's (show)
             const pedestal = this.pedestal;
-            await this.renderer.compileAsync(pedestal, this.camera, this.scene).catch(() => {});
+            await this.compileAsDrawn(pedestal, this.scene);
             if (this.pedestal !== pedestal) {
               return;
             }
@@ -1850,6 +1850,18 @@ export class Stage {
   }
 
   // Draws the halos of the model's glowing materials into the glow composer, when it has any
+  // Compiles an object's shaders in parallel where the browser can, as they are drawn: into the
+  // composer's target, which sets the programs' tone mapping and output colors. Compiled for the
+  // screen, every program was made again on its first frame (27 for Void Spirit's page, 500 ms)
+  compileAsDrawn(object, scene) {
+    const target = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(this.composer.readBuffer);
+    // compileAsync makes the programs at once and only waits for them after
+    const done = this.renderer.compileAsync(object, this.camera, scene);
+    this.renderer.setRenderTarget(target);
+    return done.catch(() => {});
+  }
+
   // New particle systems wait unseen (on a layer the camera does not draw) while their shaders
   // compile in parallel: compiled by their first frame, they stalled it (Void Spirit's portal and
   // the god rays: 140 ms)
@@ -1861,10 +1873,7 @@ export class Stage {
       if (materials.every((material) => this.compiledMaterials.has(material))) return;
       node.userData.compiling = true;
       node.layers.set(HELD_LAYER);
-      this.renderer
-        .compileAsync(node, this.camera, root)
-        .catch(() => {})
-        .then(() => {
+      this.compileAsDrawn(node, root).then(() => {
           materials.forEach((material) => this.compiledMaterials.add(material));
           node.layers.set(0);
           node.userData.compiling = false;

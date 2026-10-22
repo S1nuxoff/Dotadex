@@ -1059,7 +1059,7 @@ export class Stage {
       perf.stages(`showing ${this.rootModel}`, timings);
     }
     this.modelUrls = entries.map((entry) => entry.url);
-    trimModels(new Set([...this.modelUrls, this.pedestalUrl]));
+    trimModels(new Set([...this.modelUrls, this.pedestalUrl, ...(this.summonUrls ?? [])]));
     this.particles?.setModel(group, this.modelUrls);
     this.releaseHeld();
     if (this.veilTarget === 1) {
@@ -1490,7 +1490,7 @@ export class Stage {
     // model's first seconds: the box then stays the same however the hero is turned (fitted to the
     // turning model's bounds, the hat's brim fell off its edge at some angles and its shadow came
     // and went)
-    const key = `${this.group?.uuid}|${this.pedestal?.visible ? this.pedestal.uuid : ""}`;
+    const key = `${this.group?.uuid}|${this.pedestal?.visible ? this.pedestal.uuid : ""}|${this.summons?.length ?? 0}`;
     if (this.shadowFitKey !== key) {
       this.shadowFitKey = key;
       this.shadowFitBounds = new THREE.Box3();
@@ -1507,6 +1507,12 @@ export class Stage {
         this.group.updateMatrixWorld(true);
         this.group.traverse((node) => node.isSkinnedMesh && node.skeleton?.update());
         bounds.expandByObject(this.group, true);
+      }
+      // The units beside the hero cast their shadows on the pedestal too
+      if (this.summonGroup?.visible && this.summons?.length) {
+        this.summonGroup.updateMatrixWorld(true);
+        this.summonGroup.traverse((node) => node.isSkinnedMesh && node.skeleton?.update());
+        bounds.expandByObject(this.summonGroup, true);
       }
       if (this.pedestal?.visible) bounds.expandByObject(this.pedestal);
       if (!bounds.isEmpty()) {
@@ -1633,6 +1639,9 @@ export class Stage {
     const changed = portrait !== this.portrait || shot !== this.portraitShot;
     this.portrait = portrait;
     this.portraitShot = shot;
+    // The units the page puts beside the hero, from the dataset the pedestal comes from
+    const base = pedestalUrl?.includes("/models/") ? pedestalUrl.slice(0, pedestalUrl.indexOf("/models/") + 1) : this.particleBase;
+    this.setSummons(base ? portrait?.summons ?? [] : [], base);
     if (pedestalUrl !== this.pedestalUrl) {
       this.pedestalUrl = pedestalUrl;
       if (this.pedestal) {
@@ -1696,6 +1705,10 @@ export class Stage {
     // A part shown alone (a weapon off the hero) floats in the view, without the pedestal
     if (this.pedestal) {
       this.pedestal.visible = Boolean(this.loadout && this.portrait) && this.standing !== false;
+    }
+    // The units beside the hero, on the hero's page only, as the pedestal
+    if (this.summonGroup) {
+      this.summonGroup.visible = Boolean(this.loadout && this.portrait) && this.standing !== false;
     }
     // A hero's page as the game has it now: the hero on its pedestal with a soft shadow, over the
     // page's own backdrop; no rocks, embers or fog
@@ -1992,6 +2005,84 @@ export class Stage {
   }
 
   // Draws the halos of the model's glowing materials into the glow composer, when it has any
+  // The units the hero's page puts on the pedestal beside the hero (portraits' "summons":
+  // Warlock's Golem, Beastmaster's hawk and boar, ...), each its unit's model at its place from the
+  // hero's origin (game units), turned by its yaw and scaled, standing in its loadout stance
+  setSummons(list, base) {
+    const key = JSON.stringify(list);
+    if (key === this.summonsKey) return;
+    this.summonsKey = key;
+    const request = (this.summonsRequest = (this.summonsRequest ?? 0) + 1);
+    if (!this.summonGroup) {
+      this.summonGroup = new THREE.Group();
+      this.summonGroup.name = "summons";
+      this.scene.add(this.summonGroup);
+    }
+    for (const summon of this.summons ?? []) {
+      summon.mixer?.stopAllAction();
+      summon.object.removeFromParent();
+      this.dropModel(summon.object);
+    }
+    this.summons = [];
+    // Kept in memory while on show (trimModels)
+    this.summonUrls = list.map((summon) => base + summon.model);
+    this.summonsLoading = list.length > 0;
+    if (!list.length) return;
+    Promise.all(
+      list.map(async (summon) => {
+        const url = base + summon.model;
+        const [gltf, sequences] = await Promise.all([loadModel(url), loadSequences(url)]);
+        const object = cloneSkinned(gltf.scene);
+        this.applyMaterials(object, gltf.userData.textures);
+        object.traverse((node) => {
+          if (!node.isMesh) return;
+          const depth = shadowDepthFor(node.userData.dota ?? node.material);
+          node.castShadow = depth !== null;
+          node.receiveShadow = true;
+          for (const material of [node.material, node.userData.dota, node.userData.pbr].flat()) {
+            if (material) material.shadowSide = THREE.DoubleSide;
+          }
+          if (depth) node.customDepthMaterial = depth;
+        });
+        const holder = new THREE.Group();
+        holder.position.copy(sourceToScene(summon.position));
+        holder.rotation.y = THREE.MathUtils.degToRad(summon.angles[1] ?? 0);
+        holder.scale.setScalar(summon.scale || 1);
+        holder.add(object);
+        await this.compileAsDrawn(holder, this.scene);
+        // Its loadout stance, else its idle, by its sequences' activities (as the hero's)
+        const names = gltf.animations.map((clip) => clip.name);
+        const byClip = sequences && sequencesByClip(sequences, names);
+        const stance =
+          sequenceFor(byClip, names, "ACT_DOTA_LOADOUT") ??
+          sequenceFor(byClip, names, "ACT_DOTA_IDLE") ??
+          names.find((name) => /^idle$|^idle_anim$/i.test(name)) ??
+          names.find((name) => /idle/i.test(name)) ??
+          names[0];
+        let mixer = null;
+        if (stance) {
+          mixer = new THREE.AnimationMixer(object);
+          mixer.clipAction(gltf.animations.find((clip) => clip.name === stance)).play();
+          mixer.update(Math.random() * 2);
+        }
+        return { object: holder, mixer };
+      })
+    )
+      .then((summons) => {
+        if (request !== this.summonsRequest) {
+          summons.forEach((summon) => this.dropModel(summon.object));
+          return;
+        }
+        this.summons = summons;
+        for (const summon of summons) this.summonGroup.add(summon.object);
+        this.updateShowcase();
+      })
+      .catch((error) => console.warn("Summons not shown", error))
+      .finally(() => {
+        if (request === this.summonsRequest) this.summonsLoading = false;
+      });
+  }
+
   // While a new model loads with the last still on show, what belongs to the next one (its page's
   // camera and light, its effects, its size, its rim) waits for the swap: applied at once, the hero
   // on show moved to the next one's place and played the next one's effects (seen without the fog)
@@ -2233,6 +2324,7 @@ export class Stage {
     if (this.mixer && !this.paused && !held) {
       at = perf.now();
       this.mixer.update(delta * this.speed);
+      for (const summon of this.summons ?? []) summon.mixer?.update(delta * this.speed);
       perf.add("cpu: animation", at);
       this.playAnimationSounds();
       this.startClothEffects();
@@ -2259,7 +2351,9 @@ export class Stage {
     this.veil.visible = veil.uCover.value > 0.01;
     // Shown once the fog has parted enough to see it (or at once, without the fog) and its cloth
     // has settled, which it does over its first frames
-    const settled = (this.cloths ?? []).every((cloth) => cloth.started && !(cloth.settling > 0));
+    const settled = (this.cloths ?? []).every((cloth) => cloth.started && !(cloth.settling > 0)) && !this.summonsLoading;
+    // The units beside the hero turn with it, as the pedestal does
+    if (this.summonGroup) this.summonGroup.rotation.y = this.group?.rotation.y ?? 0;
     if (this.pendingShow && veil.uCover.value < 0.35 && (settled || performance.now() - this.pendingSince > HOLD_LIMIT_MS)) {
       this.pendingShow = false;
       this.reveal();

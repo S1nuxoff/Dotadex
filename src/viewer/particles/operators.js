@@ -831,11 +831,16 @@ DEFS.C_INIT_PositionWarp = (def) => {
   };
 };
 
+const CP_AXES = { PARTICLE_CP_AXIS_X: 0, PARTICLE_CP_AXIS_Y: 1, PARTICLE_CP_AXIS_Z: 2 };
+
+// Normals along an axis of the control point (m_nControlPointAxis, x by default)
 DEFS.C_INIT_NormalAlignToCP = (def) => {
-  const point = def.m_transformInput?.m_nControlPoint ?? def.m_nControlPoint ?? 0;
+  const point =
+    def.m_nControlPointNumber ?? def.m_transformInput?.m_nControlPoint ?? def.m_nControlPoint ?? 0;
+  const axis = CP_AXES[def.m_nControlPointAxis] ?? 0;
   return {
     init(system, start, end) {
-      const forward = system.controlPoint(point).axis(0, v1);
+      const forward = system.controlPoint(point).axis(axis, v1);
       const normal = system.float(21);
       for (let i = start; i < end; i++) {
         normal[i * 3] = forward.x;
@@ -2182,6 +2187,25 @@ DEFS.C_OP_SetControlPointOrientation = (def) => {
       // Source angles: pitch about y, yaw about z, roll about x
       euler.set(rotation[2] * deg, rotation[0] * deg, rotation[1] * deg, "ZYX");
       point.quaternion.setFromEuler(euler);
+    },
+  };
+};
+
+// m_nOutputCP at m_nInputCP, turned so its x axis follows the ground's normal under it; the ground
+// under the hero is the only world here, flat at height 0, so the normal is always up
+const X_TO_UP = new THREE.Quaternion().setFromUnitVectors(
+  new THREE.Vector3(1, 0, 0),
+  new THREE.Vector3(0, 0, 1),
+);
+DEFS.C_OP_SetCPOrientationToGroundNormal = (def) => {
+  const input = def.m_nInputCP ?? 0;
+  const output = def.m_nOutputCP ?? 1;
+  return {
+    update(system) {
+      const from = system.controlPoint(input);
+      const point = system.ownControlPoint(output);
+      point.position.copy(from.position);
+      point.quaternion.copy(X_TO_UP);
     },
   };
 };

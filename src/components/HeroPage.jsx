@@ -923,7 +923,7 @@ export default function HeroPage({
     <div
       ref={page}
       data-preview={preview || undefined}
-      className="relative min-h-0 flex-1 overflow-hidden"
+      className="fade-images relative min-h-0 flex-1 overflow-hidden"
     >
       <Backdrop base={catalog.modelsBase} heroId={hero.id} />
       {/* The model fills the page under the columns */}

@@ -357,3 +357,17 @@ label:has(> input:focus) {
     animation: none;
   }
 }
+
+/* Images that fade in as they arrive (data-loaded, set in main.jsx), not appear at once */
+/* :where keeps it under an image's own classes once loaded */
+:where(.fade-images) img {
+  transition: opacity 0.35s ease-out;
+}
+:where(.fade-images) img:not([data-loaded]) {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.fade-images) img {
+    transition: none;
+  }
+}

@@ -27,6 +27,11 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 // (large_model_loadout.css: .EconSetPreview.Fade, opacity over 0.25 s), the pedestal with it, and
 // the next fading in
 const FADE_MS = 250;
+// A part put on or taken off on the same body dithers in or out over this long, as the game's
+// loadout does (dota_wearable_dither_duration, 0.2)
+const DITHER_MS = 200;
+// The ways a part is told apart: its model and material variant
+const partKey = (entry) => `${entry.url}#${entry.skin}`;
 const CROSSFADE = `opacity ${FADE_MS}ms ease`;
 // The longest a new model waits for its cloth to settle before it is shown anyway
 const HOLD_LIMIT_MS = 2000;
@@ -829,7 +834,9 @@ export class Stage {
   async showNow(urls, onProgress) {
     // A model on show is veiled in fog while the next one loads, when the fog is chosen; else it
     // stays on show until the next is ready
-    if (this.useFog && this.group && !reducedMotion.matches) {
+    // (not when only what the same body wears changes: changeParts)
+    const sameBody = Boolean(this.group && this.parts && urls[0] === this.firstUrl);
+    if (this.useFog && this.group && !reducedMotion.matches && !sameBody) {
       if (this.veilTarget !== 1) {
         playUiSound("veil-in", 0.8);
       }
@@ -893,28 +900,33 @@ export class Stage {
       }
     });
 
+    // The parts worn on the root (not a hero base a body-replacing model hides)
+    const partIndices = gltfs.map((gltf, index) => index).filter((index) => index !== rootIndex && !(index === 0 && rootIndex !== 0 && gltf.animations.length > 10));
+    if (this.group && this.parts && partKey(entries[rootIndex]) === this.rootKey) {
+      return this.changeParts({ request, entries, gltfs, skins, cloths, partIndices });
+    }
+
     const group = new THREE.Group();
     // The cloth of the models shown (not of a hero base a body-replacing model hides)
     const shownCloth = [];
+    const parts = new Map();
     const root = cloneSkinned(gltfs[rootIndex].scene);
     this.applyMaterials(root, gltfs[rootIndex].userData.textures, skins[rootIndex]);
     // Each mesh knows the model it came from, for effects that rise from one model's surface
     const tag = (object, url) => object.traverse((node) => node.isMesh && (node.userData.model = url.split("#")[0]));
     tag(root, entries[rootIndex].url);
     group.add(root);
-    shownCloth.push(cloths[rootIndex]);
+    shownCloth.push({ fe: cloths[rootIndex], key: partKey(entries[rootIndex]) });
 
-    gltfs.forEach((gltf, index) => {
-      // A hero base is hidden when a body-replacing model took over
-      if (index === rootIndex || (index === 0 && rootIndex !== 0 && gltf.animations.length > 10)) {
-        return;
-      }
-      shownCloth.push(cloths[index]);
+    for (const index of partIndices) {
+      const gltf = gltfs[index];
+      shownCloth.push({ fe: cloths[index], key: partKey(entries[index]) });
       const part = cloneSkinned(gltf.scene);
       this.applyMaterials(part, gltf.userData.textures, skins[index]);
       tag(part, entries[index].url);
       attach(root, part);
-    });
+      parts.set(partKey(entries[index]), part);
+    }
 
     this.rootModel = entries[rootIndex].url.slice(entries[rootIndex].url.indexOf("/models/") + 1);
     this.rootUrl = entries[rootIndex].url;
@@ -1030,25 +1042,24 @@ export class Stage {
     const animatedBones = new Set(gltfs[rootIndex].animations.flatMap((clip) => clip.tracks.map((track) => track.name.slice(0, track.name.lastIndexOf(".")).toLowerCase())));
     // The new cloth's effects start with the animation playing now
     this.clothClip = null;
-    for (const fe of shownCloth) {
+    for (const { fe, key } of shownCloth) {
       try {
         const cloth = fe && new Cloth(fe, group, animatedBones);
         if (cloth && !cloth.empty) {
+          cloth.partKey = key;
           this.cloths.push(cloth);
         }
       } catch (error) {
         console.warn("Cloth not set up", error);
       }
     }
-    // A bone one cloth moves is left to the last that moves it: the bones are shared here, while in
-    // the game each model moves its own, so a worn part's cloth (Tidehunter's fish) moves the bones
-    // its mesh hangs on and the hero's own cloth, which has the same chain, must not move them too
-    const claimed = new Set();
-    for (let k = this.cloths.length - 1; k >= 0; k--) {
-      const cloth = this.cloths[k];
-      cloth.driven = cloth.driven.filter((driven) => !claimed.has(driven.bone));
-      cloth.driven.forEach((driven) => claimed.add(driven.bone));
-    }
+    this.claimClothBones();
+    // What changeParts works on: the body and its parts
+    this.animatedBones = animatedBones;
+    this.partsRoot = root;
+    this.parts = parts;
+    this.rootKey = partKey(entries[rootIndex]);
+    this.firstUrl = urls[0];
     mark("cloth");
     if (perf.perfOn) {
       // Each file's own times inside the first stage (a file loaded before shows none)
@@ -2005,6 +2016,100 @@ export class Stage {
   }
 
   // Draws the halos of the model's glowing materials into the glow composer, when it has any
+  // A bone one cloth moves is left to the last that moves it: the bones are shared here, while in
+  // the game each model moves its own, so a worn part's cloth (Tidehunter's fish) moves the bones
+  // its mesh hangs on and the hero's own cloth, which has the same chain, must not move them too
+  claimClothBones() {
+    for (const cloth of this.cloths) cloth.driven = cloth.allDriven ??= cloth.driven;
+    const claimed = new Set();
+    for (let k = this.cloths.length - 1; k >= 0; k--) {
+      const cloth = this.cloths[k];
+      cloth.driven = cloth.driven.filter((driven) => !claimed.has(driven.bone));
+      cloth.driven.forEach((driven) => claimed.add(driven.bone));
+    }
+  }
+
+  // What the same body wears changed: the parts taken off dither out and go, the parts put on are
+  // made ready while the model stays as it is, then dither in; the animation, the other parts and
+  // their cloth carry on, as in the game's loadout
+  async changeParts({ request, entries, gltfs, skins, cloths, partIndices }) {
+    const wanted = new Map(partIndices.map((index) => [partKey(entries[index]), index]));
+    const added = [];
+    for (const [key, index] of wanted) {
+      if (this.parts.has(key)) continue;
+      const part = cloneSkinned(gltfs[index].scene);
+      this.applyMaterials(part, gltfs[index].userData.textures, skins[index]);
+      part.traverse((node) => node.isMesh && (node.userData.model = entries[index].url));
+      added.push({ key, index, part });
+    }
+    for (const { part } of added) {
+      part.traverse((node) => node.isMesh && (node.receiveShadow = true));
+      await this.compileAsDrawn(part, this.scene);
+      for (const texture of texturesOf(part)) {
+        if (!this.renderer.properties.get(texture).__webglTexture) this.renderer.initTexture(texture);
+      }
+    }
+    if (request !== this.request) {
+      added.forEach(({ part }) => this.dropModel(part));
+      return null;
+    }
+    // Taken off: out of the cloth at once, dithered out, then gone
+    for (const [key, part] of [...this.parts]) {
+      if (wanted.has(key)) continue;
+      this.parts.delete(key);
+      this.cloths = this.cloths.filter((cloth) => cloth.partKey !== key);
+      this.dither(part, 1, 0, () => {
+        part.removeFromParent();
+        this.dropModel(part);
+      });
+    }
+    // Put on: on the body, its cloth set up, dithered in
+    for (const { key, index, part } of added) {
+      attach(this.partsRoot, part);
+      part.traverse((node) => {
+        if (node.isMesh) {
+          const depth = shadowDepthFor(node.userData.dota ?? node.material);
+          node.castShadow = depth !== null;
+          for (const material of [node.material, node.userData.dota, node.userData.pbr].flat()) {
+            if (material) material.shadowSide = THREE.DoubleSide;
+          }
+          if (depth) node.customDepthMaterial = depth;
+        }
+        if (node.isBone && !node.userData.rest) {
+          node.userData.rest = { position: node.position.clone(), quaternion: node.quaternion.clone(), scale: node.scale.clone() };
+        }
+      });
+      this.parts.set(key, part);
+      try {
+        const cloth = cloths[index] && new Cloth(cloths[index], this.group, this.animatedBones);
+        if (cloth && !cloth.empty) {
+          cloth.partKey = key;
+          this.cloths.push(cloth);
+        }
+      } catch (error) {
+        console.warn("Cloth not set up", error);
+      }
+      this.dither(part, 0, 1);
+    }
+    this.claimClothBones();
+    this.modelUrls = entries.map((entry) => entry.url);
+    trimModels(new Set([...this.modelUrls, this.pedestalUrl, ...(this.summonUrls ?? [])]));
+    this.particles?.setModel(this.group, this.modelUrls);
+    this.releaseHeld();
+    return Object.keys(this.actions);
+  }
+
+  // A part's Dota materials (and their glows, which share it) from one share drawn to another
+  dither(part, from, to, done) {
+    const uniforms = new Set();
+    part.traverse((node) => {
+      const uniform = node.isMesh && node.userData.dota?.uniforms?.uDither;
+      if (uniform) uniforms.add(uniform);
+    });
+    uniforms.forEach((uniform) => (uniform.value = from));
+    (this.dithers ??= []).push({ uniforms, from, to, start: performance.now(), done });
+  }
+
   // The units the hero's page puts on the pedestal beside the hero (portraits' "summons":
   // Warlock's Golem, Beastmaster's hawk and boar, ...), each its unit's model at its place from the
   // hero's origin (game units), turned by its yaw and scaled, standing in its loadout stance
@@ -2325,6 +2430,16 @@ export class Stage {
       at = perf.now();
       this.mixer.update(delta * this.speed);
       for (const summon of this.summons ?? []) summon.mixer?.update(delta * this.speed);
+      if (this.dithers?.length) {
+        const now = performance.now();
+        this.dithers = this.dithers.filter((fade) => {
+          const t = reducedMotion.matches ? 1 : Math.min((now - fade.start) / DITHER_MS, 1);
+          fade.uniforms.forEach((uniform) => (uniform.value = fade.from + (fade.to - fade.from) * t));
+          if (t < 1) return true;
+          fade.done?.();
+          return false;
+        });
+      }
       perf.add("cpu: animation", at);
       this.playAnimationSounds();
       this.startClothEffects();

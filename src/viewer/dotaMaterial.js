@@ -213,7 +213,15 @@ const fragmentShader = /* glsl */ `
     return normalize(T * (mapN.x * scale) + B * (mapN.y * scale) + n * mapN.z);
   }
 
+  // The game's wearable dither (dota_loadout_wearable_transition_effect, its default): a part put on
+  // or taken off shows or hides pixel by pixel. uDither is the share drawn, 1 all of it
+  uniform float uDither;
+  float ditherNoise(vec2 p) {
+    return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+  }
+
   void main() {
+    if (uDither < 1.0 && ditherNoise(gl_FragCoord.xy) >= uDither) discard;
     // Each layer's texture coordinates, moved, scaled and turned as the material says
     vec2 uv = (uBaseUv * vec3(vUv, 1.0)).xy;
     vec4 color = texture2D(tColor, uv);
@@ -563,6 +571,7 @@ export function createDotaMaterial(original, vmat, textures) {
     uniforms: {
       // The scene's lights, for the shadow of the stage's sun
       ...THREE.UniformsUtils.clone(THREE.UniformsLib.lights),
+      uDither: { value: 1 },
       tColor: { value: pick("g_tColor") ?? original.map ?? white },
       tNormal: { value: pick("g_tNormal") },
       tMasks1: { value: pick("g_tMasks1") },
@@ -777,7 +786,15 @@ const litSimpleFragment = /* glsl */ `
     return normalize(T * (mapN.x * scale) + B * (mapN.y * scale) + n * mapN.z);
   }
 
+  // The game's wearable dither (dota_loadout_wearable_transition_effect, its default): a part put on
+  // or taken off shows or hides pixel by pixel. uDither is the share drawn, 1 all of it
+  uniform float uDither;
+  float ditherNoise(vec2 p) {
+    return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+  }
+
   void main() {
+    if (uDither < 1.0 && ditherNoise(gl_FragCoord.xy) >= uDither) discard;
     vec2 uv = (uBaseUv * vec3(vUv, 1.0)).xy;
     vec4 color = texture2D(tColor, uv);
     if (uAlphaTest > 0.0 && color.a < uAlphaTest) discard;
@@ -834,6 +851,7 @@ export function createLitSimpleMaterial(original, vmat, textures) {
     fragmentShader: litSimpleFragment,
     uniforms: {
       ...THREE.UniformsUtils.clone(THREE.UniformsLib.lights),
+      uDither: { value: 1 },
       tColor: { value: textures.g_tColor ?? original.map ?? white },
       tNormal: { value: normal },
       uHasNormal: { value: normal ? 1 : 0 },
@@ -900,7 +918,13 @@ function createGlowMaterial(vmat, textures, main, side, animated) {
       uniform float uBloomScale;
       uniform float uBloomShift;
       varying vec2 vUv;
+      uniform float uDither;
+      float ditherNoise(vec2 p) {
+        return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+      }
       void main() {
+        // Dithered with the part it glows on
+        if (uDither < 1.0 && ditherNoise(gl_FragCoord.xy) >= uDither) discard;
         vec2 uv = (uBaseUv * vec3(vUv, 1.0)).xy;
         vec4 color = texture2D(tColor, uv);
         if (uSeparateAlpha > 0.5) color.a = texture2D(tColor, (uAlphaUv * vec3(vUv, 1.0)).xy).a;
@@ -920,6 +944,7 @@ function createGlowMaterial(vmat, textures, main, side, animated) {
       }
     `,
     uniforms: {
+      uDither: main.uDither,
       tColor: main.tColor,
       uBaseUv: main.uBaseUv,
       uAlphaUv: main.uAlphaUv,

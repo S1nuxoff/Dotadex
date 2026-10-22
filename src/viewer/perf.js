@@ -1,4 +1,4 @@
-// ?perf: where the time goes, printed to the console. Opening a model prints its stages (files,
+// ?perf: where the time goes, printed to the console and kept: Shift+Space copies it all. Opening a model prints its stages (files,
 // materials, shaders, ...), and every 2 seconds the frame: frames per second, the main thread's
 // time in each part of a frame, the GPU's in each pass (EXT_disjoint_timer_query_webgl2, where
 // the browser has it), and the draw calls and triangles. Off, every call here does nothing.
@@ -6,6 +6,46 @@
 export const perfOn = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("perf");
 
 const REPORT_MS = 2000;
+// What was printed, for Shift+Space to copy
+const printed = [];
+const KEPT_LINES = 400;
+
+function log(text) {
+  console.log(text);
+  printed.push(text);
+  if (printed.length > KEPT_LINES) printed.splice(0, printed.length - KEPT_LINES);
+}
+
+if (perfOn) {
+  window.addEventListener("keydown", (event) => {
+    if (event.code !== "Space" || !event.shiftKey) return;
+    event.preventDefault();
+    const text = [navigator.userAgent, `screen ${screen.width}x${screen.height} at ${devicePixelRatio}x`, ...printed].join("\n");
+    navigator.clipboard.writeText(text).then(
+      () => console.log(`[perf] copied ${printed.length} entries`),
+      (error) => console.error("[perf] copying failed", error)
+    );
+  });
+  // Stalls anywhere on the page, not only in the stage's frames: the browser's long animation
+  // frames (Chrome) with the scripts that took the time
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry.duration < LONG_FRAME_MS) continue;
+        const scripts = (entry.scripts ?? [])
+          .filter((script) => script.duration >= 5)
+          .sort((a, b) => b.duration - a.duration)
+          .slice(0, 5)
+          .map((script) => `${Math.round(script.duration)} ms ${script.invoker || script.invokerType} ${script.sourceFunctionName || ""} ${(script.sourceURL || "").split("/").pop()}:${script.sourceCharPosition ?? ""}`);
+        const rendering = entry.renderStart ? entry.startTime + entry.duration - entry.renderStart : 0;
+        const head = `[perf] long browser frame ${Math.round(entry.duration)} ms (blocking ${Math.round(entry.blockingDuration ?? 0)}, rendering ${Math.round(rendering)})`;
+        log([head, ...scripts.map((script) => `    ${script}`)].join("\n"));
+      }
+    }).observe({ type: "long-animation-frame", buffered: true });
+  } catch {
+    log("[perf] this browser does not report long animation frames");
+  }
+}
 const sums = new Map();
 // This frame's parts, for a long frame's own line
 const parts = new Map();
@@ -58,8 +98,15 @@ function collectQueries() {
 }
 
 // At the start of a frame: the renderer counts draw calls over the whole frame, not per pass
+let announced = false;
 export function frameStart(renderer) {
   if (!perfOn) return;
+  if (!announced) {
+    announced = true;
+    gl ??= renderer.getContext();
+    timer ??= gl.getExtension("EXT_disjoint_timer_query_webgl2") ?? false;
+    log(`[perf] on, the GPU's times: ${timer ? "yes" : "no (this browser has no timer query)"}`);
+  }
   renderer.info.autoReset = false;
   renderer.info.reset();
   parts.clear();
@@ -67,32 +114,42 @@ export function frameStart(renderer) {
 }
 
 // At the end of a frame; prints the report every 2 seconds
+let failed = false;
 export function frameEnd(renderer) {
-  if (!perfOn) return;
+  if (!perfOn || failed) return;
+  try {
+    report(renderer);
+  } catch (error) {
+    failed = true;
+    console.error("[perf] the frame report failed", error);
+  }
+}
+
+function report(renderer) {
   frames++;
   add("cpu: whole frame", frameStarted);
   const whole = parts.get("cpu: whole frame");
   if (whole > LONG_FRAME_MS) {
     // The draw includes compiling shaders first used and uploading new textures
     const named = [...parts].filter(([name]) => name !== "cpu: whole frame").map(([name, ms]) => `${name.replace("cpu: ", "")} ${Math.round(ms)}`);
-    console.log(`[perf] long frame ${Math.round(whole)} ms: ${named.join(", ")}, other ${Math.round(whole - [...parts].reduce((sum, [name, ms]) => (name === "cpu: whole frame" ? sum : sum + ms), 0))}`);
+    log(`[perf] long frame ${Math.round(whole)} ms: ${named.join(", ")}, other ${Math.round(whole - [...parts].reduce((sum, [name, ms]) => (name === "cpu: whole frame" ? sum : sum + ms), 0))}`);
   }
   if (timer) collectQueries();
   const elapsed = performance.now() - since;
   if (elapsed < REPORT_MS) return;
-  const report = { "frames per second": Math.round((frames * 1000) / elapsed) };
+  const table = { "frames per second": Math.round((frames * 1000) / elapsed) };
   for (const [name, total] of [...sums].sort(([a], [b]) => a.localeCompare(b))) {
-    report[`${name} (ms)`] = Number((total / frames).toFixed(2));
+    table[`${name} (ms)`] = Number((total / frames).toFixed(2));
   }
-  if (timer === false) report["gpu"] = "no timer query in this browser";
-  report["draw calls"] = renderer.info.render.calls;
-  report["triangles"] = renderer.info.render.triangles;
-  report["textures"] = renderer.info.memory.textures;
-  report["geometries"] = renderer.info.memory.geometries;
-  report["shader programs"] = renderer.info.programs?.length ?? 0;
-  report["pixels drawn"] = `${renderer.domElement.width}x${renderer.domElement.height}`;
+  if (timer === false) table["gpu"] = "no timer query in this browser";
+  table["draw calls"] = renderer.info.render.calls;
+  table["triangles"] = renderer.info.render.triangles;
+  table["textures"] = renderer.info.memory.textures;
+  table["geometries"] = renderer.info.memory.geometries;
+  table["shader programs"] = renderer.info.programs?.length ?? 0;
+  table["pixels drawn"] = `${renderer.domElement.width}x${renderer.domElement.height}`;
   // As text, to copy from the console as it is
-  console.log(["[perf] frame", ...Object.entries(report).map(([name, value]) => `  ${name}: ${value}`)].join("\n"));
+  log(["[perf] frame", ...Object.entries(table).map(([name, value]) => `  ${name}: ${value}`)].join("\n"));
   sums.clear();
   frames = 0;
   since = performance.now();
@@ -101,5 +158,5 @@ export function frameEnd(renderer) {
 // The stages of opening a model, one a line: [[name, ms], ...]
 export function stages(title, list) {
   if (!perfOn) return;
-  console.log([`[perf] ${title}`, ...list.map(([name, ms]) => `  ${name}: ${Math.round(ms)} ms`)].join("\n"));
+  log([`[perf] ${title}`, ...list.map(([name, ms]) => `  ${name}: ${Math.round(ms)} ms`)].join("\n"));
 }

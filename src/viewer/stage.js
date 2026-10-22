@@ -746,7 +746,20 @@ export class Stage {
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas.parentElement);
     this.resize();
+    this.warmPostprocessing();
     this.renderer.setAnimationLoop(() => this.frame());
+  }
+
+  // The halos' passes (the bloom's bright filter, five blurs, composite and blend, and the mix into
+  // the frame) compiled while the page starts: they were made by the first frame with a glowing
+  // model, eight programs in it
+  warmPostprocessing() {
+    const bloom = this.glowComposer.passes.find((pass) => pass.separableBlurMaterials);
+    const materials = [bloom?.materialHighPassFilter, ...(bloom?.separableBlurMaterials ?? []), bloom?.compositeMaterial, bloom?.blendMaterial, this.glowMix.material].filter(Boolean);
+    const scene = new THREE.Scene();
+    const quad = new THREE.PlaneGeometry(2, 2);
+    for (const material of materials) scene.add(new THREE.Mesh(quad, material));
+    this.compileAsDrawn(scene, scene).then(() => quad.dispose());
   }
 
   resize() {
@@ -882,6 +895,18 @@ export class Stage {
       if (node.isMesh) node.material = this.glowBlack;
     });
     await this.compileAsDrawn(group, this.scene);
+    // And the black of the rest of the stage the glow pass draws (the floor, the ground)
+    const rest = [];
+    this.scene.traverse((node) => {
+      if (node.isMesh && node.material !== this.glowBlack) {
+        rest.push([node, node.material]);
+        node.material = this.glowBlack;
+      }
+    });
+    // The programs are made at once; the stage on show gets its own materials back before waiting
+    const restCompiled = this.compileAsDrawn(this.scene, this.scene);
+    for (const [node, material] of rest) node.material = material;
+    await restCompiled;
     // And as they are drawn into the shadow map: each caster's depth material given what three.js's
     // WebGLShadowMap.getDepthMaterial gives it from the drawn one (its side for shadows, alpha
     // test, map); compiled by their first frame, five programs

@@ -24,6 +24,8 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 // Loaded models are kept, switching back and forth does not download them again
 const cache = new Map();
+// A layer the camera does not draw: particles wait on it while their shaders compile
+const HELD_LAYER = 31;
 // The models are exported in metres, the game's positions are in its units (inches)
 const SOURCE_TO_METRES = 0.0254;
 // Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
@@ -862,6 +864,21 @@ export class Stage {
       if (node.isMesh) node.receiveShadow = true;
     });
     await this.renderer.compileAsync(group, this.camera, this.scene).catch(() => {});
+    if (request !== this.request) {
+      return null;
+    }
+    // And with what the glow pass draws them (renderGlow): compiled by its first frame, 160 ms
+    const drawn = [];
+    group.traverse((node) => {
+      if (node.isMesh) {
+        drawn.push([node, node.material]);
+        node.material = node.userData.dota?.userData?.glow ?? this.glowBlack;
+      }
+    });
+    await this.renderer.compileAsync(group, this.camera, this.scene).catch(() => {});
+    for (const [node, material] of drawn) {
+      node.material = material;
+    }
     if (request !== this.request) {
       return null;
     }
@@ -1829,6 +1846,28 @@ export class Stage {
   }
 
   // Draws the halos of the model's glowing materials into the glow composer, when it has any
+  // New particle systems wait unseen (on a layer the camera does not draw) while their shaders
+  // compile in parallel: compiled by their first frame, they stalled it (Void Spirit's portal and
+  // the god rays: 140 ms)
+  holdUncompiled(root) {
+    this.compiledMaterials ??= new WeakSet();
+    root.traverse((node) => {
+      if (!node.material || node.userData.compiling) return;
+      const materials = [node.material].flat();
+      if (materials.every((material) => this.compiledMaterials.has(material))) return;
+      node.userData.compiling = true;
+      node.layers.set(HELD_LAYER);
+      this.renderer
+        .compileAsync(node, this.camera, root)
+        .catch(() => {})
+        .then(() => {
+          materials.forEach((material) => this.compiledMaterials.add(material));
+          node.layers.set(0);
+          node.userData.compiling = false;
+        });
+    });
+  }
+
   renderGlow() {
     const glowing = [];
     this.group?.traverse((node) => {
@@ -2037,6 +2076,7 @@ export class Stage {
       this.renderer.autoClear = true;
       return;
     }
+    this.holdUncompiled(this.particleScene);
     at = perf.now();
     let gpu = perf.gpuBegin(this.renderer, "glow pass");
     this.renderGlow();

@@ -35,6 +35,9 @@ const MAX_STEPS = 8;
 // hangs (Tidehunter's fish otherwise fell from the animation's pose for seconds in front of you)
 const SETTLE_STEPS = 300;
 const SETTLE_KEEP = 0.9;
+// Settled over a few frames, these steps each, while the new model waits behind the fog: all at
+// once they stalled its first frame (Void Spirit: 100 ms)
+const SETTLE_PER_FRAME = 50;
 // Rods and collisions solved this many times a step
 const ITERATIONS = 4;
 // A node this far from its place in the animation (inches) means the solver lost it: start over
@@ -657,12 +660,28 @@ export class Cloth {
       step.set(target);
       this.groupBefore.copy(groupWorld);
       this.started = true;
+      this.settling = SETTLE_STEPS;
+    }
+    if (this.settling > 0) {
+      step.set(target);
+      this.groupBefore.copy(groupWorld);
       this.placeShapes();
-      for (let s = 0; s < SETTLE_STEPS; s++) {
+      const count = Math.min(this.settling, SETTLE_PER_FRAME);
+      for (let s = 0; s < count; s++) {
         this.advance(STEP, unit);
         for (let k = 0; k < n * 3; k++) {
           previous[k] = x[k] - (x[k] - previous[k]) * SETTLE_KEEP;
         }
+      }
+      this.settling -= count;
+      if (this.settling > 0) {
+        targetBefore.set(target);
+        this.pending = 0;
+        for (let k = 0; k < n * 3; k++) {
+          this.shown[k] = x[k];
+        }
+        this.pose(view);
+        return;
       }
     }
     // Some cloth feels the model's own movement less (m_flLocalForce): carried along by that share

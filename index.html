@@ -32,18 +32,19 @@
       #dx-loader::before { /* the red pulse once DEX has landed */
         content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
         background: radial-gradient(60% 45% at 50% 52%, rgba(200,50,25,.35), transparent 70%);
-        animation: dx-pulse 1.2s ease-out 1.4s both;
+        animation: dx-pulse 1.2s ease-out 1.06s both;
       }
       #dx-embers { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
       .dx-logo { position: relative; z-index: 2; width: min(873px, 100%); aspect-ratio: 873 / 113; }
 
-      /* One letter: clipped out of the logo, dropped in (--d is its delay). Under the plain face sits
-         a white-hot copy that fades as it lands */
+      /* One piece of the logo, clipped out of it (--d is its delay): D O T A are typed one by one,
+         then DEX flies in whole and slams down. Under the plain face sits a white-hot copy that
+         fades as the piece appears */
       .dx-l {
         position: absolute; inset: 0; opacity: 0;
         will-change: transform, opacity;
-        animation: dx-slam .45s cubic-bezier(.17,.84,.32,1.12) var(--d) both;
+        animation: dx-type .14s ease-out var(--d) both;
       }
       .dx-l.red { animation: dx-slam-red .56s cubic-bezier(.17,.84,.32,1.12) var(--d) both; }
       .dx-face, .dx-hot {
@@ -54,7 +55,7 @@
       .dx-hot {
         filter: brightness(2.4);
         will-change: opacity;
-        animation: dx-cool .45s ease-out var(--d) both;
+        animation: dx-cool .3s ease-out var(--d) both;
       }
       .dx-l.red .dx-hot {
         filter: brightness(2.6) saturate(1.5) drop-shadow(0 0 22px rgba(255,90,30,.9));
@@ -73,7 +74,7 @@
         background: linear-gradient(105deg, transparent 40%, rgba(255,240,210,.85) 50%, transparent 60%);
         transform: translateX(-96%);
         will-change: transform;
-        animation: dx-sheen 1s ease-in-out 1.6s both;
+        animation: dx-sheen 1s ease-in-out 1.25s both;
       }
 
       /* impact is shown by light, never by moving the logo */
@@ -82,20 +83,18 @@
         translate: -50% 0; pointer-events: none; opacity: 0; scale: 0 1;
         background: linear-gradient(90deg, transparent, rgba(255,170,90,.95) 50%, transparent);
         box-shadow: 0 0 18px 4px rgba(255,90,30,.45);
-        animation: dx-wave .85s cubic-bezier(.15,.7,.25,1) 1.4s both;
+        animation: dx-wave .85s cubic-bezier(.15,.7,.25,1) 1.06s both;
       }
       .dx-flash {
-        position: absolute; left: 68%; top: 50%; width: 40%; aspect-ratio: 1;
+        position: absolute; left: 79%; top: 50%; width: 40%; aspect-ratio: 1;
         translate: -50% -50%; border-radius: 50%; pointer-events: none;
         background: radial-gradient(circle, rgba(255,140,60,.55), rgba(179,38,26,.25) 40%, transparent 70%);
         opacity: 0; scale: .3;
-        animation: dx-flash .7s ease-out 1.4s both;
+        animation: dx-flash .7s ease-out 1.06s both;
       }
 
-      @keyframes dx-slam {
-        0%   { opacity: 0; transform: translateY(-38%) scale(1.9); }
-        55%  { opacity: 1; transform: translateY(2%) scale(.95); }
-        75%  { transform: translateY(-1%) scale(1.02); }
+      @keyframes dx-type {
+        0%   { opacity: 0; transform: translateY(4%) scale(1.08); }
         100% { opacity: 1; transform: none; }
       }
       @keyframes dx-slam-red {
@@ -148,19 +147,20 @@
     <script>
       (() => {
         const W = 873, H = 113;
-        // Letter cut-outs in source-image pixels. T and A overlap, so they get stepped polygons.
-        // at: when the letter starts to drop, in ms from the start
+        // Logo pieces in source-image pixels: the four letters of DOTA, then DEX as one. T and A
+        // overlap, so they get stepped polygons. at: when the piece appears, in ms from the start
         const LETTERS = [
-          { poly: [[0,0],[129,0],[129,113],[0,113]], cx: 61, at: 200 },
-          { poly: [[129,0],[272,0],[272,113],[129,113]], cx: 200, at: 330 },
-          { poly: [[272,0],[384,0],[384,40],[368,40],[368,113],[272,113]], cx: 330, at: 460 },
-          { poly: [[384,0],[511,0],[511,113],[368,113],[368,40],[384,40]], cx: 440, at: 590 },
-          { poly: [[511,0],[643,0],[643,113],[511,113]], cx: 577, at: 900, red: true },
-          { poly: [[643,0],[746,0],[746,113],[643,113]], cx: 693, at: 1010, red: true },
-          { poly: [[746,0],[873,0],[873,113],[746,113]], cx: 813, at: 1120, red: true },
+          { poly: [[0,0],[129,0],[129,113],[0,113]], cx: 61, at: 150 },
+          { poly: [[129,0],[272,0],[272,113],[129,113]], cx: 200, at: 270 },
+          { poly: [[272,0],[384,0],[384,40],[368,40],[368,113],[272,113]], cx: 330, at: 390 },
+          { poly: [[384,0],[511,0],[511,113],[368,113],[368,40],[384,40]], cx: 440, at: 510 },
+          { poly: [[511,0],[873,0],[873,113],[511,113]], cx: 692, at: 780, red: true },
         ];
+        // DEX lands this long after it sets off, where its sparks fly and the light hits
+        const LAND_MS = 285;
+        const DEX = LETTERS[4];
         // The splash stays at least until DEX has landed, however fast the catalog arrives
-        const MIN_MS = 1750;
+        const MIN_MS = 1400;
         const pct = (x, t) => (x / t * 100).toFixed(3) + "%";
 
         const start = performance.now();
@@ -189,11 +189,10 @@
            page does not stall them. The same code runs on the page where that is not possible */
         function emberEngine(scope) {
           const W = 873;
-          const CX = [61, 200, 330, 440, 577, 693, 813];
-          const AT = [200, 330, 460, 590, 900, 1010, 1120];
           const now = () => performance.timeOrigin + performance.now();
           const frame = typeof requestAnimationFrame === "function" ? (fn) => requestAnimationFrame(fn) : (fn) => setTimeout(fn, 16);
-          let cv, ctx, vw = 0, vh = 0, rect = null, reduce = false, burning = false, running = true;
+          // burning: the span of DEX, in source-image pixels, once it has landed
+          let cv, ctx, vw = 0, vh = 0, rect = null, reduce = false, burning = null, running = true;
           const parts = [];
 
           // An ember is one pre-drawn glow sprite per hue band, not a fresh gradient every frame
@@ -224,14 +223,17 @@
             });
           }
 
-          function letterPoint(i, fy) {
-            return { x: rect.left + rect.width * CX[i] / W, y: rect.top + rect.height * fy, w: rect.width };
+          // A random point across [x0, x1] of the logo (source-image pixels), fy down its height
+          function logoPoint(x0, x1, fy) {
+            return { x: rect.left + rect.width * (x0 + Math.random() * (x1 - x0)) / W, y: rect.top + rect.height * fy };
           }
 
-          function impact(i, big) {
+          function impact(x0, x1, n) {
             if (reduce || !rect) return;
-            const p = letterPoint(i, 0.92);
-            for (let k = 0; k < (big ? 46 : 18); k++) ember(p.x + (Math.random() - 0.5) * p.w * 0.1, p.y, true);
+            for (let k = 0; k < n; k++) {
+              const p = logoPoint(x0, x1, 0.92);
+              ember(p.x, p.y, true);
+            }
           }
 
           function tick() {
@@ -240,8 +242,8 @@
             if (!reduce && Math.random() < 0.55) ember(Math.random() * vw, vh + 10, false);
             // DEX keeps smouldering once it has landed
             if (!reduce && burning && rect && Math.random() < 0.5) {
-              const p = letterPoint(4 + Math.floor(Math.random() * 3), 0.1);
-              ember(p.x + (Math.random() - 0.5) * p.w * 0.12, p.y, false);
+              const p = logoPoint(burning[0], burning[1], 0.1);
+              ember(p.x, p.y, false);
             }
             ctx.clearRect(0, 0, vw, vh);
             ctx.globalCompositeOperation = "lighter";
@@ -275,8 +277,10 @@
             } else if (data.type === "start") {
               // data.t0 is when the letters' animations began, on the shared wall clock
               const at = (ms, fn) => setTimeout(fn, Math.max(0, data.t0 + ms - now()));
-              AT.forEach((t, i) => at(t + (i < 4 ? 250 : 285), () => impact(i, i >= 4)));
-              at(1400, () => { burning = true; });
+              at(data.landAt, () => {
+                impact(data.span[0], data.span[1], 90);
+                burning = data.span;
+              });
             } else if (data.type === "stop") {
               running = false;
             }
@@ -313,7 +317,8 @@
         const first = els[0].getAnimations?.()[0];
         (first ? first.ready : Promise.resolve()).then(() => {
           const began = first && first.startTime != null ? first.startTime : performance.now();
-          embers.send({ type: "start", t0: performance.timeOrigin + began });
+          const span = [DEX.poly[0][0], DEX.poly[1][0]];
+          embers.send({ type: "start", t0: performance.timeOrigin + began, landAt: DEX.at + LAND_MS, span });
         });
 
         let hidden = false;

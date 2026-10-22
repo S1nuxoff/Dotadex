@@ -1129,19 +1129,16 @@ export class Stage {
   updatePortraitLight() {
     const on = Boolean(this.loadout && this.portrait?.light && !this.sceneLook);
     if (on && !this.portraitSun) {
-      // The page's light is the portrait world's env_global_light "default_light" (client.dll
-      // 0x182c85826), filled from the portrait's light block by 0x181b358d0 and copied whole into
-      // the scene panel (0x182c960ec), which only rebuilds its matrices (0x18173e2e0) and hands it
-      // to the portrait pipeline (0x4351aa6e); no per-frame sun fit runs for it. Its shadow is so
-      // a perspective one (the ortho flag left 0): from PortraitLightPosition, turned by
-      // PortraitLightAngles, PortraitLightFOV wide, near 4 and far PortraitLightDistance, drawn
-      // into DotaSunLightShadowDepthTexture, 2048 square (0x1822014f0 by
-      // cl_globallight_shadow_mode, default 2). The shaders push each point 1 unit out along its
-      // normal before reading it
+      // The page's shadow as RenderDoc captures of the game show it (2026-10-22, the hero page and
+      // the Armory: cb2[12..15], the matrix hero.vfx projects a point by): orthographic along the
+      // light's direction, its sides the horizontal across the light and that crossed with the
+      // light, a box round the hero and the pedestal 288 x 352 units for Anti-Mage (sides whole
+      // multiples of 32), 2382 deep; drawn into DotaSunLightShadowDepthTexture 4096 square
+      // (cb2[16].x = 1/4096). The shaders push each point 1 unit out along its normal before reading it
       this.portraitSun = new THREE.DirectionalLight(0xffffff, 0);
       this.portraitSun.castShadow = true;
-      this.portraitSun.shadow.camera = new THREE.PerspectiveCamera(15, 1, 4 * SOURCE_TO_METRES, 250 * SOURCE_TO_METRES);
-      this.portraitSun.shadow.mapSize.set(2048, 2048);
+      this.portraitSun.shadow.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 2);
+      this.portraitSun.shadow.mapSize.set(4096, 4096);
       this.portraitSun.shadow.bias = 0;
       this.portraitSun.shadow.normalBias = SOURCE_TO_METRES;
       this.scene.add(this.portraitSun, this.portraitSun.target);
@@ -1204,19 +1201,6 @@ export class Stage {
       }
       // Dev switch ?keyflip: the key light from the other side, to check the sign of m_ShadowDirection
       if (search?.has("keyflip")) this.portraitDir.negate();
-      // The shadow's spot where 0x181b358d0 puts it: at the position, aimed along the angles'
-      // forward (also m_ShadowDirection, 0x18175cdc0), with client.dll's defaults when a key is
-      // missing (FOV 15, distance 250)
-      this.portraitSpot = sourceToScene(light.position);
-      this.portraitAim = light.angles?.length === 3 ? (() => {
-        const [pitch, yaw] = light.angles.map(THREE.MathUtils.degToRad);
-        return sourceToScene([Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)]).normalize();
-      })() : this.portraitSpot.clone().normalize().negate();
-      const shadowCamera = this.portraitSun.shadow.camera;
-      shadowCamera.fov = light.fov ?? 15;
-      shadowCamera.near = 4 * SOURCE_TO_METRES;
-      shadowCamera.far = (light.distance ?? 250) * SOURCE_TO_METRES;
-      shadowCamera.updateProjectionMatrix();
       this.portraitSun.color.copy(look.key);
       this.portraitSun.intensity = 2;
       this.placePortraitSpot(new THREE.Quaternion());
@@ -1260,14 +1244,55 @@ export class Stage {
     });
   }
 
-  // The shadow's spot where the game has it, turned round the hero with the free camera
+  // The shadow's box as the game's: along the light (turned round the hero with the free camera),
+  // fitted round the hero and the pedestal across it, each side rounded up to whole 32 units, and
+  // reaching 1500 units further towards the light (cb2[8].w in the captures)
   placePortraitSpot(turn) {
-    if (!this.portraitSun || !this.portraitSpot) {
+    if (!this.portraitSun || !this.portraitDir) {
       return;
     }
-    this.portraitSun.position.copy(this.portraitSpot).applyQuaternion(turn);
-    this.portraitSun.target.position.copy(this.portraitAim).applyQuaternion(turn).add(this.portraitSun.position);
+    const travel = this.portraitDir.clone().applyQuaternion(turn).negate();
+    const bounds = new THREE.Box3();
+    if (this.group) bounds.expandByObject(this.group);
+    if (this.pedestal?.visible) bounds.expandByObject(this.pedestal);
+    if (bounds.isEmpty()) {
+      return;
+    }
+    const up = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(up, travel);
+    if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+    right.normalize();
+    const down = new THREE.Vector3().crossVectors(right, travel).normalize();
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    const corner = new THREE.Vector3();
+    for (let k = 0; k < 8; k++) {
+      corner.set(k & 1 ? bounds.max.x : bounds.min.x, k & 2 ? bounds.max.y : bounds.min.y, k & 4 ? bounds.max.z : bounds.min.z);
+      const values = [corner.dot(right), corner.dot(down), corner.dot(travel)];
+      for (let a = 0; a < 3; a++) {
+        lo[a] = Math.min(lo[a], values[a]);
+        hi[a] = Math.max(hi[a], values[a]);
+      }
+    }
+    const step = 32 * SOURCE_TO_METRES;
+    const half = (a) => (Math.ceil((hi[a] - lo[a]) / step) * step) / 2;
+    const middle = (a) => (hi[a] + lo[a]) / 2;
+    const reach = 1500 * SOURCE_TO_METRES;
+    // The light stands before the box's near face, looking along the light, its up the box's -down
+    const center = right.clone().multiplyScalar(middle(0)).addScaledVector(down, middle(1));
+    const eye = center.clone().addScaledVector(travel, lo[2] - reach);
+    this.portraitSun.position.copy(eye);
+    this.portraitSun.target.position.copy(eye).add(travel);
     this.portraitSun.target.updateMatrixWorld();
+    const camera = this.portraitSun.shadow.camera;
+    camera.up.copy(down).negate();
+    camera.left = -half(0);
+    camera.right = half(0);
+    camera.top = half(1);
+    camera.bottom = -half(1);
+    camera.near = 0;
+    camera.far = reach + (hi[2] - lo[2]) + step;
+    camera.updateProjectionMatrix();
   }
 
   // On a hero's page the camera stays where the game puts it and a drag turns the hero round, as

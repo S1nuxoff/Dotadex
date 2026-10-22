@@ -427,7 +427,7 @@ export const HOME_TITLE = "Dotadex: the complete Dota 2 encyclopedia in 3D";
 
 // Switches of the dev server (?shadowview, ?preview=all…): kept in the address while
 // developing, never read as a look
-const DEV_SWITCHES = ["preview", "key", "amb", "nospec", "noenv", "norim", "shadowview", "shadow25", "sunposition", "showtranslucent", "opaque", "nobloom", "flatparticles", "pfilter", "noshadow", "herolight", "specshadow", "keyflip", "fillall", "probe"];
+const DEV_SWITCHES = ["preview", "key", "amb", "nospec", "noenv", "norim", "shadowview", "shadow9", "sunposition", "showtranslucent", "opaque", "nobloom", "flatparticles", "pfilter", "noshadow", "herolight", "specshadow", "keyflip", "fillall", "probe"];
 
 // /Dotadex/hero/pudge?head=4007.1&weapon=7247  (slot=item.style)
 // /Dotadex/item/4517?style=2&alone=1&variant=1

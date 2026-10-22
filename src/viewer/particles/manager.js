@@ -2,7 +2,7 @@
 // points bound to the model's attachments (of the hero and of what it wears) as the game's
 // effects ask, and points on the model's surface for effects that rise from it.
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { loadGlb } from "../glb.js";
 import { ControlPoint, ParticleSystem } from "./system.js";
 import { attachmentTransform, bonesOf, quaternionToSource, toSource, UNIT } from "./math.js";
 import { unsupported } from "./operators.js";
@@ -19,7 +19,6 @@ let attachedModels = null; // loaded once: a Set of the models that have attachm
 const textureLoader = new THREE.TextureLoader();
 const modelCache = new Map();
 const models = new Map(); // the ones loaded, for the systems to find the moment they start
-const modelLoader = new GLTFLoader();
 
 // Whether an image has no see-through texel at all: a texture saved without its alpha
 const probe = document.createElement("canvas");
@@ -119,7 +118,7 @@ export class ParticleManager {
       const attachments = attachedModels.then((attached) => (!attached || attached.has(`${key}.attachments.json`) ? fetchJson(`${this.base}${key}.attachments.json`) : null));
       modelCache.set(
         key,
-        Promise.all([modelLoader.loadAsync(`${this.base}${key}.glb`).catch(() => null), fetchJson(`${this.base}${key}.sequences.json`), attachments]).then(([gltf, sequences, attachments]) => {
+        Promise.all([loadGlb(`${this.base}${key}.glb`).catch(() => null), fetchJson(`${this.base}${key}.sequences.json`), attachments]).then(([gltf, sequences, attachments]) => {
           if (!gltf) return null;
           const clips = gltf.animations ?? [];
           const model = { scene: gltf.scene, clips, sequences: sequences ?? Object.fromEntries(clips.map((clip) => [clip.name, {}])), attachments: attachments ?? {} };

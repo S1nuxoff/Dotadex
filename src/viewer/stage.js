@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
@@ -19,12 +18,12 @@ import { Cloth, loadCloth } from "./cloth.js";
 import { frameLights, SCENE_DEPTH } from "./particles/render.js";
 import { playLoaded, playWhenReady, preloadSound } from "./soundPlayer.js";
 import { playUiSound } from "../uiSounds.js";
+import { loadGlb, prefetchGlb } from "./glb.js";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 // Loaded models are kept, switching back and forth does not download them again
 const cache = new Map();
-const loader = new GLTFLoader();
 // The models are exported in metres, the game's positions are in its units (inches)
 const SOURCE_TO_METRES = 0.0254;
 // Source's axes (x ahead of a hero, y to its left, z up) to the scene's (y up, the hero facing +z)
@@ -108,18 +107,18 @@ const verticalFov = (fov) => THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THR
 const WATERMARK_BAND = 0.06;
 
 // Starts downloading models ahead of time (the pointer resting on a hero in the list), so
-// they are ready, or nearly, when picked
+// they are ready, or nearly, when picked. Only the files: parsing a model stalls the page, it
+// is done once the model is picked
 export function prefetchModels(urls) {
   for (const url of urls) {
-    loadModel(url.split("#")[0]).catch(() => {});
+    const file = url.split("#")[0];
+    if (!cache.has(file)) prefetchGlb(file);
   }
 }
 
 function loadModel(url, onProgress) {
   if (!cache.has(url)) {
-    const promise = new Promise((resolve, reject) => {
-      loader.load(url, resolve, onProgress, reject);
-    }).then(prepareTextures);
+    const promise = loadGlb(url, onProgress).then(prepareTextures);
     promise.catch(() => cache.delete(url));
     cache.set(url, promise);
   }

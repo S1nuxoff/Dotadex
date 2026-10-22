@@ -1166,12 +1166,14 @@ export class Stage {
         fillFollows: Boolean(ambient.direction),
         shadowFill: color(this.portrait.shadow?.color ?? [89 / 255, 89 / 255, 89 / 255], this.portrait.shadow?.scale ?? 1.5),
       };
-      // The second light from PortraitAmbientDirection: angles the light points along, as the key
-      // light's (whose position lies the other way), so it comes from the opposite side
+      // The second light from PortraitAmbientDirection
       this.portraitFillDir = null;
+      // PortraitAmbientDirection is a vector towards the light, not angles (unit length in the data:
+      // Anti-Mage's -0.517 -0.759 0.396); client.dll 0x18222481d normalizes it into cb2[4], which
+      // hero.vfx dots with the normal as it is (dp3_sat cb2[4], N). Read as pitch and yaw in
+      // degrees before, it lit every hero along one axis
       if (ambient.direction?.length === 3) {
-        const [pitch, yaw] = ambient.direction.map(THREE.MathUtils.degToRad);
-        this.portraitFillDir = sourceToScene([Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)]).normalize().negate();
+        this.portraitFillDir = sourceToScene(ambient.direction).normalize();
       }
       setDotaLighting(look);
       // The direction towards the light: hero.vfx's sun direction is the global light's

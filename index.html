@@ -32,7 +32,7 @@
       #dx-loader::before { /* the red pulse once DEX has landed */
         content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
         background: radial-gradient(60% 45% at 50% 52%, rgba(200,50,25,.35), transparent 70%);
-        animation: dx-pulse 1.6s ease-out 1.93s both;
+        animation: dx-pulse 1.2s ease-out 1.4s both;
       }
       #dx-embers { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
@@ -43,9 +43,9 @@
       .dx-l {
         position: absolute; inset: 0; opacity: 0;
         will-change: transform, opacity;
-        animation: dx-slam .6s cubic-bezier(.17,.84,.32,1.12) var(--d) both;
+        animation: dx-slam .45s cubic-bezier(.17,.84,.32,1.12) var(--d) both;
       }
-      .dx-l.red { animation: dx-slam-red .75s cubic-bezier(.17,.84,.32,1.12) var(--d) both; }
+      .dx-l.red { animation: dx-slam-red .56s cubic-bezier(.17,.84,.32,1.12) var(--d) both; }
       .dx-face, .dx-hot, .dx-glow {
         position: absolute; inset: 0;
         background: var(--dx-logo) center / 100% 100% no-repeat;
@@ -54,17 +54,17 @@
       .dx-hot {
         filter: brightness(2.4);
         will-change: opacity;
-        animation: dx-cool .6s ease-out var(--d) both;
+        animation: dx-cool .45s ease-out var(--d) both;
       }
       .dx-l.red .dx-hot {
         filter: brightness(2.6) saturate(1.5) drop-shadow(0 0 22px rgba(255,90,30,.9));
-        animation-duration: .75s;
+        animation-duration: .56s;
       }
       .dx-glow {
         opacity: 0;
         filter: brightness(1.18) drop-shadow(0 0 16px rgba(255,90,30,.7));
         will-change: opacity;
-        animation: dx-burn 2.4s ease-in-out 2.3s infinite;
+        animation: dx-burn 2.4s ease-in-out 1.7s infinite;
       }
 
       /* metallic sheen that travels across the stone, masked by the logo itself */
@@ -79,7 +79,7 @@
         background: linear-gradient(105deg, transparent 40%, rgba(255,240,210,.85) 50%, transparent 60%);
         transform: translateX(-96%);
         will-change: transform;
-        animation: dx-sheen 1.3s ease-in-out 2.2s both;
+        animation: dx-sheen 1s ease-in-out 1.6s both;
       }
 
       /* impact is shown by light, never by moving the logo */
@@ -88,14 +88,14 @@
         translate: -50% 0; pointer-events: none; opacity: 0; scale: 0 1;
         background: linear-gradient(90deg, transparent, rgba(255,170,90,.95) 50%, transparent);
         box-shadow: 0 0 18px 4px rgba(255,90,30,.45);
-        animation: dx-wave 1.1s cubic-bezier(.15,.7,.25,1) 1.93s both;
+        animation: dx-wave .85s cubic-bezier(.15,.7,.25,1) 1.4s both;
       }
       .dx-flash {
         position: absolute; left: 68%; top: 50%; width: 40%; aspect-ratio: 1;
         translate: -50% -50%; border-radius: 50%; pointer-events: none;
         background: radial-gradient(circle, rgba(255,140,60,.55), rgba(179,38,26,.25) 40%, transparent 70%);
         opacity: 0; scale: .3;
-        animation: dx-flash .9s ease-out 1.93s both;
+        animation: dx-flash .7s ease-out 1.4s both;
       }
 
       @keyframes dx-slam {
@@ -161,16 +161,16 @@
         // Letter cut-outs in source-image pixels. T and A overlap, so they get stepped polygons.
         // at: when the letter starts to drop, in ms from the start
         const LETTERS = [
-          { poly: [[0,0],[129,0],[129,113],[0,113]], cx: 61, at: 300 },
-          { poly: [[129,0],[272,0],[272,113],[129,113]], cx: 200, at: 470 },
-          { poly: [[272,0],[384,0],[384,40],[368,40],[368,113],[272,113]], cx: 330, at: 640 },
-          { poly: [[384,0],[511,0],[511,113],[368,113],[368,40],[384,40]], cx: 440, at: 810 },
-          { poly: [[511,0],[643,0],[643,113],[511,113]], cx: 577, at: 1250, red: true },
-          { poly: [[643,0],[746,0],[746,113],[643,113]], cx: 693, at: 1400, red: true },
-          { poly: [[746,0],[873,0],[873,113],[746,113]], cx: 813, at: 1550, red: true },
+          { poly: [[0,0],[129,0],[129,113],[0,113]], cx: 61, at: 200 },
+          { poly: [[129,0],[272,0],[272,113],[129,113]], cx: 200, at: 330 },
+          { poly: [[272,0],[384,0],[384,40],[368,40],[368,113],[272,113]], cx: 330, at: 460 },
+          { poly: [[384,0],[511,0],[511,113],[368,113],[368,40],[384,40]], cx: 440, at: 590 },
+          { poly: [[511,0],[643,0],[643,113],[511,113]], cx: 577, at: 900, red: true },
+          { poly: [[643,0],[746,0],[746,113],[643,113]], cx: 693, at: 1010, red: true },
+          { poly: [[746,0],[873,0],[873,113],[746,113]], cx: 813, at: 1120, red: true },
         ];
         // The splash stays at least until DEX has landed, however fast the catalog arrives
-        const MIN_MS = 2400;
+        const MIN_MS = 1750;
         const pct = (x, t) => (x / t * 100).toFixed(3) + "%";
 
         const start = performance.now();
@@ -200,7 +200,7 @@
         function emberEngine(scope) {
           const W = 873;
           const CX = [61, 200, 330, 440, 577, 693, 813];
-          const AT = [300, 470, 640, 810, 1250, 1400, 1550];
+          const AT = [200, 330, 460, 590, 900, 1010, 1120];
           const now = () => performance.timeOrigin + performance.now();
           const frame = typeof requestAnimationFrame === "function" ? (fn) => requestAnimationFrame(fn) : (fn) => setTimeout(fn, 16);
           let cv, ctx, vw = 0, vh = 0, rect = null, reduce = false, burning = false, running = true;
@@ -285,8 +285,8 @@
             } else if (data.type === "start") {
               // data.t0 is when the letters' animations began, on the shared wall clock
               const at = (ms, fn) => setTimeout(fn, Math.max(0, data.t0 + ms - now()));
-              AT.forEach((t, i) => at(t + (i < 4 ? 330 : 380), () => impact(i, i >= 4)));
-              at(1930, () => { burning = true; });
+              AT.forEach((t, i) => at(t + (i < 4 ? 250 : 285), () => impact(i, i >= 4)));
+              at(1400, () => { burning = true; });
             } else if (data.type === "stop") {
               running = false;
             }

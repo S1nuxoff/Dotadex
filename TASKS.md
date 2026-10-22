@@ -84,6 +84,10 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
 
 ## Archive
 
+### 2026-10-22
+
+- [x] **Smoke patches and halos with hard edges on macOS.** Additive particles and the glow pass left colors brighter than their alpha on the see-through canvas (undefined for a premultiplied canvas; macOS showed them as patches round Ember Spirit's smoke and Wei's trees, Windows hid them). A last pass raises the alpha to the brightest channel (`?rawalpha` in dev: as before). Checked by the user on a Mac.
+
 ### 2026-10-20
 
 - [x] **U-05 Pretty links and previews for search engines and link shares.** Asked 2026-10-20. Now every page is `s1nuxoff.github.io/Dotadex/#/...` (hash routes: `parseRoute` / `routeHash` in src/catalog.js, `hashchange` in App.jsx, e.g. `#/hero/pudge?head=4007.1`, `#/item/4517?style=2`, `#/scene/...`); the part after `#` never reaches a server and crawlers / link-preview bots (Telegram, Discord, Twitter, Google) don't run JS, so every page shows the one index.html description. Stack: React 19 + Vite 8 (base `/Dotadex/`) + Tailwind 4 + three.js, static on GitHub Pages (deploy workflow: `npm run catalog`, `npm run build`, uploads dist), data from the HF dataset. Agreed plan (user: build it, all done at build time, nothing by hand, English texts):

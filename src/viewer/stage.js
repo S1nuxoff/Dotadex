@@ -693,6 +693,19 @@ export class Stage {
     this.glowMix.enabled = false;
     this.composer.addPass(this.glowMix);
     this.composer.addPass(new OutputPass());
+    // The canvas is see-through over the page's backdrop, and the browser takes its pixels as
+    // premultiplied: a color brighter than its alpha (what additive particles and halos leave
+    // where nothing of the model is) has no defined look, and macOS shows such faint colors as
+    // patches with hard edges. The alpha is raised to the brightest channel, so each system
+    // lays the frame over the backdrop the same way (?rawalpha, while developing: as before)
+    if (!(import.meta.env.DEV && window.location.search.includes("rawalpha"))) {
+      this.composer.addPass(new ShaderPass({
+        uniforms: { tDiffuse: { value: null } },
+        vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+          void main() { vec4 c = clamp(texture2D(tDiffuse, vUv), 0.0, 1.0); gl_FragColor = vec4(c.rgb, max(c.a, max(c.r, max(c.g, c.b)))); }`,
+      }));
+    }
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas.parentElement);

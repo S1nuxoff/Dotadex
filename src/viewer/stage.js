@@ -22,6 +22,20 @@ import * as perf from "./perf.js";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
+// ?fade, to compare: models change by the whole picture fading out to the page and back in,
+// not behind the fog. On for the rest of the tab once opened with it; ?fade=off ends it
+function readFadeSwitch() {
+  const value = new URLSearchParams(window.location.search).get("fade");
+  try {
+    if (value === "off") sessionStorage.removeItem("fade");
+    else if (value !== null) sessionStorage.setItem("fade", "1");
+    return sessionStorage.getItem("fade") === "1";
+  } catch {
+    return value !== null && value !== "off";
+  }
+}
+const fadeInstead = readFadeSwitch();
+
 // Loaded models are kept, switching back and forth does not download them again
 const cache = new Map();
 // A layer the camera does not draw: particles wait on it while their shaders compile
@@ -2127,7 +2141,14 @@ export class Stage {
     veil.uCover.value = THREE.MathUtils.clamp(cover + Math.sign(this.veilTarget - cover) * delta * speed, 0, 1);
     veil.uTime.value += delta;
     veil.uAspect.value = this.canvas.parentElement.clientWidth / Math.max(this.canvas.parentElement.clientHeight, 1);
-    this.veil.visible = veil.uCover.value > 0.01;
+    if (fadeInstead) {
+      // The same timing as the fog's, the picture fading instead (smoothed at both ends)
+      const cover = veil.uCover.value;
+      this.veil.visible = false;
+      this.canvas.style.opacity = String(1 - cover * cover * (3 - 2 * cover));
+    } else {
+      this.veil.visible = veil.uCover.value > 0.01;
+    }
     if (this.pendingShow && veil.uCover.value < 0.35) {
       this.pendingShow = false;
       this.onShow?.();

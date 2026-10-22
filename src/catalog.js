@@ -151,7 +151,8 @@ export function outfitUnitModels(catalog, outfit) {
   if (!hero || outfit.bare) return {};
   const persona = outfit.persona && hero.personas?.[outfit.persona - 1] ? outfit.persona : 0;
   const result = {};
-  for (const slot of dressedSlots(hero, outfit, persona)) {
+  // Every slot chosen, those not worn on the hero too: a Golem's skin is in ability_ultimate
+  for (const slot of Object.keys(outfit.slots).filter((slot) => personaOf(slot) === persona)) {
     const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
     if (!chosen?.units) continue;
     for (const model of itemModels(chosen, outfit.slots[slot].style)) {

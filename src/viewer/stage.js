@@ -1183,6 +1183,8 @@ export class Stage {
         const [pitch, yaw] = light.angles.map(THREE.MathUtils.degToRad);
         this.portraitDir = sourceToScene([Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)]).normalize().negate();
       }
+      // Dev switch ?keyflip: the key light from the other side, to check the sign of m_ShadowDirection
+      if (search?.has("keyflip")) this.portraitDir.negate();
       // The shadow's spot where 0x181b358d0 puts it: at the position, aimed along the angles'
       // forward (also m_ShadowDirection, 0x18175cdc0), with client.dll's defaults when a key is
       // missing (FOV 15, distance 250)

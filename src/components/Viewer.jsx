@@ -22,13 +22,14 @@ import { playSound, soundsBase } from "./Voice.jsx";
 import { ATTRIBUTES, abilityIcon, useGameData } from "../gamedata.js";
 import { unlockSound } from "../viewer/soundPlayer.js";
 import { getViewSettings, onViewSettings } from "../viewSettings.js";
+import { fetchData } from "../fetchData.js";
 
 // What the stage needs to play animation sounds, loaded once when sound is turned on
 let soundData = null;
 function loadSoundData(modelsBase) {
   soundData ??= Promise.all(
     ["animsounds.json", "animsound-events.json", "heroes.json"].map((file) =>
-      fetch(`${modelsBase}data/${file}`).then((res) => (res.ok ? res.json() : {}))
+      fetchData(`${modelsBase}data/${file}`).then((res) => (res.ok ? res.json() : {}))
     )
   ).then(([byModel, events, heroes]) => {
     const attack = {};
@@ -297,7 +298,7 @@ function useSceneMask(base, armory) {
 // [{ when: [[key, expression]], lines: [sound event] }]), loaded once
 let portraitSpeech = null;
 function loadPortraitSpeech(modelsBase) {
-  portraitSpeech ??= fetch(`${modelsBase}data/portrait-speech.json`)
+  portraitSpeech ??= fetchData(`${modelsBase}data/portrait-speech.json`)
     .then((res) => (res.ok ? res.json() : []))
     .catch(() => []);
   return portraitSpeech;

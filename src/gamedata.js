@@ -1,6 +1,7 @@
 // Game data from the dataset's data/ folder: heroes, abilities, shop items, treasures,
 // and the texts in the chosen language (English fills what a language lacks).
 import { useEffect, useState } from "react";
+import { fetchData } from "./fetchData.js";
 
 export const LANGUAGES = [
   ["english", "English"],
@@ -38,7 +39,7 @@ const cache = new Map();
 function load(base, file) {
   const url = `${base}data/${file}`;
   if (!cache.has(url)) {
-    const promise = fetch(url).then((res) => {
+    const promise = fetchData(url).then((res) => {
       if (!res.ok) {
         throw new Error(`${file} did not load (HTTP ${res.status}).`);
       }

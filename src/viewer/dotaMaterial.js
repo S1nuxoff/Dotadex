@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { materialPrograms, runProgram } from "./materialPrograms.js";
+import { fetchData } from "../fetchData.js";
 
 // Dota's hero.vfx shader, after its compiled pixel shader. The textures and parameters come from the
 // material's vmat data that Source2Viewer keeps in the glTF extras:
@@ -459,7 +460,7 @@ let cubeIndex = {};
 let cubeLoading = null;
 const cubeTextures = new Map();
 export function loadCubeMaps(root) {
-  cubeLoading ??= fetch(`${root}cubemaps/index.json`)
+  cubeLoading ??= fetchData(`${root}cubemaps/index.json`)
     .then((res) => (res.ok ? res.json() : {}))
     .catch(() => ({}))
     .then((json) => {

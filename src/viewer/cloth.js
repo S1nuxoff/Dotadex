@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { fetchData } from "../fetchData.js";
 
 // The cloth, hair and beards the game moves on its own: a model's FeModel (Source 2's cloth, from
 // the model's PHYS block), exported by the tracker as <model>.cloth.json beside the glb, with
@@ -56,7 +57,7 @@ export function loadCloth(url) {
   }
   const base = url.slice(0, at + 1);
   if (!lists.has(base)) {
-    const list = fetch(`${base}models/cloth.json`)
+    const list = fetchData(`${base}models/cloth.json`)
       .then((response) => (response.ok ? response.json() : []))
       .then((glbs) => new Set(glbs))
       .catch(() => {

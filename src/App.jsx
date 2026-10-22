@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { prefetchModels } from "./viewer/stage.js";
 import { installUiSounds } from "./uiSounds.js";
+import { fetchData } from "./fetchData.js";
 import TopNav, { SECTIONS, sectionOf } from "./components/TopNav.jsx";
 import HeroGrid from "./components/HeroGrid.jsx";
 import HeroPage, { Backdrop } from "./components/HeroPage.jsx";
@@ -198,7 +199,7 @@ export default function App() {
     loadCatalog()
       .then(async (loaded) => {
         // Alongside the list of exported models, not after it: the pedestal waits on it
-        fetch(`${loaded.modelsBase}data/loadout_portraits.json`)
+        fetchData(`${loaded.modelsBase}data/loadout_portraits.json`)
           .then((res) => (res.ok ? res.json() : {}))
           .then(setPortraits, () => {});
         const done = await loadExported(loaded.modelsBase);

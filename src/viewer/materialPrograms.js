@@ -1,3 +1,4 @@
+import { fetchData } from "../fetchData.js";
 // Material parameters the game works out every frame (a .vmat's DynamicParams: a detail texture
 // scrolling, a glow pulsing), from the dataset's materials/dynamic.json:
 //   { "materials/....vmat": { "g_vDetailTexCoordOffset": [0.055, 0, "float2", "time", "*", "frac"] } }
@@ -10,7 +11,7 @@ let loading = null;
 
 // Fetched once, from the dataset root (the part of a model's url before "models/")
 export function loadMaterialPrograms(root) {
-  loading ??= fetch(`${root}materials/dynamic.json`)
+  loading ??= fetchData(`${root}materials/dynamic.json`)
     .then((res) => (res.ok ? res.json() : {}))
     .catch(() => ({}))
     .then((json) => {

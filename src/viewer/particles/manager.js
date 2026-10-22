@@ -3,6 +3,7 @@
 // effects ask, and points on the model's surface for effects that rise from it.
 import * as THREE from "three";
 import { loadGlb } from "../glb.js";
+import { fetchData } from "../../fetchData.js";
 import { ControlPoint, ParticleSystem } from "./system.js";
 import { attachmentTransform, bonesOf, quaternionToSource, toSource, UNIT } from "./math.js";
 import { unsupported } from "./operators.js";
@@ -46,6 +47,14 @@ function texturesIn(value, found = new Set()) {
     for (const item of Object.values(value)) texturesIn(item, found);
   }
   return found;
+}
+
+// The models that have a file of attachments, as a Set (null while the dataset has no list)
+function loadAttachedModels(base) {
+  return fetchData(`${base}particles/attached-models.json`)
+    .then((res) => (res.ok ? res.json() : null))
+    .then((list) => list && new Set(list))
+    .catch(() => null);
 }
 
 function fetchJson(url) {
@@ -95,7 +104,7 @@ export class ParticleManager {
     // after another along the way to the first effect
     if (base) {
       loadSchema(base);
-      attachedModels ??= fetchJson(`${base}particles/attached-models.json`).then((list) => list && new Set(list));
+      attachedModels ??= loadAttachedModels(base);
     }
   }
 
@@ -143,7 +152,7 @@ export class ParticleManager {
   loadModel(path) {
     const key = path.toLowerCase().replace(/\.vmdl$/, "");
     if (!modelCache.has(key)) {
-      attachedModels ??= fetchJson(`${this.base}particles/attached-models.json`).then((list) => list && new Set(list));
+      attachedModels ??= loadAttachedModels(this.base);
       const attachments = attachedModels.then((attached) => (!attached || attached.has(`${key}.attachments.json`) ? fetchJson(`${this.base}${key}.attachments.json`) : null));
       modelCache.set(
         key,
@@ -300,7 +309,7 @@ export class ParticleManager {
     });
     this.totalVertices = this.meshes.reduce((sum, mesh) => sum + mesh.geometry.attributes.position.count, 0);
     // Only the models the dataset lists as having attachments have a file of them
-    attachedModels ??= fetchJson(`${this.base}particles/attached-models.json`).then((list) => list && new Set(list));
+    attachedModels ??= loadAttachedModels(this.base);
     const attached = await attachedModels;
     const lists = await Promise.all(
       (urls ?? []).map((url) => {

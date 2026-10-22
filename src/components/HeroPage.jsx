@@ -5,11 +5,12 @@ import { GAME_BUTTON, useUiLayout } from "./ui.jsx";
 import HeroInfo from "./HeroInfo.jsx";
 import Voice from "./Voice.jsx";
 import ChatWheel from "./ChatWheel.jsx";
+import { fetchData } from "../fetchData.js";
 
 // Which sound and voice lines go with each ability (abilitysounds.json), loaded once
 let abilitySounds = null;
 function loadAbilitySounds(modelsBase) {
-  abilitySounds ??= fetch(`${modelsBase}data/abilitysounds.json`)
+  abilitySounds ??= fetchData(`${modelsBase}data/abilitysounds.json`)
     .then((res) => (res.ok ? res.json() : {}))
     .catch(() => ({}));
   return abilitySounds;
@@ -81,7 +82,7 @@ const mask = (url) => ({
 // Which backdrop each hero has, loaded once
 let backgrounds = null;
 function loadBackgrounds(base) {
-  backgrounds ??= fetch(`${base}data/loadout_backgrounds.json`)
+  backgrounds ??= fetchData(`${base}data/loadout_backgrounds.json`)
     .then((res) => (res.ok ? res.json() : null))
     .catch(() => null);
   return backgrounds;

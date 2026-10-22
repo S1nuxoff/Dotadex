@@ -5,6 +5,7 @@ import { RARITIES, itemIcon, treasureScene } from "../catalog.js";
 import { ItemCard } from "./ui.jsx";
 import { SoundList, soundsBase } from "./Voice.jsx";
 import { useEffect, useState } from "react";
+import { fetchData } from "../fetchData.js";
 
 function Page({ children }) {
   return (
@@ -212,7 +213,7 @@ export function AudioPage({ catalog, id }) {
   useEffect(() => {
     let cancelled = false;
     setFiles(null);
-    fetch(`${catalog.modelsBase}data/audio-library.json`)
+    fetchData(`${catalog.modelsBase}data/audio-library.json`)
       .then((res) => res.json())
       .then((library) => {
         const [kind, folder] = id.split("/");

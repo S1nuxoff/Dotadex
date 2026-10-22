@@ -10,6 +10,8 @@ import { loadSchema, withDefaults } from "./schema.js";
 import { sheetTextureOf } from "./render.js";
 
 const systemCache = new Map();
+// Effects by path, each loaded once however many ask for it at the same time
+const effectCache = new Map();
 const snapshotCache = new Map();
 const snapshots = new Map(); // the ones loaded, for the systems to read as they run
 const textureCache = new Map();
@@ -34,6 +36,16 @@ function isOpaque(image) {
   } catch {
     return false;
   }
+}
+
+// The textures (.vtex) named anywhere in a bundle's systems
+function texturesIn(value, found = new Set()) {
+  if (typeof value === "string") {
+    if (value.toLowerCase().endsWith(".vtex")) found.add(value);
+  } else if (value && typeof value === "object") {
+    for (const item of Object.values(value)) texturesIn(item, found);
+  }
+  return found;
 }
 
 function fetchJson(url) {
@@ -79,6 +91,12 @@ export class ParticleManager {
       sample: (position, normal) => this.sampleSurface(position, normal),
       position: (binding, target) => this.surfacePosition(binding, target),
     };
+    // Files every effect needs, on their way while the effects and the model come in, not one
+    // after another along the way to the first effect
+    if (base) {
+      loadSchema(base);
+      attachedModels ??= fetchJson(`${base}particles/attached-models.json`).then((list) => list && new Set(list));
+    }
   }
 
   // A system with the engine's defaults for what its file leaves out (schema.js)
@@ -96,16 +114,27 @@ export class ParticleManager {
 
   // An effect with every system it spawns, in one request (particles/bundles/); its systems are
   // kept for the children to find, and a missing bundle falls back to the files one by one
-  async loadEffect(path) {
+  // The textures its systems name start downloading with it: fetched as each system started, some
+  // came seconds after the effect
+  loadEffect(path) {
     const key = path.toLowerCase().replace(/\.vpcf$/, "");
-    if (!systemCache.has(key)) {
-      const bundle = await fetchJson(`${this.base}particles/bundles/${key.replace(/^particles\//, "")}.json`);
-      for (const [file, system] of Object.entries(bundle ?? {})) {
-        const name = file.toLowerCase().replace(/\.vpcf$/, "");
-        if (!systemCache.has(name)) systemCache.set(name, this.withSchema(system));
-      }
+    if (!effectCache.has(key)) {
+      effectCache.set(
+        key,
+        (async () => {
+          if (!systemCache.has(key)) {
+            const bundle = await fetchJson(`${this.base}particles/bundles/${key.replace(/^particles\//, "")}.json`);
+            for (const [file, system] of Object.entries(bundle ?? {})) {
+              const name = file.toLowerCase().replace(/\.vpcf$/, "");
+              if (!systemCache.has(name)) systemCache.set(name, this.withSchema(system));
+            }
+            texturesIn(bundle).forEach((texture) => this.loadTexture(texture));
+          }
+          return this.loadSystem(path);
+        })()
+      );
     }
-    return this.loadSystem(path);
+    return effectCache.get(key);
   }
 
   // A model particles are drawn as (.vmdl, exported as .glb next to the others), or null when the
@@ -334,6 +363,8 @@ export class ParticleManager {
     this.key = key;
     this.list = sorted;
     this.paths = sorted.map((effect) => effect.system);
+    // Downloaded while the model still comes in; they start once it is there
+    for (const effect of sorted) this.loadEffect(effect.system);
     this.restart();
   }
 

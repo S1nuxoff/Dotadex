@@ -51,10 +51,18 @@ export function installUiSounds(soundsBase) {
     return;
   }
   installUiSounds.done = true;
-  // All of them are small: decoded now, ready for the first click
-  for (const files of Object.values(FILES)) {
-    files.forEach((file) => preloadSound(base + file));
-  }
+  // All of them are small, decoded ahead of the clicks: once the page has settled or at the first
+  // press, not alongside the first hero's files (the browser plays nothing before a press anyway)
+  const preloadAll = () => {
+    if (preloadAll.done) return;
+    preloadAll.done = true;
+    for (const files of Object.values(FILES)) {
+      files.forEach((file) => preloadSound(base + file));
+    }
+  };
+  setTimeout(() => (window.requestIdleCallback ?? ((callback) => callback()))(preloadAll), 4000);
+  document.addEventListener("pointerdown", preloadAll, { once: true });
+  document.addEventListener("keydown", preloadAll, { once: true });
   document.addEventListener("click", (event) => {
     const target = event.target.closest?.("[data-sound]");
     if (target) {

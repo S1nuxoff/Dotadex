@@ -845,8 +845,19 @@ export default function HeroPage({
   onOpen,
   persona,
   onPersona,
+  shownHeroId = null,
 }) {
   const [tab, setTab] = useState("loadout");
+  // The hero's info and backdrop change when its model comes into view, not before: the last hero
+  // stood beside the next one's info and on its backdrop while the model loaded. Not waiting past
+  // a few seconds for a model that does not come
+  const [waited, setWaited] = useState(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setWaited(hero.id), 5000);
+    return () => clearTimeout(timer);
+  }, [hero.id]);
+  const inView = shownHeroId === hero.id || waited === hero.id;
+  const backdropHero = inView || !shownHeroId ? hero.id : shownHeroId;
   // The hero alone on the whole screen, as the game's preview button does
   const [preview, setPreview] = useState(false);
   const page = useRef(null);
@@ -953,7 +964,7 @@ export default function HeroPage({
       data-preview={preview || undefined}
       className="fade-images relative min-h-0 flex-1 overflow-hidden"
     >
-      <Backdrop base={catalog.modelsBase} heroId={hero.id} />
+      <Backdrop base={catalog.modelsBase} heroId={backdropHero} />
       {/* The model fills the page under the columns */}
       <div className="absolute inset-0">{viewer}</div>
       {/* Back from the preview; the loadout's own button sits in the left column */}
@@ -1019,8 +1030,8 @@ export default function HeroPage({
                 className="absolute inset-0 mx-auto max-w-[1920px]"
                 style={{ "--side": `${SIDE[aspect] ?? 90}px` }}
               >
-                {/* The columns come in from the sides, again for each hero */}
-                <div key={`summary-${hero.id}`} className="enter-left pointer-events-auto absolute top-[99px] left-(--side) w-[540px]" style={{ "--enter-delay": "0.08s" }}>
+                {/* The columns come in from the sides, again for each hero, once it is in view */}
+                {inView && <div key={`summary-${hero.id}`} className="enter-left pointer-events-auto absolute top-[99px] left-(--side) w-[540px]" style={{ "--enter-delay": "0.08s" }}>
                   <HeroSummary
                     catalog={catalog}
                     hero={hero}
@@ -1032,8 +1043,8 @@ export default function HeroPage({
                     onCast={cast}
                     onPreview={togglePreview}
                   />
-                </div>
-                {tab === "loadout" && (
+                </div>}
+                {inView && tab === "loadout" && (
                   <div key={`loadout-${hero.id}`} className="enter-right pointer-events-auto absolute top-[111px] right-(--side) flex w-[422px] flex-col" style={{ "--enter-delay": "0.14s" }}>
                     <PersonaSelector
                       base={catalog.modelsBase}
@@ -1047,7 +1058,7 @@ export default function HeroPage({
                   </div>
                 )}
               </div>
-              {tab !== "loadout" ? (
+              {inView && tab !== "loadout" ? (
                 <div key={tab} className="enter-right pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
                   <div className="h-full overflow-y-auto bg-black/55 p-[24px] pr-[48px] scrollbar-thin">
                     {tab === "voice" && (

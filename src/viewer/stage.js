@@ -2256,6 +2256,8 @@ export class Stage {
       this.pendingShow = false;
       this.reveal();
       this.onShow?.();
+      // The page's own parts of the hero (its info, its backdrop) change with it
+      this.onReveal?.();
     }
     this.rockStage.flash = this.flash;
     // How the camera has turned round the model and tilted, for the background haze to follow:

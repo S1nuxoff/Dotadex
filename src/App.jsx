@@ -189,6 +189,8 @@ export default function App() {
   const [panelView, setPanelView] = useState("hero");
   // The hero grid, as the game opens on it, until a hero is picked; a link to a page opens that page
   const [heroGrid, setHeroGrid] = useState(() => !parseRoute(window.location));
+  // The hero whose model is in view, which the hero page's info and backdrop follow
+  const [shownHero, setShownHero] = useState(null);
   const wide = useWide();
   const uiScale = useUiScale();
   const [language, setLanguage] = useLanguage();
@@ -469,6 +471,7 @@ export default function App() {
       onBare={(bare) => open({ ...route, bare })}
       onPersona={choosePersona}
       onWardrobe={wide ? null : () => setWardrobe(true)}
+      onShown={setShownHero}
     />
   );
   // The heroes in the game's order of names, for the arrows to the previous and next one
@@ -505,6 +508,7 @@ export default function App() {
         <HeroPage
           catalog={catalog}
           hero={heroOrder[heroIndex]}
+          shownHeroId={shownHero}
           language={language}
           viewer={viewer}
           summary={

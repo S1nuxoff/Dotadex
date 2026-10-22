@@ -320,7 +320,7 @@ function portraitLine(rules, voices, speech, heroId) {
   return files.length ? files[Math.floor(Math.random() * files.length)] : null;
 }
 
-export default function Viewer({ catalog, language, hideTitle = false, controlsRight = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], activities = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona }) {
+export default function Viewer({ catalog, language, hideTitle = false, controlsRight = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], activities = [], outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona, onShown }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -374,6 +374,9 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
     let cancelled = false;
     setError(null);
     setProgress(0);
+    // Which hero these models are, told to the page once they come into view
+    const shownHero = outfit?.hero ?? null;
+    stageRef.current.onReveal = () => !cancelled && onShown?.(shownHero);
     stageRef.current
       .show(urls, (value) => !cancelled && setProgress(value))
       .then((names) => {
@@ -386,6 +389,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
       })
       .catch((reason) => {
         if (!cancelled) {
+          onShown?.(shownHero);
           setError(reason?.message ?? String(reason));
           setProgress(null);
         }

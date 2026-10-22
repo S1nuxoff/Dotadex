@@ -8,162 +8,275 @@
     <title>Dotadex: the complete Dota 2 encyclopedia in 3D</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3 28 10v12L16 29 4 22V10z' fill='%23c9a45c'/%3E%3C/svg%3E" />
     <link rel="preload" as="image" type="image/webp" href="%BASE_URL%ui/dotadex-logo.webp" />
+    <link rel="preload" as="image" type="image/webp" href="%BASE_URL%ui/dotadex-logo-dex.webp" />
     <style>
-      /* The splash: the logo slammed down letter by letter on a forge-lit floor, shown from the
-         first paint until the app has its catalog (window.DotadexLoader.hide).
+      /* The splash, shown from the first paint until the app has its catalog
+         (window.DotadexLoader.hide). A slow push-in on the logo while it is forged: first only its
+         dark silhouette, rim-lit by the fire behind it; then a white-hot seam runs across and leaves
+         the metal behind; at the end DEX ignites, the light behind breaks out in rays, and a sheen
+         crosses the finished logo.
          The page's own script, the catalog and the first render all run while it plays, so every
          animation here is opacity or transform with its delay set up front, which the browser runs
-         off the main thread; the glows are fixed filters on layers that only fade, and the embers
-         are drawn in a worker */
+         off the main thread; the glows are fixed filters on layers that only fade, and the sparks
+         are drawn in a worker. All times are in ms from the start */
       #dx-loader {
         position: fixed; inset: 0; z-index: 9999;
         display: grid; place-items: center;
         padding: 0 16px;
+        overflow: hidden;
         background:
-          radial-gradient(120% 70% at 50% 115%, rgba(179,38,26,.35), transparent 60%),
-          radial-gradient(80% 60% at 50% 50%, #12141a, #07080b 75%);
+          radial-gradient(120% 70% at 50% 115%, rgba(179,38,26,.3), transparent 60%),
+          radial-gradient(80% 60% at 50% 50%, #12141a, #06070a 75%);
         transition: opacity .9s ease, visibility .9s;
       }
       #dx-loader.is-done { opacity: 0; visibility: hidden; }
       #dx-loader::after { /* vignette */
         content: ""; position: absolute; inset: 0; pointer-events: none;
-        background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.75) 100%);
+        background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.8) 100%);
       }
-      #dx-loader::before { /* the red pulse once DEX has landed */
+      #dx-loader::before { /* the red pulse as DEX ignites */
         content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
-        background: radial-gradient(60% 45% at 50% 52%, rgba(200,50,25,.35), transparent 70%);
-        animation: dx-pulse 1.2s ease-out 1.06s both;
+        background: radial-gradient(60% 45% at 62% 50%, rgba(220,60,25,.4), transparent 70%);
+        animation: dx-pulse 1.4s ease-out 1.3s both;
       }
-      #dx-embers { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+      #dx-embers { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
 
-      .dx-logo { position: relative; z-index: 2; width: min(873px, 100%); aspect-ratio: 873 / 113; }
-
-      /* One piece of the logo, clipped out of it (--d is its delay): D O T A are typed one by one,
-         then DEX flies in whole and slams down. Under the plain face sits a white-hot copy that
-         fades as the piece appears. The cut-out (--clip) is on the inner .dx-cut and the glows on
-         the layers around it, so a glow spreads past the cut instead of being sliced off by it */
-      .dx-l {
-        position: absolute; inset: 0; opacity: 0;
+      /* The light behind the logo: fire-coloured rays, slowly turning, that break out on ignition */
+      .dx-rays {
+        position: absolute; left: 50%; top: 50%; width: 160vmax; aspect-ratio: 1;
+        pointer-events: none; opacity: 0;
+        background: conic-gradient(from 0deg,
+          transparent 0deg, rgba(255,110,40,.16) 4deg, transparent 9deg,
+          transparent 21deg, rgba(255,150,70,.10) 24deg, transparent 27deg,
+          transparent 40deg, rgba(255,90,30,.18) 46deg, transparent 52deg,
+          transparent 68deg, rgba(255,140,60,.12) 71deg, transparent 75deg,
+          transparent 90deg, rgba(255,110,40,.16) 94deg, transparent 99deg,
+          transparent 111deg, rgba(255,150,70,.10) 114deg, transparent 117deg,
+          transparent 130deg, rgba(255,90,30,.18) 136deg, transparent 142deg,
+          transparent 158deg, rgba(255,140,60,.12) 161deg, transparent 165deg,
+          transparent 180deg, rgba(255,110,40,.16) 184deg, transparent 189deg,
+          transparent 201deg, rgba(255,150,70,.10) 204deg, transparent 207deg,
+          transparent 220deg, rgba(255,90,30,.18) 226deg, transparent 232deg,
+          transparent 248deg, rgba(255,140,60,.12) 251deg, transparent 255deg,
+          transparent 270deg, rgba(255,110,40,.16) 274deg, transparent 279deg,
+          transparent 291deg, rgba(255,150,70,.10) 294deg, transparent 297deg,
+          transparent 310deg, rgba(255,90,30,.18) 316deg, transparent 322deg,
+          transparent 338deg, rgba(255,140,60,.12) 341deg, transparent 345deg, transparent 360deg);
+        -webkit-mask: radial-gradient(circle, #000 4%, transparent 38%);
+                mask: radial-gradient(circle, #000 4%, transparent 38%);
+        transform: translate(-50%, -50%);
         will-change: transform, opacity;
-        animation: dx-type .14s ease-out var(--d) both;
-      }
-      .dx-l.red { animation: dx-slam-red .56s cubic-bezier(.17,.84,.32,1.12) var(--d) both; }
-      .dx-face, .dx-hot, .dx-cut { position: absolute; inset: 0; }
-      .dx-cut {
-        clip-path: var(--clip);
-        background: var(--dx-logo) center / 100% 100% no-repeat;
-      }
-      .dx-l.red .dx-face { filter: drop-shadow(0 0 8px rgba(255,70,20,.45)); }
-      .dx-hot {
-        filter: brightness(2.4);
-        will-change: opacity;
-        animation: dx-cool .3s ease-out var(--d) both;
-      }
-      .dx-l.red .dx-hot {
-        filter: brightness(2.6) saturate(1.5) drop-shadow(0 0 22px rgba(255,90,30,.9));
-        animation-duration: .56s;
+        animation:
+          dx-rays-turn 90s linear infinite,
+          dx-rays-in 1.6s ease-out 1.3s both;
       }
 
-      /* metallic sheen that travels across the stone, masked by the logo itself */
+      /* The camera: a slow push-in for the whole sequence, and a small kick when DEX ignites */
+      .dx-cam {
+        position: relative; z-index: 2;
+        width: min(920px, 100%);
+        will-change: transform;
+        animation: dx-push 2.8s cubic-bezier(.16,.8,.24,1) both;
+      }
+      .dx-logo {
+        position: relative; width: 100%; aspect-ratio: 2164 / 376;
+        will-change: transform;
+        animation: dx-kick .5s ease-out 1.3s both;
+      }
+      .dx-logo > * { position: absolute; inset: 0; pointer-events: none; }
+      .dx-art { background: var(--dx-logo) center / 100% 100% no-repeat; }
+
+      /* the silhouette, black and rim-lit, before the metal is there */
+      .dx-sil {
+        filter: brightness(0) drop-shadow(0 0 1.5px rgba(255,200,130,.95)) drop-shadow(0 0 18px rgba(255,80,20,.6));
+        opacity: 0;
+        will-change: opacity;
+        animation: dx-sil 2.2s ease-out .1s both;
+      }
+
+      /* the metal, wiped in from the left: the outer box slides right while the art inside slides
+         back, so the art stays put and only the cut moves */
+      .dx-wipe {
+        overflow: hidden;
+        transform: translateX(-100%);
+        will-change: transform;
+        animation: dx-wipe-out .8s cubic-bezier(.65,0,.35,1) .5s both;
+      }
+      .dx-wipe > .dx-art {
+        position: absolute; inset: 0;
+        transform: translateX(100%);
+        will-change: transform;
+        animation: dx-wipe-in .8s cubic-bezier(.65,0,.35,1) .5s both;
+      }
+
+      /* the white-hot seam at the cut: light on the letters (masked by them) and a soft spill of
+         heat around it */
+      .dx-seam {
+        -webkit-mask: var(--dx-logo) center / 100% 100% no-repeat;
+                mask: var(--dx-logo) center / 100% 100% no-repeat;
+      }
+      .dx-seam-track {
+        position: absolute; inset: 0;
+        transform: translateX(-100%);
+        will-change: transform;
+        animation: dx-wipe-out .8s cubic-bezier(.65,0,.35,1) .5s both;
+      }
+      .dx-seam-track::before {
+        content: ""; position: absolute; top: 0; bottom: 0; right: -3%; width: 6%;
+        background: linear-gradient(90deg, transparent, rgba(255,140,60,.8) 30%, #fff6e0 50%, rgba(255,140,60,.8) 70%, transparent);
+        opacity: 0;
+        animation: dx-seam-glow .8s linear .5s both;
+      }
+      .dx-heat .dx-seam-track::before {
+        top: -40%; bottom: -40%; right: -8%; width: 16%;
+        background: radial-gradient(closest-side, rgba(255,150,70,.35), transparent);
+      }
+
+      /* DEX alone (its red pixels), white-hot and glowing as it ignites, settling to a warm glow */
+      .dx-dex {
+        background: var(--dx-dex) center / 100% 100% no-repeat;
+        filter: brightness(1.9) saturate(1.3) drop-shadow(0 0 14px rgba(255,90,30,.95)) drop-shadow(0 0 40px rgba(255,50,10,.55));
+        opacity: 0;
+        will-change: opacity;
+        animation: dx-ignite 1.1s ease-out 1.3s both;
+      }
+
+      /* the burst of light at DEX and the line of light under the logo */
+      .dx-flash {
+        inset: auto; left: 77.5%; top: 50%; width: 45%; aspect-ratio: 1;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255,210,150,.7), rgba(255,90,30,.3) 35%, transparent 70%);
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(.3);
+        animation: dx-flash .8s ease-out 1.3s both;
+      }
+      .dx-wave {
+        inset: auto; left: 77.5%; top: 97%; width: 110%; height: 2px;
+        background: linear-gradient(90deg, transparent, rgba(255,180,100,.95) 50%, transparent);
+        box-shadow: 0 0 18px 4px rgba(255,90,30,.45);
+        opacity: 0;
+        transform: translateX(-50%) scaleX(0);
+        animation: dx-wave .9s cubic-bezier(.15,.7,.25,1) 1.3s both;
+      }
+
+      /* a sheen across the finished metal, masked by the logo itself */
       .dx-sheen {
-        position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+        overflow: hidden;
         -webkit-mask: var(--dx-logo) center / 100% 100% no-repeat;
                 mask: var(--dx-logo) center / 100% 100% no-repeat;
         mix-blend-mode: overlay;
       }
       .dx-sheen::before {
         content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 250%;
-        background: linear-gradient(105deg, transparent 40%, rgba(255,240,210,.85) 50%, transparent 60%);
+        background: linear-gradient(105deg, transparent 40%, rgba(255,240,210,.9) 50%, transparent 60%);
         transform: translateX(-96%);
         will-change: transform;
-        animation: dx-sheen 1s ease-in-out 1.25s both;
+        animation: dx-sheen 1.1s ease-in-out 1.65s both;
       }
 
-      /* impact is shown by light, never by moving the logo */
-      .dx-wave {
-        position: absolute; left: 68%; top: 96%; width: 90%; height: 2px;
-        translate: -50% 0; pointer-events: none; opacity: 0; scale: 0 1;
-        background: linear-gradient(90deg, transparent, rgba(255,170,90,.95) 50%, transparent);
-        box-shadow: 0 0 18px 4px rgba(255,90,30,.45);
-        animation: dx-wave .85s cubic-bezier(.15,.7,.25,1) 1.06s both;
+      @keyframes dx-push {
+        from { transform: scale(1.16); }
+        to   { transform: none; }
       }
-      .dx-flash {
-        position: absolute; left: 79%; top: 50%; width: 40%; aspect-ratio: 1;
-        translate: -50% -50%; border-radius: 50%; pointer-events: none;
-        background: radial-gradient(circle, rgba(255,140,60,.55), rgba(179,38,26,.25) 40%, transparent 70%);
-        opacity: 0; scale: .3;
-        animation: dx-flash .7s ease-out 1.06s both;
+      @keyframes dx-kick {
+        0%   { transform: none; }
+        25%  { transform: scale(1.03); }
+        100% { transform: none; }
       }
-
-      @keyframes dx-type {
-        0%   { opacity: 0; transform: translateY(4%) scale(1.08); }
-        100% { opacity: 1; transform: none; }
+      @keyframes dx-sil {
+        0%   { opacity: 0; }
+        23%  { opacity: 1; }
+        55%  { opacity: 1; }
+        100% { opacity: .45; }
       }
-      @keyframes dx-slam-red {
-        0%   { opacity: 0; transform: translateY(-50%) scale(2.4) rotate(-3deg); }
-        50%  { opacity: 1; transform: translateY(3%) scale(.93); }
-        72%  { transform: translateY(-1.5%) scale(1.03); }
-        100% { opacity: 1; transform: none; }
+      @keyframes dx-wipe-out {
+        from { transform: translateX(-100%); }
+        to   { transform: none; }
       }
-      @keyframes dx-cool {
-        0%   { opacity: 1; }
-        55%  { opacity: .5; }
+      @keyframes dx-wipe-in {
+        from { transform: translateX(100%); }
+        to   { transform: none; }
+      }
+      @keyframes dx-seam-glow {
+        0%   { opacity: 0; }
+        10%  { opacity: 1; }
+        88%  { opacity: 1; }
         100% { opacity: 0; }
       }
-      @keyframes dx-sheen {
-        from { transform: translateX(-96%); }
-        to   { transform: translateX(36%); }
+      @keyframes dx-ignite {
+        0%   { opacity: 0; }
+        9%   { opacity: 1; }
+        100% { opacity: .3; }
       }
       @keyframes dx-flash {
-        0%   { opacity: 0; scale: .3; }
-        20%  { opacity: 1; }
-        100% { opacity: 0; scale: 1.8; }
+        0%   { opacity: 0; transform: translate(-50%, -50%) scale(.3); }
+        18%  { opacity: 1; }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(1.9); }
       }
       @keyframes dx-wave {
-        0%   { opacity: 0; scale: 0 1; }
+        0%   { opacity: 0; transform: translateX(-50%) scaleX(0); }
         15%  { opacity: 1; }
-        100% { opacity: 0; scale: 1 1; }
+        100% { opacity: 0; transform: translateX(-50%) scaleX(1); }
       }
       @keyframes dx-pulse {
         0%   { opacity: 0; }
         12%  { opacity: 1; }
         100% { opacity: 0; }
       }
-      @keyframes dx-fade { to { opacity: 1; } }
+      @keyframes dx-rays-turn {
+        from { transform: translate(-50%, -50%) rotate(0deg); }
+        to   { transform: translate(-50%, -50%) rotate(360deg); }
+      }
+      @keyframes dx-rays-in {
+        0%   { opacity: 0; }
+        12%  { opacity: 1; }
+        100% { opacity: .4; }
+      }
+      @keyframes dx-sheen {
+        from { transform: translateX(-96%); }
+        to   { transform: translateX(36%); }
+      }
+      @keyframes dx-fade { from { opacity: 0; } to { opacity: 1; } }
 
       @media (prefers-reduced-motion: reduce) {
-        .dx-l, .dx-l.red { animation: dx-fade .6s ease var(--d) both; }
-        .dx-hot { display: none; }
-        .dx-wave, .dx-flash, .dx-sheen::before, #dx-loader::before { animation: none; }
+        .dx-cam, .dx-logo, .dx-sil, .dx-wipe, .dx-wipe > .dx-art, .dx-seam, .dx-heat, .dx-flash, .dx-wave, .dx-sheen,
+        #dx-loader::before { animation: none; }
+        .dx-sil, .dx-seam, .dx-heat, .dx-flash, .dx-wave, .dx-sheen { display: none; }
+        .dx-wipe, .dx-wipe > .dx-art { transform: none; animation: dx-fade .6s ease both; }
+        .dx-rays { animation: dx-rays-in 1.6s ease-out both; }
+        .dx-dex { animation: dx-fade .6s ease both; opacity: .3; }
       }
     </style>
   </head>
   <body>
     <div id="dx-loader" role="status" aria-label="Loading Dotadex">
+      <div class="dx-rays"></div>
       <canvas id="dx-embers"></canvas>
-      <div class="dx-logo" id="dx-logo" aria-hidden="true">
-        <div class="dx-flash"></div>
-        <div class="dx-wave"></div>
+      <div class="dx-cam">
+        <div class="dx-logo" id="dx-logo" aria-hidden="true">
+          <div class="dx-art dx-sil"></div>
+          <div class="dx-wipe"><div class="dx-art"></div></div>
+          <div class="dx-heat"><div class="dx-seam-track"></div></div>
+          <div class="dx-seam"><div class="dx-seam-track"></div></div>
+          <div class="dx-dex"></div>
+          <div class="dx-sheen"></div>
+          <div class="dx-flash"></div>
+          <div class="dx-wave"></div>
+        </div>
       </div>
     </div>
     <script>
       (() => {
-        const W = 873, H = 113;
-        // Logo pieces in source-image pixels: the four letters of DOTA, then DEX as one. T and A
-        // overlap, so they get stepped polygons. at: when the piece appears, in ms from the start
-        const LETTERS = [
-          { poly: [[0,0],[129,0],[129,113],[0,113]], cx: 61, at: 150 },
-          { poly: [[129,0],[272,0],[272,113],[129,113]], cx: 200, at: 270 },
-          { poly: [[272,0],[384,0],[384,40],[368,40],[368,113],[272,113]], cx: 330, at: 390 },
-          { poly: [[384,0],[511,0],[511,113],[368,113],[368,40],[384,40]], cx: 440, at: 510 },
-          { poly: [[511,0],[873,0],[873,113],[511,113]], cx: 692, at: 780, red: true },
-        ];
-        // DEX lands this long after it sets off, where its sparks fly and the light hits
-        const LAND_MS = 285;
-        const DEX = LETTERS[4];
-        // The splash stays at least until DEX has landed, however fast the catalog arrives
-        const MIN_MS = 1400;
-        const pct = (x, t) => (x / t * 100).toFixed(3) + "%";
+        // The sequence, in ms from the start: the seam crosses the logo, then DEX ignites
+        const SEAM = { at: 500, dur: 800 };
+        // the camera's push-in (.dx-cam): from this scale down to 1
+        const PUSH = { dur: 2800, from: 1.16 };
+        const IGNITE = 1300;
+        // DEX across the logo, as fractions of its width
+        const DEX = [0.552, 0.997];
+        // The splash stays at least until DEX has ignited and the sheen has crossed, however fast
+        // the catalog arrives
+        const MIN_MS = 2400;
 
         const start = performance.now();
         const loader = document.getElementById("dx-loader");
@@ -171,30 +284,33 @@
         const cv = document.getElementById("dx-embers");
         const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
         loader.style.setProperty("--dx-logo", 'url("%BASE_URL%ui/dotadex-logo.webp")');
+        loader.style.setProperty("--dx-dex", 'url("%BASE_URL%ui/dotadex-logo-dex.webp")');
 
-        const els = LETTERS.map((L) => {
-          const d = document.createElement("div");
-          d.className = "dx-l" + (L.red ? " red" : "");
-          d.style.setProperty("--clip", "polygon(" + L.poly.map(([x, y]) => pct(x, W) + " " + pct(y, H)).join(",") + ")");
-          d.style.transformOrigin = pct(L.cx, W) + " 60%";
-          d.style.setProperty("--d", L.at + "ms");
-          d.innerHTML = '<div class="dx-face"><div class="dx-cut"></div></div><div class="dx-hot"><div class="dx-cut"></div></div>';
-          logo.insertBefore(d, logo.querySelector(".dx-flash"));
-          return d;
-        });
-        logo.insertAdjacentHTML("beforeend", '<div class="dx-sheen"></div>');
-
-        /* Embers and impact sparks: a worker draws them on the canvas handed over to it, so a busy
-           page does not stall them. The same code runs on the page where that is not possible */
+        /* Sparks: off the seam as it runs, a burst when DEX ignites, then DEX smouldering. A
+           worker draws them on the canvas handed over to it, so a busy page does not stall them;
+           the same code runs on the page where that is not possible */
         function emberEngine(scope) {
-          const W = 873;
           const now = () => performance.timeOrigin + performance.now();
           const frame = typeof requestAnimationFrame === "function" ? (fn) => requestAnimationFrame(fn) : (fn) => setTimeout(fn, 16);
-          // burning: the span of DEX, in source-image pixels, once it has landed
-          let cv, ctx, vw = 0, vh = 0, rect = null, reduce = false, burning = null, running = true;
+          // CSS's cubic-bezier() timing functions, so sparks keep to the page's animations
+          const bezier = (x1, y1, x2, y2) => (t) => {
+            const f = (a, b, u) => 3 * (1 - u) * (1 - u) * u * a + 3 * (1 - u) * u * u * b + u * u * u;
+            let lo = 0, hi = 1, u = t;
+            for (let i = 0; i < 24; i++) {
+              u = (lo + hi) / 2;
+              if (f(x1, x2, u) < t) lo = u; else hi = u;
+            }
+            return f(y1, y2, u);
+          };
+          const seamEase = bezier(0.65, 0, 0.35, 1);
+          const pushEase = bezier(0.16, 0.8, 0.24, 1);
+          let cv, ctx, vw = 0, vh = 0, rect = null, reduce = false, running = true;
+          // seam: its start and end on the wall clock; push: the camera's; burning: the span of DEX
+          // once it has ignited
+          let seam = null, push = null, burning = null;
           const parts = [];
 
-          // An ember is one pre-drawn glow sprite per hue band, not a fresh gradient every frame
+          // A spark is one pre-drawn glow sprite per hue band, not a fresh gradient every frame
           const S = 64, HUES = 8, sprites = [];
           for (let k = 0; k < HUES; k++) {
             const hue = 12 + k * 33 / (HUES - 1);
@@ -208,59 +324,76 @@
             g2.fillRect(0, 0, S, S);
             sprites.push(c);
           }
+          const sprite = (hue) => sprites[Math.max(0, Math.min(HUES - 1, Math.round((hue - 12) / 33 * (HUES - 1))))];
 
-          function ember(x, y, burst) {
-            const a = burst ? Math.random() * Math.PI * 2 : -Math.PI / 2 + (Math.random() - 0.5) * 0.6;
-            const sp = burst ? 2 + Math.random() * 6 : 0.4 + Math.random() * 1.2;
-            const hue = burst ? 20 + Math.random() * 25 : 12 + Math.random() * 28;
+          // kind: "drift" rises slowly and sways, "burst" flies out and falls
+          function spark(x, y, kind, angle, speed, life, r, hue) {
             parts.push({
-              x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - (burst ? 1.5 : 0),
-              life: 0, max: burst ? 40 + Math.random() * 40 : 140 + Math.random() * 160,
-              r: burst ? 1 + Math.random() * 2 : 0.8 + Math.random() * 1.8,
-              wob: Math.random() * 6.28, burst,
-              sprite: sprites[Math.round((hue - 12) / 33 * (HUES - 1))],
+              x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+              life: 0, max: life, r, wob: Math.random() * 6.28, burst: kind === "burst", sprite: sprite(hue),
             });
           }
+          const drift = (x, y) => spark(x, y, "drift", -Math.PI / 2 + (Math.random() - 0.5) * 0.6, 0.4 + Math.random() * 1.2,
+            140 + Math.random() * 160, 0.8 + Math.random() * 1.8, 12 + Math.random() * 28);
 
-          // A random point across [x0, x1] of the logo (source-image pixels), fy down its height
-          function logoPoint(x0, x1, fy) {
-            return { x: rect.left + rect.width * (x0 + Math.random() * (x1 - x0)) / W, y: rect.top + rect.height * fy };
-          }
-
-          function impact(x0, x1, n) {
-            if (reduce || !rect) return;
-            for (let k = 0; k < n; k++) {
-              const p = logoPoint(x0, x1, 0.92);
-              ember(p.x, p.y, true);
+          // A point at fraction (fx, fy) of the logo, as far as the camera has pushed in by now
+          function at(fx, fy) {
+            let s = 1;
+            if (push) {
+              const k = Math.min(1, Math.max(0, (now() - push.s) / push.dur));
+              s = push.from + (1 - push.from) * pushEase(k);
             }
+            return { x: rect.left + rect.width * (0.5 + (fx - 0.5) * s), y: rect.top + rect.height * (0.5 + (fy - 0.5) * s) };
           }
 
           function tick() {
             if (!running) return;
-            // ambient embers from the forge floor
-            if (!reduce && Math.random() < 0.55) ember(Math.random() * vw, vh + 10, false);
-            // DEX keeps smouldering once it has landed
-            if (!reduce && burning && rect && Math.random() < 0.5) {
-              const p = logoPoint(burning[0], burning[1], 0.1);
-              ember(p.x, p.y, false);
+            const t = now();
+            if (!reduce) {
+              // embers from the forge floor
+              if (Math.random() < 0.55) drift(Math.random() * vw, vh + 10);
+              // the seam throws sparks forward and up as it cuts
+              if (seam && rect && t >= seam.s && t <= seam.e) {
+                const fx = seamEase((t - seam.s) / (seam.e - seam.s));
+                for (let k = 0; k < 3; k++) {
+                  const p = at(fx, 0.08 + Math.random() * 0.84);
+                  spark(p.x, p.y, "burst", -Math.PI / 2 + (Math.random() - 0.2) * 1.6, 1.5 + Math.random() * 3.5,
+                    25 + Math.random() * 25, 0.7 + Math.random() * 1.1, 30 + Math.random() * 15);
+                }
+              }
+              // DEX keeps smouldering once it has ignited
+              if (burning && rect && Math.random() < 0.6) {
+                const p = at(burning[0] + Math.random() * (burning[1] - burning[0]), 0.05);
+                drift(p.x, p.y);
+              }
             }
             ctx.clearRect(0, 0, vw, vh);
             ctx.globalCompositeOperation = "lighter";
             for (let i = parts.length - 1; i >= 0; i--) {
               const q = parts[i];
               q.life++;
-              if (q.burst) { q.vy += 0.18; q.vx *= 0.97; }
+              if (q.burst) { q.vy += 0.16; q.vx *= 0.97; }
               else { q.wob += 0.05; q.vx += Math.sin(q.wob) * 0.02; }
               q.x += q.vx; q.y += q.vy;
-              const t = q.life / q.max;
-              if (t >= 1 || q.y < -20) { parts.splice(i, 1); continue; }
-              ctx.globalAlpha = (t < 0.1 ? t / 0.1 : 1 - t) * (q.burst ? 1 : 0.8) * (0.7 + Math.random() * 0.3);
+              const k = q.life / q.max;
+              if (k >= 1 || q.y < -20) { parts.splice(i, 1); continue; }
+              ctx.globalAlpha = (k < 0.1 ? k / 0.1 : 1 - k) * (q.burst ? 1 : 0.8) * (0.7 + Math.random() * 0.3);
               const s = q.r * 8;
               ctx.drawImage(q.sprite, q.x - s / 2, q.y - s / 2, s, s);
             }
             ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = "source-over";
             frame(tick);
+          }
+
+          function ignite(span) {
+            burning = span;
+            if (reduce || !rect) return;
+            for (let k = 0; k < 130; k++) {
+              const p = at(span[0] + Math.random() * (span[1] - span[0]), 0.1 + Math.random() * 0.85);
+              spark(p.x, p.y, "burst", Math.random() * Math.PI * 2, 2 + Math.random() * 7, 40 + Math.random() * 45,
+                1 + Math.random() * 2, 20 + Math.random() * 25);
+            }
           }
 
           scope.onmessage = ({ data }) => {
@@ -274,12 +407,10 @@
               cv.width = vw * data.dpr; cv.height = vh * data.dpr;
               ctx.setTransform(data.dpr, 0, 0, data.dpr, 0, 0);
             } else if (data.type === "start") {
-              // data.t0 is when the letters' animations began, on the shared wall clock
-              const at = (ms, fn) => setTimeout(fn, Math.max(0, data.t0 + ms - now()));
-              at(data.landAt, () => {
-                impact(data.span[0], data.span[1], 90);
-                burning = data.span;
-              });
+              // data.t0 is when the page's animations began, on the shared wall clock
+              seam = { s: data.t0 + data.seam.at, e: data.t0 + data.seam.at + data.seam.dur };
+              push = { s: data.t0, dur: data.push.dur, from: data.push.from };
+              setTimeout(() => ignite(data.dex), Math.max(0, data.t0 + data.ignite - now()));
             } else if (data.type === "stop") {
               running = false;
             }
@@ -301,28 +432,29 @@
           embers = { send: (m) => scope.onmessage({ data: m }), close: () => {} };
         }
 
+        // The logo's box once the push-in has settled; the worker scales it by the push itself
         function sendSize() {
-          const c = cv.getBoundingClientRect(), r = logo.getBoundingClientRect();
+          const c = cv.getBoundingClientRect();
+          const w = logo.offsetWidth, h = logo.offsetHeight;
           embers.send({
             type: "size", w: c.width, h: c.height, dpr: Math.min(devicePixelRatio || 1, 2),
-            rect: { left: r.left - c.left, top: r.top - c.top, width: r.width, height: r.height },
+            rect: { left: (c.width - w) / 2, top: (c.height - h) / 2, width: w, height: h },
           });
         }
         addEventListener("resize", sendSize);
         sendSize();
 
-        // Sparks follow the letters from the moment their animations actually started, which can be
-        // later than now when the page's script holds up the first frame
-        const first = els[0].getAnimations?.()[0];
+        // Sparks follow the animations from the moment they actually started, which can be later
+        // than now when the page's script holds up the first frame
+        const first = document.querySelector(".dx-cam").getAnimations?.()[0];
         (first ? first.ready : Promise.resolve()).then(() => {
           const began = first && first.startTime != null ? first.startTime : performance.now();
-          const span = [DEX.poly[0][0], DEX.poly[1][0]];
-          embers.send({ type: "start", t0: performance.timeOrigin + began, landAt: DEX.at + LAND_MS, span });
+          embers.send({ type: "start", t0: performance.timeOrigin + began, seam: SEAM, push: PUSH, ignite: IGNITE, dex: DEX });
         });
 
         let hidden = false;
         window.DotadexLoader = {
-          // Fades the splash out (once DEX has landed) and drops it from the page
+          // Fades the splash out (once the sequence has played) and drops it from the page
           hide() {
             if (hidden) return;
             hidden = true;

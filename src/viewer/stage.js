@@ -637,7 +637,10 @@ export class Stage {
     this.veil.material.uniforms.uCover.value = 1;
     this.veil.visible = true;
     this.veil.userData.skipGlow = true;
-    this.scene.add(this.veil);
+    // Drawn last, over the particles too: drawn with the scene, a new hero's effects showed
+    // through the fog before the hero did
+    this.veilScene = new THREE.Scene();
+    this.veilScene.add(this.veil);
     this.veilTarget = 1;
     this.veilSince = performance.now();
     // Stony ground instead of the stone pedestal, with real shadows
@@ -670,6 +673,9 @@ export class Stage {
     const particlePass = new RenderPass(this.particleScene, this.camera);
     particlePass.clear = false;
     this.composer.addPass(particlePass);
+    const veilPass = new RenderPass(this.veilScene, this.camera);
+    veilPass.clear = false;
+    this.composer.addPass(veilPass);
     // The materials' own halos (see createGlowMaterial): the model drawn again with only its
     // glow, everything else black so it still hides what is behind it, then blurred
     this.glowComposer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
@@ -1960,6 +1966,7 @@ export class Stage {
       this.renderer.render(this.scene, this.camera);
       this.renderer.autoClear = false;
       this.renderer.render(this.particleScene, this.camera);
+      this.renderer.render(this.veilScene, this.camera);
       this.renderer.autoClear = true;
       return;
     }

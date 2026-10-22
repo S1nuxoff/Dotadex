@@ -757,7 +757,8 @@ export class Stage {
     const bloom = this.glowComposer.passes.find((pass) => pass.separableBlurMaterials);
     const materials = [bloom?.materialHighPassFilter, ...(bloom?.separableBlurMaterials ?? []), bloom?.compositeMaterial, bloom?.blendMaterial, this.glowMix.material].filter(Boolean);
     const scene = new THREE.Scene();
-    const quad = new THREE.PlaneGeometry(2, 2);
+    // Without normals, as the passes' own full screen triangle (the programs differ by it)
+    const quad = new THREE.PlaneGeometry(2, 2).deleteAttribute("normal");
     for (const material of materials) scene.add(new THREE.Mesh(quad, material));
     this.compileAsDrawn(scene, scene).then(() => quad.dispose());
   }

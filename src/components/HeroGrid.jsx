@@ -115,10 +115,10 @@ function SortPicker({ value, options, onChange, label }) {
   );
 }
 
-function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetch, onHover }) {
+function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetch, onHover, delay = 0 }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <li className="relative h-[83px] w-[51px] hover:z-20">
+    <li className="enter-pop relative h-[83px] w-[51px] hover:z-20" style={{ "--enter-delay": `${delay}s` }}>
       <button
         onClick={() => onOpen({ type: "hero", id: hero.id })}
         onPointerEnter={() => {
@@ -354,9 +354,12 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
     own.then(next, next);
   };
 
-  const card = (entry, index, list, perRow) => (
+  // The cards come in as a wave: category after category, each column a little after the last
+  const enterDelay = (index, perRow, categoryIndex) => 0.05 + categoryIndex * 0.08 + (index % perRow) * 0.02 + Math.floor(index / perRow) * 0.035;
+  const card = (entry, index, list, perRow, categoryIndex) => (
     <HeroCard
       key={entry.hero.id}
+      delay={enterDelay(index, perRow, categoryIndex)}
       hero={entry.hero}
       name={entry.name}
       portrait={portraitStyle(atlas, entry.hero.id, imageUrl(catalog.modelsBase, `heroes/selection/npc_dota_hero_${entry.hero.id}`))}
@@ -374,13 +377,13 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
       <div className="mx-auto pt-[60px]" style={{ width: GRID_WIDTH, zoom: scale * GRID_SCALE }}>
         <div className="flex flex-col" style={{ height: GRID_HEIGHT }}>
           <div className="relative flex min-h-0 flex-1">
-            {categories.map((category) => (
+            {categories.map((category, categoryIndex) => (
               <div key={category.key} className="mb-[8px] flex min-w-0 flex-col" style={category.width ? { width: category.width } : { flex: 1 }}>
-                <h2 className="flex h-[20px] items-center">
+                <h2 className="enter-up flex h-[20px] items-center" style={{ "--enter-delay": `${categoryIndex * 0.08}s` }}>
                   {category.icon && <img src={`${ICONS}${category.icon}.png`} alt="" className="ml-[4px] size-[18px]" />}
                   <span className="pl-[4px] text-[16px] font-semibold tracking-[2px] text-[#808fa6] uppercase [text-shadow:2px_2px_4px_#00000044]">{category.name}</span>
                 </h2>
-                <ul className="flex flex-wrap content-start p-[4px]">{category.heroes.map((entry, index, list) => card(entry, index, list, category.perRow))}</ul>
+                <ul className="flex flex-wrap content-start p-[4px]">{category.heroes.map((entry, index, list) => card(entry, index, list, category.perRow, categoryIndex))}</ul>
               </div>
             ))}
             <span
@@ -393,7 +396,7 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
             </span>
           </div>
 
-          <footer className="hero-grid-footer flex h-[66px] shrink-0 items-center">
+          <footer className="hero-grid-footer enter-up flex h-[66px] shrink-0 items-center" style={{ "--enter-delay": "0.25s" }}>
             <SortPicker
               label="Sort"
               value={sort}

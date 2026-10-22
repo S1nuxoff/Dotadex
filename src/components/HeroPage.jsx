@@ -969,9 +969,10 @@ export default function HeroPage({
                 in the middle, at 80% */}
             <div
               id="hero-model-controls"
-              className="pointer-events-auto absolute bottom-[21px] left-1/2 z-10 flex origin-bottom -translate-x-1/2 scale-[0.8] items-center gap-[8px] empty:hidden"
+              className="enter-up pointer-events-auto absolute bottom-[21px] left-1/2 z-10 flex origin-bottom -translate-x-1/2 scale-[0.8] items-center gap-[8px] empty:hidden"
+              style={{ "--enter-delay": "0.2s" }}
             />
-            <div className="pointer-events-auto">
+            <div className="enter-down pointer-events-auto">
               <HeroNav
                 hero={hero}
                 base={catalog.modelsBase}
@@ -990,7 +991,8 @@ export default function HeroPage({
                 className="absolute inset-0 mx-auto max-w-[1920px]"
                 style={{ "--side": `${SIDE[aspect] ?? 90}px` }}
               >
-                <div className="pointer-events-auto absolute top-[99px] left-(--side) w-[540px]">
+                {/* The columns come in from the sides, again for each hero */}
+                <div key={`summary-${hero.id}`} className="enter-left pointer-events-auto absolute top-[99px] left-(--side) w-[540px]" style={{ "--enter-delay": "0.08s" }}>
                   <HeroSummary
                     catalog={catalog}
                     hero={hero}
@@ -1004,7 +1006,7 @@ export default function HeroPage({
                   />
                 </div>
                 {tab === "loadout" && (
-                  <div className="pointer-events-auto absolute top-[111px] right-(--side) flex w-[422px] flex-col">
+                  <div key={`loadout-${hero.id}`} className="enter-right pointer-events-auto absolute top-[111px] right-(--side) flex w-[422px] flex-col" style={{ "--enter-delay": "0.14s" }}>
                     <PersonaSelector
                       base={catalog.modelsBase}
                       heroKey={`npc_dota_hero_${hero.id}`}
@@ -1018,7 +1020,7 @@ export default function HeroPage({
                 )}
               </div>
               {tab !== "loadout" ? (
-                <div className="pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
+                <div key={tab} className="enter-right pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
                   <div className="h-full overflow-y-auto bg-black/55 p-[24px] pr-[48px] scrollbar-thin">
                     {tab === "voice" && (
                       <Voice

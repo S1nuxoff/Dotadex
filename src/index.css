@@ -289,3 +289,71 @@ label:has(> input:focus) {
 [data-preview] .viewer-controls {
   display: none;
 }
+
+/* The interface coming in: each piece fades in from a little way off, --enter-delay after the
+   page appears. Backwards fill only, so nothing keeps a transform (and a stacking context) after */
+@keyframes enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes enter-down {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+@keyframes enter-left {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+@keyframes enter-right {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes enter-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+.enter-up,
+.enter-down,
+.enter-left,
+.enter-right,
+.enter-pop {
+  animation-duration: 0.55s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: backwards;
+  animation-delay: var(--enter-delay, 0s);
+}
+.enter-up {
+  animation-name: enter-up;
+}
+.enter-down {
+  animation-name: enter-down;
+}
+.enter-left {
+  animation-name: enter-left;
+}
+.enter-right {
+  animation-name: enter-right;
+}
+.enter-pop {
+  animation-name: enter-pop;
+  animation-duration: 0.45s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .enter-up,
+  .enter-down,
+  .enter-left,
+  .enter-right,
+  .enter-pop {
+    animation: none;
+  }
+}

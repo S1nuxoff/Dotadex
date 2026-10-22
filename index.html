@@ -12,8 +12,7 @@
     <style>
       /* The splash, shown from the first paint until the app has its catalog
          (window.DotadexLoader.hide). A slow push-in on the logo as it comes up out of the dark under a
-         warm light that passes across it; then DEX ignites, the light behind breaks out in rays, and
-         a sheen crosses the finished logo.
+         warm light that passes across it; then DEX ignites and a sheen crosses the finished logo.
          The page's own script, the catalog and the first render all run while it plays, so every
          animation here is opacity or transform with its delay set up front, which the browser runs
          off the main thread; the glows are fixed filters on layers that only fade, and the sparks
@@ -39,36 +38,6 @@
         animation: dx-pulse 1.4s ease-out 1.3s both;
       }
       #dx-embers { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
-
-      /* The light behind the logo: fire-coloured rays, slowly turning, that break out on ignition */
-      .dx-rays {
-        position: absolute; left: 50%; top: 50%; width: 160vmax; aspect-ratio: 1;
-        pointer-events: none; opacity: 0;
-        background: conic-gradient(from 0deg,
-          transparent 0deg, rgba(255,110,40,.16) 4deg, transparent 9deg,
-          transparent 21deg, rgba(255,150,70,.10) 24deg, transparent 27deg,
-          transparent 40deg, rgba(255,90,30,.18) 46deg, transparent 52deg,
-          transparent 68deg, rgba(255,140,60,.12) 71deg, transparent 75deg,
-          transparent 90deg, rgba(255,110,40,.16) 94deg, transparent 99deg,
-          transparent 111deg, rgba(255,150,70,.10) 114deg, transparent 117deg,
-          transparent 130deg, rgba(255,90,30,.18) 136deg, transparent 142deg,
-          transparent 158deg, rgba(255,140,60,.12) 161deg, transparent 165deg,
-          transparent 180deg, rgba(255,110,40,.16) 184deg, transparent 189deg,
-          transparent 201deg, rgba(255,150,70,.10) 204deg, transparent 207deg,
-          transparent 220deg, rgba(255,90,30,.18) 226deg, transparent 232deg,
-          transparent 248deg, rgba(255,140,60,.12) 251deg, transparent 255deg,
-          transparent 270deg, rgba(255,110,40,.16) 274deg, transparent 279deg,
-          transparent 291deg, rgba(255,150,70,.10) 294deg, transparent 297deg,
-          transparent 310deg, rgba(255,90,30,.18) 316deg, transparent 322deg,
-          transparent 338deg, rgba(255,140,60,.12) 341deg, transparent 345deg, transparent 360deg);
-        -webkit-mask: radial-gradient(circle, #000 4%, transparent 38%);
-                mask: radial-gradient(circle, #000 4%, transparent 38%);
-        transform: translate(-50%, -50%);
-        will-change: transform, opacity;
-        animation:
-          dx-rays-turn 90s linear infinite,
-          dx-rays-in 1.6s ease-out 1.3s both;
-      }
 
       /* The camera: a slow push-in for the whole sequence, and a small kick when DEX ignites */
       .dx-cam {
@@ -194,15 +163,6 @@
         12%  { opacity: 1; }
         100% { opacity: 0; }
       }
-      @keyframes dx-rays-turn {
-        from { transform: translate(-50%, -50%) rotate(0deg); }
-        to   { transform: translate(-50%, -50%) rotate(360deg); }
-      }
-      @keyframes dx-rays-in {
-        0%   { opacity: 0; }
-        12%  { opacity: 1; }
-        100% { opacity: .4; }
-      }
       @keyframes dx-sheen {
         from { transform: translateX(-96%); }
         to   { transform: translateX(36%); }
@@ -215,14 +175,12 @@
         .dx-shade, .dx-light, .dx-flash, .dx-wave, .dx-sheen { display: none; }
         .dx-back { opacity: 1; }
         .dx-logo > .dx-art { animation: dx-fade .6s ease both; }
-        .dx-rays { animation: dx-rays-in 1.6s ease-out both; }
         .dx-dex { animation: dx-fade .6s ease both; opacity: .3; }
       }
     </style>
   </head>
   <body>
     <div id="dx-loader" role="status" aria-label="Loading Dotadex">
-      <div class="dx-rays"></div>
       <canvas id="dx-embers"></canvas>
       <div class="dx-cam">
         <div class="dx-logo" id="dx-logo" aria-hidden="true">

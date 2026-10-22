@@ -2052,6 +2052,10 @@ export class Stage {
     const context = picture.getContext("2d");
     context.clearRect(0, 0, picture.width, picture.height);
     context.drawImage(this.canvas, 0, 0);
+    // Seen as the canvas is: through the page's mask (its floor and sides fading out), which the
+    // canvas has in its own style
+    picture.style.cssText = this.canvas.style.cssText;
+    picture.style.pointerEvents = "none";
     picture.style.transition = "none";
     picture.style.opacity = "1";
     // The canvas hidden under it: the picture is see-through where the page's backdrop shows, and

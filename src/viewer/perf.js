@@ -19,13 +19,15 @@ function log(text) {
 if (perfOn) {
   window.addEventListener("keydown", (event) => {
     if (event.code !== "Space" || !event.shiftKey) return;
+    // Before the page's own keys (typing a hero's name takes a space too)
     event.preventDefault();
+    event.stopImmediatePropagation();
     const text = [navigator.userAgent, `screen ${screen.width}x${screen.height} at ${devicePixelRatio}x`, ...printed].join("\n");
     navigator.clipboard.writeText(text).then(
       () => console.log(`[perf] copied ${printed.length} entries`),
       (error) => console.error("[perf] copying failed", error)
     );
-  });
+  }, true);
   // Stalls anywhere on the page, not only in the stage's frames: the browser's long animation
   // frames (Chrome) with the scripts that took the time
   try {

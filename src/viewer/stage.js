@@ -9,7 +9,7 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { FullScreenQuad, Pass } from "three/addons/postprocessing/Pass.js";
-import { colorParam, createDotaMaterial, createLitSimpleMaterial, loadCubeMaps, setDotaFillDir, setDotaKeyDir, setDotaLighting, setParticleLights, stageRim } from "./dotaMaterial.js";
+import { colorParam, createDotaMaterial, createLitSimpleMaterial, loadCubeMaps, probeMode, setDotaFillDir, setDotaKeyDir, setDotaLighting, setParticleLights, stageRim } from "./dotaMaterial.js";
 import { loadMaterialPrograms } from "./materialPrograms.js";
 import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
@@ -153,14 +153,18 @@ const skinFiles = new Map();
 const variantTextures = new Map();
 const textureLoader = new THREE.TextureLoader();
 
-function loadVariantTexture(url, color) {
+function loadVariantTexture(url, color, ramp = false) {
   if (!variantTextures.has(url)) {
     variantTextures.set(
       url,
       textureLoader.loadAsync(url).then((texture) => {
         texture.flipY = false;
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
+        // A lookup ramp clamped and without mip levels, as the game reads it (RAMP_TEXTURES)
+        texture.wrapS = texture.wrapT = ramp ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+        if (ramp) {
+          texture.minFilter = THREE.LinearFilter;
+          texture.generateMipmaps = false;
+        }
         texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
         return texture;
       })
@@ -234,7 +238,7 @@ async function loadSkin(modelUrl, skin) {
       const textures = {};
       await Promise.all(
         Object.entries(vmat.TextureParams).map(async ([param, path]) => {
-          textures[param] = await loadVariantTexture(base + path, param === "g_tColor" || param === "g_tCubeMap" || param === "g_tDetail" || param === "g_tDetail2").catch(() => null);
+          textures[param] = await loadVariantTexture(base + path, param === "g_tColor" || param === "g_tCubeMap" || param === "g_tDetail" || param === "g_tDetail2", RAMP_TEXTURES.has(param)).catch(() => null);
         })
       );
       result[name] = { vmat, textures };
@@ -242,6 +246,9 @@ async function loadSkin(modelUrl, skin) {
   );
   return result;
 }
+
+// Lookup ramps of hero.vfx, read clamped and without mip levels as the game reads them
+const RAMP_TEXTURES = new Set(["g_tFresnelWarp", "g_tDiffuseWarp", "g_tSpecularWarp"]);
 
 function dotaMaterialFor(material, textures) {
   const vmat = material.userData?.vmat;
@@ -256,6 +263,16 @@ function dotaMaterialFor(material, textures) {
     const texture = textures[name] ?? slots[param];
     if (texture) {
       texture.colorSpace = param === "g_tColor" || param === "g_tCubeMap" || param === "g_tDetail" || param === "g_tDetail2" ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      // The ramps hero.vfx looks up by a light or view term (fresnel by N·V, diffuse warp by
+      // half-Lambert, specular warp) are read clamped at their edges and from their full size
+      // (the game's sampler clamps, and the fresnel is read with sample_l at LOD 0). Repeated,
+      // N·V near 1 read the fresnel's other end (1.0 instead of 0.05: white highlights on
+      // everything facing the camera) and a shadowed half-Lambert of 0 the warp's bright end
+      if (RAMP_TEXTURES.has(param)) {
+        texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.minFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false;
+      }
       texture.needsUpdate = true;
       byParam[param] = texture;
     }
@@ -1932,6 +1949,52 @@ export class Stage {
       this.probeRequested = false;
       this.probeParticles();
     }
+    if (import.meta.env.DEV && this.shadingProbe) {
+      const at = this.shadingProbe;
+      this.shadingProbe = null;
+      this.probeShading(at);
+    }
+  }
+
+  // Dev (?probe, shift+click on the hero): the hero shader's intermediate values at that pixel,
+  // each group drawn into a float target and read back, printed next to the game's (RenderDoc
+  // pixel trace of Wei's thigh, cap1 event 3326 at 838,542)
+  probeShading({ x, y }) {
+    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.FloatType });
+    const px = Math.round(x * (size.x / this.canvas.clientWidth));
+    const py = size.y - 1 - Math.round(y * (size.y / this.canvas.clientHeight));
+    const read = (group) => {
+      probeMode.value = group;
+      this.renderer.setRenderTarget(target);
+      this.renderer.clear();
+      this.renderer.render(this.scene, this.camera);
+      const out = new Float32Array(4);
+      this.renderer.readRenderTargetPixels(target, px, py, 1, 1, out);
+      return [...out].map((v) => Number(v.toFixed(4)));
+    };
+    const g = [1, 2, 3, 4, 5, 6, 7].map(read);
+    probeMode.value = 0;
+    this.renderer.setRenderTarget(null);
+    target.dispose();
+    const game = {
+      "N.L": 0.945, "N.V": 0.972, "R.L": 0.8426, exponent: 3.314, "exponent mask": 0.221, shadow: 1,
+      "phong x N.L": 0.5358, "spec mask": 0.495, "tint mask": 0, "fresnel.b": 0.0516,
+      diffuse: [1.7587, 1.5753, 1.5344], metal: "?", albedo: [0.2405, 0.0957, 0.0524], "warp mask": 0.9647,
+      specular: [0.1175, 0.0443, 0.0229], "half lambert": 0.9725, out: [0.5405, 0.1951, 0.1033],
+    };
+    const site = {
+      "world normal": g[0].slice(0, 3), "N.L": g[0][3], "N.V": g[1][0], "R.L": g[1][1], exponent: g[1][2], "exponent mask": g[6][3], shadow: g[1][3],
+      "phong x N.L": g[2][0], "spec mask": g[2][1], "tint mask": g[2][2], "fresnel.b": g[2][3],
+      diffuse: g[3].slice(0, 3), metal: g[3][3], albedo: g[4].slice(0, 3), "warp mask": g[4][3],
+      specular: g[5].slice(0, 3), "half lambert": g[5][3], out: g[6].slice(0, 3),
+    };
+    console.table(Object.fromEntries(Object.keys(site).map((key) => [key, { site: JSON.stringify(site[key]), game: JSON.stringify(game[key] ?? "") }])));
+    // One line to copy: also put in the clipboard, and kept as window.__probe (copy(__probe) in the console)
+    const text = JSON.stringify({ pixel: [px, py], site });
+    window.__probe = text;
+    console.log(`PROBE ${text}`);
+    navigator.clipboard?.writeText(text).catch(() => {});
   }
 
   // While developing, K: the frame drawn with and without the particles on this graphics card,
@@ -2021,6 +2084,11 @@ export class Stage {
         if (event.key === "k" || event.key === "K" || event.code === "KeyK") this.probeRequested = true;
       };
       window.addEventListener("keydown", this.probeKey);
+      if (window.location.search.includes("probe")) {
+        this.canvas.addEventListener("pointerdown", (event) => {
+          if (event.shiftKey) this.shadingProbe = { x: event.offsetX, y: event.offsetY };
+        });
+      }
     }
     if (!this.particles) {
       this.particles = new ParticleManager(this.particleScene, base);

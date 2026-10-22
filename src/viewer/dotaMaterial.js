@@ -160,6 +160,7 @@ const fragmentShader = /* glsl */ `
   uniform float uAmbientScale;
   uniform float uCubeMapScale;
   uniform float uReflectionsUntinted;
+  uniform float uProbe;
   uniform vec3 uSpecularColor;
   uniform vec3 uRimLightColor;
 
@@ -352,9 +353,26 @@ const fragmentShader = /* glsl */ `
       // White lit, black shadowed; blue outside the shadow map, red with no shadow map
       gl_FragColor = shadow == -2.0 ? vec4(1.0, 0.0, 0.0, 1.0) : shadow == -3.0 ? vec4(1.0, 0.0, 1.0, 1.0) : shadow == -4.0 ? vec4(1.0, 1.0, 0.0, 1.0) : shadow == -1.0 ? vec4(0.0, 0.3, 1.0, 1.0) : vec4(vec3(shadow), 1.0);
     #endif
+    // Dev probe (?probe, shift+click): the shading's intermediate values, one group per pass,
+    // read back from a float target to compare with the game's (a RenderDoc pixel trace)
+    if (uProbe > 0.5) {
+      vec3 probeN = inverseTransformDirection(n, viewMatrix);
+      float probeRL = clamp(dot(r, uKeyDir), 0.0, 1.0);
+      if (uProbe < 1.5) gl_FragColor = vec4(probeN, nl);
+      else if (uProbe < 2.5) gl_FragColor = vec4(nv, probeRL, exponent, shadow);
+      else if (uProbe < 3.5) gl_FragColor = vec4(phong, specMask, tintMask, fresnel.b);
+      else if (uProbe < 4.5) gl_FragColor = vec4(diffuseLight, metal);
+      else if (uProbe < 5.5) gl_FragColor = vec4(albedo, warpMask);
+      else if (uProbe < 6.5) gl_FragColor = vec4(specular, halfLambert);
+      else gl_FragColor = vec4(outColor, exponentMask);
+      return;
+    }
     #include <colorspace_fragment>
   }
 `;
+
+// The probe's group, 0 off (dev only)
+export const probeMode = { value: 0 };
 
 // Key, fill and ambient add up to about 1 on a lit side, so the base color shows as painted
 const studioKeyDir = new THREE.Vector3(-0.45, 0.75, 0.5).normalize();
@@ -609,6 +627,7 @@ export function createDotaMaterial(original, vmat, textures) {
       uShadowFill: { value: stage.shadowFill },
       uShadowFillOn: shadowFillOn,
       uFillScale: fillScale,
+      uProbe: probeMode,
       ...particleLightUniforms,
       uOpaque: { value: translucent ? 0 : 1 },
       uFresnelAlpha: { value: Math.min(Math.max(float.g_flFresnelModulatesAlpha ?? 0, 0), 1) },

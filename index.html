@@ -39,14 +39,14 @@
       .dx-logo { position: relative; z-index: 2; width: min(873px, 100%); aspect-ratio: 873 / 113; }
 
       /* One letter: clipped out of the logo, dropped in (--d is its delay). Under the plain face sits
-         a white-hot copy that fades as it lands, and for D E X a glowing copy that keeps breathing */
+         a white-hot copy that fades as it lands */
       .dx-l {
         position: absolute; inset: 0; opacity: 0;
         will-change: transform, opacity;
         animation: dx-slam .45s cubic-bezier(.17,.84,.32,1.12) var(--d) both;
       }
       .dx-l.red { animation: dx-slam-red .56s cubic-bezier(.17,.84,.32,1.12) var(--d) both; }
-      .dx-face, .dx-hot, .dx-glow {
+      .dx-face, .dx-hot {
         position: absolute; inset: 0;
         background: var(--dx-logo) center / 100% 100% no-repeat;
       }
@@ -59,12 +59,6 @@
       .dx-l.red .dx-hot {
         filter: brightness(2.6) saturate(1.5) drop-shadow(0 0 22px rgba(255,90,30,.9));
         animation-duration: .56s;
-      }
-      .dx-glow {
-        opacity: 0;
-        filter: brightness(1.18) drop-shadow(0 0 16px rgba(255,90,30,.7));
-        will-change: opacity;
-        animation: dx-burn 2.4s ease-in-out 1.7s infinite;
       }
 
       /* metallic sheen that travels across the stone, masked by the logo itself */
@@ -115,10 +109,6 @@
         55%  { opacity: .5; }
         100% { opacity: 0; }
       }
-      @keyframes dx-burn {
-        0%, 100% { opacity: 0; }
-        50%      { opacity: 1; }
-      }
       @keyframes dx-sheen {
         from { transform: translateX(-96%); }
         to   { transform: translateX(36%); }
@@ -143,7 +133,7 @@
       @media (prefers-reduced-motion: reduce) {
         .dx-l, .dx-l.red { animation: dx-fade .6s ease var(--d) both; }
         .dx-hot { display: none; }
-        .dx-glow, .dx-wave, .dx-flash, .dx-sheen::before, #dx-loader::before { animation: none; }
+        .dx-wave, .dx-flash, .dx-sheen::before, #dx-loader::before { animation: none; }
       }
     </style>
   </head>
@@ -189,7 +179,7 @@
           d.style.clipPath = "polygon(" + L.poly.map(([x, y]) => pct(ex(x), W) + " " + pct(ey(y), H)).join(",") + ")";
           d.style.transformOrigin = pct(L.cx, W) + " 60%";
           d.style.setProperty("--d", L.at + "ms");
-          d.innerHTML = '<div class="dx-face"></div><div class="dx-hot"></div>' + (L.red ? '<div class="dx-glow"></div>' : "");
+          d.innerHTML = '<div class="dx-face"></div><div class="dx-hot"></div>';
           logo.insertBefore(d, logo.querySelector(".dx-flash"));
           return d;
         });

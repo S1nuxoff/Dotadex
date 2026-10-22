@@ -182,14 +182,6 @@ export default function App() {
   const [pickerStart, setPickerStart] = useState("sets");
   // Each hero's page scene as the game sets it: pedestal, light, cameras
   const [portraits, setPortraits] = useState({});
-  useEffect(() => {
-    if (!base) {
-      return;
-    }
-    fetch(`${base.modelsBase}data/loadout_portraits.json`)
-      .then((res) => (res.ok ? res.json() : {}))
-      .then(setPortraits, () => {});
-  }, [base]);
   // Another hero opens on its page, not in the picker left open for the last one
   const routeHero = route?.type === "hero" ? route.id : null;
   useEffect(() => setWardrobe(false), [routeHero]);
@@ -205,6 +197,10 @@ export default function App() {
   useEffect(() => {
     loadCatalog()
       .then(async (loaded) => {
+        // Alongside the list of exported models, not after it: the pedestal waits on it
+        fetch(`${loaded.modelsBase}data/loadout_portraits.json`)
+          .then((res) => (res.ok ? res.json() : {}))
+          .then(setPortraits, () => {});
         const done = await loadExported(loaded.modelsBase);
         const ready = withExported(loaded, done);
         const fromLink = parseRoute(window.location);
@@ -337,7 +333,9 @@ export default function App() {
     }
     prefetchTimer.current = setTimeout(() => {
       const look = outfitFor(catalog, next);
-      prefetchModels(outfitUrls(catalog, look));
+      // The hero's pedestal too, which its page stands it on
+      const pedestal = portraits[`npc_dota_hero_${next.id}`]?.pedestal;
+      prefetchModels([...outfitUrls(catalog, look), ...(pedestal ? [`${catalog.modelsBase}${pedestal}`] : [])]);
     }, 450);
   };
 

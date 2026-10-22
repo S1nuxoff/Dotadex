@@ -75,10 +75,41 @@ export function prefetchGlb(url) {
   download(url).catch(() => {});
 }
 
+// The model is parsed without its animations, which are made after it a few at a time, the page
+// drawing frames in between: a hero has up to 235 clips, and making them all at once was most
+// of its parse (Void Spirit: 200 of 270 ms), a stall of the whole page
+loader.register((parser) => ({
+  name: "animations_later",
+  beforeRoot() {
+    parser.laterAnimations = parser.json.animations ?? [];
+    parser.json.animations = [];
+    return null;
+  },
+}));
+
+const SLICE_MS = 8;
+const nextTask = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise((resolve) => setTimeout(resolve, 0)));
+
+async function makeAnimations(gltf) {
+  const { parser } = gltf;
+  parser.json.animations = parser.laterAnimations ?? [];
+  const clips = [];
+  let since = performance.now();
+  for (let index = 0; index < parser.json.animations.length; index++) {
+    if (performance.now() - since > SLICE_MS) {
+      await nextTask();
+      since = performance.now();
+    }
+    clips.push(await parser.getDependency("animation", index));
+  }
+  gltf.animations = clips;
+  return gltf;
+}
+
 // The parsed glTF of a model; onProgress({ loaded, total }) as its file comes in
 export async function loadGlb(url, onProgress) {
   const bytes = await download(url, onProgress);
   // Parsed once (the callers keep the result), the file is not needed any more
   downloads.delete(url);
-  return loader.parseAsync(await gunzip(bytes), url.slice(0, url.lastIndexOf("/") + 1));
+  return makeAnimations(await loader.parseAsync(await gunzip(bytes), url.slice(0, url.lastIndexOf("/") + 1)));
 }

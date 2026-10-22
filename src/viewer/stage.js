@@ -24,8 +24,10 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 // The game's hero page changes models as CDOTA_UI_LargeModelLoadout does: two EconSetPreview
 // panels, the next model loading in one while the other is on show, then the shown one fading out
-// as the next fades in (large_model_loadout.css: .EconSetPreview.Fade, opacity over 0.25 s)
-const CROSSFADE = "opacity 0.25s ease";
+// (large_model_loadout.css: .EconSetPreview.Fade, opacity over 0.25 s), the pedestal with it, and
+// the next fading in
+const FADE_MS = 250;
+const CROSSFADE = `opacity ${FADE_MS}ms ease`;
 // The longest a new model waits for its cloth to settle before it is shown anyway
 const HOLD_LIMIT_MS = 2000;
 
@@ -772,6 +774,7 @@ export class Stage {
     this.resizeObserver.observe(canvas.parentElement);
     this.resize();
     this.warmPostprocessing();
+    this.holdNext(["setPortrait", "setParticles", "setHeroScale", "setRim"]);
     this.setFogTransition(false);
     this.renderer.setAnimationLoop(() => this.frame());
   }
@@ -813,6 +816,17 @@ export class Stage {
   // takes the place of the hero base.
   // An url may end with #skin=N for a material variant of the model.
   async show(urls, onProgress) {
+    // The request this show gets (showNow takes the next one at once)
+    const mine = this.request + 1;
+    try {
+      return await this.showNow(urls, onProgress);
+    } finally {
+      // Failed before its swap: what waited for it is applied all the same
+      if (this.holdingFor === mine) this.releaseHeld();
+    }
+  }
+
+  async showNow(urls, onProgress) {
     // A model on show is veiled in fog while the next one loads, when the fog is chosen; else it
     // stays on show until the next is ready
     if (this.useFog && this.group && !reducedMotion.matches) {
@@ -823,6 +837,8 @@ export class Stage {
       this.veilSince = performance.now();
     }
     const request = ++this.request;
+    // What belongs to the next model waits for it while the last one is on show (holdNext)
+    if (this.group) this.holdingFor = request;
     // ?perf: the time each stage took, printed once the model is shown
     let last = perf.now();
     const timings = [];
@@ -1045,6 +1061,7 @@ export class Stage {
     this.modelUrls = entries.map((entry) => entry.url);
     trimModels(new Set([...this.modelUrls, this.pedestalUrl]));
     this.particles?.setModel(group, this.modelUrls);
+    this.releaseHeld();
     if (this.veilTarget === 1) {
       playUiSound("veil-out", 0.7);
     }
@@ -1975,6 +1992,32 @@ export class Stage {
   }
 
   // Draws the halos of the model's glowing materials into the glow composer, when it has any
+  // While a new model loads with the last still on show, what belongs to the next one (its page's
+  // camera and light, its effects, its size, its rim) waits for the swap: applied at once, the hero
+  // on show moved to the next one's place and played the next one's effects (seen without the fog)
+  holdNext(names) {
+    this.held = new Map();
+    this.applyNow = {};
+    for (const name of names) {
+      const apply = this[name].bind(this);
+      this.applyNow[name] = apply;
+      this[name] = (...args) => {
+        if (this.holdingFor) {
+          this.held.set(name, args);
+          return undefined;
+        }
+        return apply(...args);
+      };
+    }
+  }
+
+  releaseHeld() {
+    this.holdingFor = null;
+    const held = this.held;
+    this.held = new Map();
+    for (const [name, args] of held) this.applyNow[name](...args);
+  }
+
   // The fog between models (a setting), or the game's crossfade
   setFogTransition(on) {
     this.useFog = Boolean(on);
@@ -2017,15 +2060,23 @@ export class Stage {
   }
 
   // The new model comes into view: the held picture fades off it, or the canvas fades in
+  // As the game's: the last one fades out, pedestal and all, then the next fades in
   reveal() {
-    if (this.picture && this.picture.style.opacity !== "0") {
-      this.picture.style.transition = reducedMotion.matches ? "none" : CROSSFADE;
-      this.picture.style.opacity = "0";
-    }
-    if (this.canvas.style.opacity === "0") {
+    clearTimeout(this.revealTimer);
+    const fadeIn = () => {
       this.canvas.style.transition = reducedMotion.matches ? "none" : CROSSFADE;
       this.canvas.style.opacity = "1";
+    };
+    if (this.picture && this.picture.style.opacity !== "0" && !reducedMotion.matches) {
+      this.canvas.style.transition = "none";
+      this.canvas.style.opacity = "0";
+      this.picture.style.transition = CROSSFADE;
+      this.picture.style.opacity = "0";
+      this.revealTimer = setTimeout(fadeIn, FADE_MS);
+      return;
     }
+    if (this.picture) this.picture.style.opacity = "0";
+    fadeIn();
   }
 
   // Compiles an object's shaders in parallel where the browser can, as they are drawn: into the

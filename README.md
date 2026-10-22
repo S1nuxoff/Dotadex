@@ -98,6 +98,21 @@ flowchart LR
   pictures.
 - The site is rebuilt on every push and every six hours, so new heroes and items show up on their own.
 
+## Checked against the game, pixel by pixel
+
+The shading is not eyeballed from screenshots. Dotadex runs the game's own hero shader, ported
+instruction by instruction from its compiled code, and its lighting, shadows and particle defaults are
+taken from what the game itself does:
+
+- **Frame captures of the real game.** The hero page and the Armory are captured with
+  [RenderDoc](https://renderdoc.org/), and the constants the game hands its shaders (the light, the
+  shadow's projection, every material parameter) are compared with the site's, value for value.
+- **Pixel traces.** A single pixel of a hero is stepped through the game's shader in RenderDoc, and the
+  same pixel through the site's: every intermediate term (N·L, the highlight, the fresnel, the warp) is
+  printed side by side until the two agree.
+- **The engine's own data.** Particle operators take their defaults from the engine's class schema, and
+  the hero page's light, camera and shadow follow the game's code and portrait data, not a guess.
+
 ## Support
 
 Dotadex is free and made in spare time. If you enjoy it, you can

@@ -30,6 +30,10 @@ const FADE_MS = 250;
 // A part put on or taken off on the same body dithers in or out over this long, as the game's
 // loadout does (dota_wearable_dither_duration, 0.2)
 const DITHER_MS = 200;
+// The summon a unit stands as on a hero's page: client.dll (0x183168be0) takes a unit by the name
+// its own holds (npc_dota_venomancer_plague_ward_4 is npc_dota_venomancer_plague_ward), and both
+// Beastmaster boars as npc_dota_beastmaster_boar
+const summonOfUnit = (unit) => (unit.includes("npc_dota_beastmaster_greater_boar") ? "npc_dota_beastmaster_boar" : unit);
 // The ways a part is told apart: its model and material variant
 const partKey = (entry) => `${entry.url}#${entry.skin}`;
 const CROSSFADE = `opacity ${FADE_MS}ms ease`;
@@ -2117,8 +2121,11 @@ export class Stage {
     this.summonList = list;
     this.summonBase = base;
     // In the look what the hero wears gives them (setUnitModels), else their own
-    const models = this.unitModels ?? {};
-    list = list.map((summon) => (models[summon.unit] ? { ...summon, url: models[summon.unit] } : summon));
+    const models = Object.entries(this.unitModels ?? {});
+    list = list.map((summon) => {
+      const look = models.find(([unit]) => summonOfUnit(unit) === summon.unit || unit.includes(summon.unit));
+      return look ? { ...summon, url: look[1] } : summon;
+    });
     const key = JSON.stringify(list);
     if (key === this.summonsKey) return;
     this.summonsKey = key;

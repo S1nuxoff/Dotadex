@@ -129,6 +129,24 @@ function loadModel(url, onProgress) {
   return cache.get(url);
 }
 
+// Every texture the model's materials draw with (their maps, and the uniforms of the Dota
+// materials and their glows)
+function texturesOf(group) {
+  const found = new Set();
+  const take = (material) => {
+    if (!material) return;
+    for (const value of Object.values(material)) if (value?.isTexture) found.add(value);
+    for (const uniform of Object.values(material.uniforms ?? {})) if (uniform?.value?.isTexture) found.add(uniform.value);
+  };
+  group.traverse((node) => {
+    if (!node.isMesh) return;
+    take(node.material);
+    take(node.userData.dota);
+    take(node.userData.dota?.userData?.glow);
+  });
+  return found;
+}
+
 // Models kept loaded besides the ones on show; the least recently used past these are freed
 // (geometry, materials, textures): every hero opened stayed in memory and on the GPU
 const KEPT_MODELS = 20;
@@ -935,6 +953,17 @@ export class Stage {
     }
     mark("shaders");
     perf.note("the model's shaders compiled", this.renderer);
+    // Its textures onto the GPU, one a frame: on the first frame that drew the model (the glow
+    // pass, drawn first) they all went up at once with their mip levels, 170 ms
+    for (const texture of texturesOf(group)) {
+      if (this.renderer.properties.get(texture).__webglTexture) continue;
+      this.renderer.initTexture(texture);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (request !== this.request) {
+        return null;
+      }
+    }
+    mark("textures");
     // The swap happens behind the fog once it has closed over the view
     while (this.veilTarget === 1 && this.veil.material.uniforms.uCover.value < 0.95) {
       await new Promise((resolve) => requestAnimationFrame(resolve));

@@ -964,6 +964,19 @@ export class Stage {
       }
     }
     mark("textures");
+    // And each mesh drawn once, one a frame, where nothing shows: the first frame that drew the
+    // model also put its geometry on the GPU and built its morph targets' texture (the face's)
+    // and the skeleton's, 240 ms with nothing left to compile
+    const meshes = [];
+    group.traverse((node) => node.isMesh && meshes.push(node));
+    for (const mesh of meshes) {
+      this.drawUnseen(group, mesh);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (request !== this.request) {
+        return null;
+      }
+    }
+    mark("first draws");
     // The swap happens behind the fog once it has closed over the view
     while (this.veilTarget === 1 && this.veil.material.uniforms.uCover.value < 0.95) {
       await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -1950,6 +1963,35 @@ export class Stage {
     const done = this.renderer.compileAsync(object, this.camera, scene);
     this.renderer.setRenderTarget(target);
     return done.catch(() => {});
+  }
+
+  // Draws one mesh of a model not on show yet into a 1x1 target, with the stage's lights (a layer
+  // only it and the lights are on), so what its first draw does is done
+  drawUnseen(group, mesh) {
+    const layer = HELD_LAYER - 1;
+    this.unseenTarget ??= new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+    const lights = [];
+    this.scene.traverse((node) => {
+      if (node.isLight && !node.layers.isEnabled(layer)) {
+        node.layers.enable(layer);
+        lights.push(node);
+      }
+    });
+    this.scene.add(group);
+    mesh.layers.enable(layer);
+    const layers = this.camera.layers.mask;
+    this.camera.layers.set(layer);
+    const target = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(this.unseenTarget);
+    try {
+      this.renderer.render(this.scene, this.camera);
+    } finally {
+      this.renderer.setRenderTarget(target);
+      this.camera.layers.mask = layers;
+      mesh.layers.disable(layer);
+      this.scene.remove(group);
+      for (const light of lights) light.layers.disable(layer);
+    }
   }
 
   // New particle systems wait unseen (on a layer the camera does not draw) while their shaders

@@ -168,7 +168,7 @@ function ItemTable({ base, items, shops, mainShop, selected, search, onPick }) {
   return (
     <div className="ml-[12px] flex">
       {COLUMNS.map(([title, id, categories]) => (
-        <div key={id} className="relative mr-[12px]">
+        <div key={id} className="relative mr-[12px] self-start">
           <div className="flex flex-col">
             <h3 className={COLUMN_TITLE}>{title}</h3>
             <div className="flex h-[749px] max-w-[600px] flex-wrap content-start items-start bg-black/80 pt-[12px]">

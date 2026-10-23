@@ -51,7 +51,11 @@ function source(def) {
     case "PF_TYPE_PARTICLE_NUMBER":
       return (system, index) => (index < 0 ? 0 : system.ids[index]);
     case "PF_TYPE_PARTICLE_NUMBER_NORMALIZED":
-      return (system, index) => (index < 0 ? 0 : (system.ids[index] % system.maxParticles) / Math.max(system.maxParticles - 1, 1));
+      return (system, index) => {
+        if (index < 0) return 0;
+        const max = system.numberRange();
+        return (system.ids[index] % max) / Math.max(max - 1, 1);
+      };
     case "PF_TYPE_CONTROL_POINT_COMPONENT": {
       const point = def.m_nControlPoint ?? 0;
       const component = def.m_nVectorComponent ?? 0;

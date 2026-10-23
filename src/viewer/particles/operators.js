@@ -128,11 +128,14 @@ DEFS.C_OP_InstantaneousEmitter = (def) => {
   let left = null;
   return {
     done: () => left === 0,
+    // Marks it as an emitter that makes its particles at once (ParticleSystem.numberRange)
+    emitted: 0,
     emit(system) {
       if (left === null && system.age >= start(system, -1)) {
         const snapshot = snapshotPoint >= 0 && system.snapshot(snapshotPoint);
         const points = snapshot && (system.host.snapshotData?.(snapshot)?.position ?? system.host.snapshotPoints?.(snapshot));
         left = points?.length ? points.length : Math.max(0, Math.round(count(system, -1)));
+        system.emittedAtOnce = (system.emittedAtOnce ?? 0) + left;
       }
       if (left > 0) {
         const n = perFrame > 0 ? Math.min(left, perFrame) : left;

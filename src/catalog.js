@@ -242,6 +242,18 @@ export function outfitFor(catalog, route) {
   return { hero: null, slots: {}, focus: item.id, style, variant: route.variant ?? 0 };
 }
 
+// The skin what the hero wears puts on its own model (heroSkins: model_skin, in the style worn
+// when it names one), 0 for its default
+function heroSkin(catalog, hero, outfit) {
+  for (const slot of dressedSlots(hero, outfit, 0)) {
+    const chosen = outfit.slots[slot] && catalog.itemsById[outfit.slots[slot].id];
+    const style = outfit.slots[slot]?.style ?? 0;
+    const entry = chosen?.heroSkins?.find((skin) => skin.style === undefined || skin.style === style);
+    if (entry) return entry.skin;
+  }
+  return 0;
+}
+
 // The models to load: the hero's body, then in each slot the chosen item or the default
 export function outfitUrls(catalog, outfit) {
   if (outfit.scene) {
@@ -259,7 +271,8 @@ export function outfitUrls(catalog, outfit) {
 
   const hero = catalog.heroesById[outfit.hero];
   const persona = (outfit.persona && hero.personas?.[outfit.persona - 1]) ? outfit.persona : 0;
-  const urls = [catalog.modelsBase + (persona ? hero.personas[persona - 1] : hero.model)];
+  const skin = persona || outfit.bare ? 0 : heroSkin(catalog, hero, outfit);
+  const urls = [catalog.modelsBase + (persona ? hero.personas[persona - 1] : hero.model) + (skin ? `#skin=${skin}` : "")];
   // The hero's own model alone, without anything worn on it
   if (outfit.bare) {
     return urls;

@@ -131,6 +131,15 @@ export class ParticleSystem {
     return Math.hypot(p[i] - q[i], p[i + 1] - q[i + 1], p[i + 2] - q[i + 2]) / STEP;
   }
 
+  // What a particle's number is normalized over: the system's maximum, or the particles it makes
+  // at once when only instantaneous emitters make them. The card edges' glow (no maximum, so
+  // 1000) scales its radius and alpha by a curve over its 30 particles along an edge, thinning
+  // out from the corner; over 1000 every particle would get the curve's first value
+  numberRange() {
+    const once = this.emitters.length > 0 && this.emitters.every((emitter) => emitter.emitted !== undefined);
+    return once && this.emittedAtOnce > 0 ? Math.min(this.maxParticles, this.emittedAtOnce) : this.maxParticles;
+  }
+
   // A named value (m_NamedValueLocals): the parent's, when it names the same one, else the system's
   // own default; undefined when neither names it. The card edges' children declare SideCount at 0
   // and emit one particle per particle of their edge, which gives its own (40 or 60)

@@ -134,6 +134,17 @@ function activitiesOf(item) {
   return list.length ? list : null;
 }
 
+// The skins an item puts on its hero's own model (asset modifier model_skin: Legion Commander's
+// Arcana, Lina's Fiery Soul): [{ skin, style? }], style when only one of the item's styles does
+function heroSkinsOf(item) {
+  const list = [];
+  for (const [key, visual] of Object.entries(item?.visuals ?? {})) {
+    if (!key.startsWith("asset_modifier") || visual?.type !== "model_skin" || !Number(visual.skin)) continue;
+    list.push(visual.style !== undefined ? { skin: Number(visual.skin), style: Number(visual.style) } : { skin: Number(visual.skin) });
+  }
+  return list.length ? list : null;
+}
+
 // A hero's own effects: those of its default items that have no model (its ambient effects)
 for (const [id, item] of Object.entries(gameItems)) {
   if (item.prefab !== "default_item" || index.items[id]) {
@@ -201,6 +212,10 @@ for (const [id, entry] of Object.entries(index.items)) {
   if (activities) {
     record.activities = activities;
   }
+  const heroSkins = heroSkinsOf(item);
+  if (heroSkins) {
+    record.heroSkins = heroSkins;
+  }
   const price = priceOf(entry.name);
   if (price) {
     record.price = price;
@@ -208,6 +223,38 @@ for (const [id, entry] of Object.entries(index.items)) {
 
   items.push(record);
   idByName.set(entry.name, id);
+}
+
+// A hero's base items with no model of their own (the Arcanas that change the hero itself:
+// Legion Commander's Blades of Voth Domosh, a skin of her model and effects): in the game's
+// hero_base slot, worn like any other item, so their sets are complete
+for (const [id, item] of Object.entries(gameItems)) {
+  const heroKeys = Object.keys(item.used_by_heroes ?? {});
+  if (index.items[id] || item.prefab !== "wearable" || item.item_slot !== "hero_base" || heroKeys.length !== 1 || !item.image_inventory) {
+    continue;
+  }
+  const name = localize(item.item_name) ?? item.name;
+  const record = {
+    id,
+    name,
+    kind: "wearable",
+    rarity: item.item_rarity ?? "common",
+    models: [],
+    hero: heroIdOf(heroKeys[0]),
+    slot: "hero_base",
+    icon: item.image_inventory,
+  };
+  if (item.creation_date) record.date = item.creation_date;
+  const particles = particlesOf(item);
+  if (particles) record.particles = particles;
+  const activities = activitiesOf(item);
+  if (activities) record.activities = activities;
+  const heroSkins = heroSkinsOf(item);
+  if (heroSkins) record.heroSkins = heroSkins;
+  const price = priceOf(item.name);
+  if (price) record.price = price;
+  items.push(record);
+  idByName.set(item.name, id);
 }
 
 // What a hero wears by default, so a hero shows up complete; a persona's are in its own slots.

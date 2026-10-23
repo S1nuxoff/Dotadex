@@ -173,7 +173,7 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
         // chosen one (DOTAEconItemAnimated:selected) ui_generic_button_click
         data-sound={worn ? undefined : "ui_loadout_equipped"}
         data-select-sound={worn ? undefined : "ui_generic_button_click"}
-        className={`econ-card group absolute inset-[6px] flex flex-col overflow-hidden text-left shadow-[0_6px_24px_-8px_rgb(0_0_0/0.8)] transition-[filter,transform] duration-100 active:scale-[0.985] active:brightness-50 ${
+        className={`econ-card group absolute inset-[6px] flex flex-col text-left shadow-[0_6px_24px_-8px_rgb(0_0_0/0.8)] transition-[filter,transform] duration-100 active:scale-[0.985] active:brightness-50 ${
           equipped ? "econ-flash" : ""
         } ${previewing ? "econ-previewing" : ""}`}
         style={{
@@ -187,7 +187,7 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
         }}
       >
         {set ? (
-          <span className="absolute inset-0">
+          <span className="absolute inset-0 overflow-hidden">
             {/* .HeroBackgroundImage, three times as bright under the pointer */}
             {background && <span className="absolute inset-0 bg-cover bg-center group-hover:brightness-300" style={{ backgroundImage: `url(${background})` }} />}
             {/* .StyledBorder2 on the owned ones */}
@@ -199,7 +199,6 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
             >
               {image && <img src={image} alt="" loading="lazy" className="size-full" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />}
             </span>
-            {top && <CardEdges base={base} name="armory_edge_set" rarity={look.id} equipped={equipped} />}
           </span>
         ) : (
           // #StaticItemViewContainer: two thirds of the width high, grey to light grey below the middle
@@ -221,6 +220,7 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
             )}
           </span>
         )}
+        {set && top && <CardEdges base={base} name="armory_edge_set" rarity={look.id} equipped={equipped} />}
         {/* .ArcanaLabel / .ImmortalLabel on full sets of those rarities */}
         {set && top && (
           <span className={`relative self-center p-[12px] text-[16px] text-white/80 [text-shadow:0_1px_4px_#000] glow-${look.id}-label`}>{look.name}</span>
@@ -307,16 +307,21 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
 // #ArcanaBackgroundEffect: the particle edges, a scene of their own laid over the card's
 // (ui_econ_item_animated). The game shows them once the card's live scene is loaded, and loads
 // that on Immortal and Arcana sets only (client.dll 0x182b27790); Immortal's hue turned -90°.
-// The equipped set's are drawn at 0.98, in 0.2 s
+// The equipped set's are drawn at 0.98, in 0.2 s. The panel does not clip (overflow: noclip):
+// the glow round the corners reaches past the card, so the canvas is EDGE_SPILL larger each way
+const EDGE_SPILL = 48;
 function CardEdges({ base, name, rarity, equipped }) {
   const canvas = useRef(null);
-  useEffect(() => startCardEdges(base, canvas.current, name), [base, name]);
+  useEffect(() => startCardEdges(base, canvas.current, name, EDGE_SPILL), [base, name]);
   return (
     <canvas
       ref={canvas}
       aria-hidden
-      className="pointer-events-none absolute inset-0 size-full transition-transform duration-200"
+      className="pointer-events-none absolute transition-transform duration-200"
       style={{
+        inset: -EDGE_SPILL,
+        width: `calc(100% + ${2 * EDGE_SPILL}px)`,
+        height: `calc(100% + ${2 * EDGE_SPILL}px)`,
         transform: `${equipped ? "scale(0.98) " : ""}translateY(-2px)`,
         filter: rarity === "immortal" ? "hue-rotate(-90deg)" : undefined,
       }}

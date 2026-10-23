@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { emptySlotIcon, heroSlots, itemIcon, itemsForSlot, personaOf, rarity, slotName, sortItems } from "../catalog.js";
 import { fetchData } from "../fetchData.js";
 import { useGameData } from "../gamedata.js";
@@ -302,6 +302,65 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
   );
 }
 
+// A scrolled panel with Panorama's VerticalScrollBar: laid over the contents (layout-position:
+// fixed), so it takes no width from them; 8 wide, a thumb of at least 32, shown in 0.1 s while
+// the pointer is over the panel
+function OverlayScroll({ width = 8, className = "", children }) {
+  const view = useRef(null);
+  const [thumb, setThumb] = useState(null);
+  useEffect(() => {
+    const element = view.current;
+    const update = () => {
+      const { scrollTop, scrollHeight, clientHeight } = element;
+      if (scrollHeight <= clientHeight + 1) {
+        setThumb(null);
+        return;
+      }
+      const height = Math.max(32, (clientHeight * clientHeight) / scrollHeight);
+      setThumb({ top: (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - height), height });
+    };
+    update();
+    element.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    for (const child of element.children) observer.observe(child);
+    return () => {
+      element.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, []);
+  // Dragging the thumb scrolls in proportion (the layer is zoomed, the pointer is in screen pixels)
+  const drag = (event) => {
+    event.preventDefault();
+    const element = view.current;
+    const start = event.clientY;
+    const from = element.scrollTop;
+    const zoom = element.getBoundingClientRect().height / element.clientHeight || 1;
+    const ratio = (element.scrollHeight - element.clientHeight) / (element.clientHeight - thumb.height);
+    const move = (moveEvent) => (element.scrollTop = from + ((moveEvent.clientY - start) / zoom) * ratio);
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  return (
+    <div className={`group/scroll relative min-h-0 ${className}`}>
+      <div ref={view} className="h-full overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {children}
+      </div>
+      {thumb && (
+        <span
+          onPointerDown={drag}
+          className="absolute right-0 border-t border-r border-t-[#aaaaaa22] border-r-[#000000aa] bg-[#566767] opacity-0 transition-[opacity,background-color] duration-100 group-hover/scroll:opacity-100 hover:bg-[#86989f] active:brightness-50"
+          style={{ top: thumb.top, height: thumb.height, width }}
+        />
+      )}
+    </div>
+  );
+}
+
 export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquipSet, onOutfit, onClose }) {
   const base = catalog.modelsBase;
   const icons = `${base}images/control_icons/24px/`;
@@ -438,13 +497,13 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
         {/* .ContentsContainer */}
         <div className="relative flex min-h-0 flex-1 shadow-[0_28px_120px_-8px_rgb(0_0_0/0.4)]">
           {/* .LeftColumn: the full sets, then every slot with what it wears */}
-          <div className="h-full shrink-0 overflow-y-auto bg-[linear-gradient(153deg,#12171f,#050609_55%)] [scrollbar-width:none] hover:[scrollbar-width:thin]">
+          <OverlayScroll width={5} className="h-full w-[210px] shrink-0 bg-[linear-gradient(153deg,#12171f,#050609_55%)]">
             <div className="-mt-px flex flex-col">
               {rows.map((row) => (
                 <SlotRow key={row.id} icons={icons} {...row} active={selected === row.id} onSelect={() => setSelected(row.id)} />
               ))}
             </div>
-          </div>
+          </OverlayScroll>
           {/* .RightColumn */}
           <div className="flex h-full min-w-0 flex-1 flex-col border-l border-white/[0.02] bg-[radial-gradient(140%_100%_at_0_0,#202833e4,#06080e)] shadow-[0_-4px_40px_rgb(0_0_0/0.5)]">
             {/* .ItemStatusFilters */}
@@ -472,7 +531,8 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
               </button>
             </div>
             {/* .CosmeticPickerContentsContainer */}
-            <div className="min-h-0 flex-1 overflow-y-auto pt-[12px] pr-[8px] pb-[12px] pl-[12px] shadow-[inset_0_1px_0_rgb(238_245_255/0.02)] [scrollbar-width:none] hover:[scrollbar-width:thin]">
+            <OverlayScroll className="flex-1 shadow-[inset_0_1px_0_rgb(238_245_255/0.02)]">
+              <div className="pt-[12px] pr-[8px] pb-[12px] pl-[12px]">
               {shown.length > 0 ? (
                 <ul key={selected} className="econ-contents flex flex-wrap">
                   {shown.map(({ key, ...card }) => (
@@ -482,7 +542,8 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
               ) : (
                 <p className="p-[6px] text-[18px] text-[#b0bcc2]">Nothing else for this slot is exported yet.</p>
               )}
-            </div>
+              </div>
+            </OverlayScroll>
           </div>
           {/* .ViewerContainerBorder */}
           <span aria-hidden className="pointer-events-none absolute inset-0 border border-white/[0.03]" />

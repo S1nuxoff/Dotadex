@@ -76,8 +76,47 @@ export async function playWhenReady(url, options) {
   playLoaded(url, options);
 }
 
+// The game's mixer (scripts/soundmixers.txt, from data/ui-sounds.json): a sound's group is the
+// highest priority one whose path part its file path holds (the first listed of equal ones), and
+// Default_Mix gives each group's level. Taken relative to the interface's group, so the
+// interface plays at the volume the sliders give and the rest keeps the game's balance to it.
+let mix = null;
+export function setSoundMix(value) {
+  mix = value;
+}
+
+export function mixLevel(url) {
+  if (!mix) {
+    return 1;
+  }
+  // the game's path: from sounds/ on
+  const file = url.slice(url.indexOf("/sounds/") + 1);
+  let group = null;
+  for (const entry of mix.groups) {
+    if (entry.class || !file.includes(entry.path) || (group && entry.priority <= group.priority)) continue;
+    group = entry;
+  }
+  const level = (name) => mix.levels[name] ?? 1;
+  return group ? level(group.name) / level("UI") : 1;
+}
+
+// A sound from a place before the listener, as the game's HRTF panner sends one: forward, plus
+// left and up by the given amounts (the remapped screen place, -1 to 1 each)
+function placed(ctx, { left = 0, up = 0 }) {
+  const panner = ctx.createPanner();
+  panner.panningModel = "HRTF";
+  // only the direction counts
+  panner.rolloffFactor = 0;
+  const length = Math.hypot(left, up, 1);
+  // the listener looks down -z with +y up and -x to its left
+  panner.positionX.value = -left / length;
+  panner.positionY.value = up / length;
+  panner.positionZ.value = -1 / length;
+  return panner;
+}
+
 // Plays right away when loaded; a sound still loading is skipped rather than played late
-export function playLoaded(url, { volume = 1, rate = 1 } = {}) {
+export function playLoaded(url, { volume = 1, rate = 1, place = null } = {}) {
   const buffer = buffers.get(url);
   if (!buffer) {
     preloadSound(url);
@@ -91,7 +130,8 @@ export function playLoaded(url, { volume = 1, rate = 1 } = {}) {
   source.buffer = buffer;
   source.playbackRate.value = rate;
   const gain = ctx.createGain();
-  gain.gain.value = volume * effectsVolume();
-  source.connect(gain).connect(ctx.destination);
+  gain.gain.value = volume * mixLevel(url) * effectsVolume();
+  source.connect(gain);
+  (place ? gain.connect(placed(ctx, place)) : gain).connect(ctx.destination);
   source.start();
 }

@@ -730,7 +730,10 @@ function OutfitCard({ name, image, look, price, worn, tall, onPick }) {
     <li>
       <button
         onClick={worn ? undefined : onPick}
-        // DOTAEconItemAnimated:selected
+        // The card does what its EQUIP (#ActionButton) does: `.Container:hover #ActionButton:active`
+        // plays ui_loadout_equipped, and the tile it makes the chosen one
+        // (DOTAEconItemAnimated:selected) ui_generic_button_click
+        data-sound={worn ? undefined : "ui_loadout_equipped"}
         data-select-sound={worn ? undefined : "ui_generic_button_click"}
         className={`group relative flex w-full flex-col overflow-hidden bg-gradient-to-b from-[#2a2f38] to-[#14171c] text-left shadow-[0_4px_12px_rgb(0_0_0/0.5)] ${
           worn ? "outline-2 -outline-offset-2 outline-white/80" : "hover:brightness-125"

@@ -3071,7 +3071,7 @@ export class Stage {
     }
     const event = sounds[0] && this.sound?.events[sounds[0]];
     if (event?.files.length) {
-      playWhenReady(this.sound.base + event.files[Math.floor(Math.random() * event.files.length)], { volume: Math.min((event.volume ?? 1) * 0.8, 1) });
+      playWhenReady(this.sound.base + event.files[Math.floor(Math.random() * event.files.length)], { volume: Math.min(event.volume ?? 1, 1) });
       event.layers?.forEach((layer) => this.playEvent(layer, 1));
     }
   }
@@ -3083,7 +3083,7 @@ export class Stage {
     }
     if (event.files.length) {
       playLoaded(this.sound.base + event.files[Math.floor(Math.random() * event.files.length)], {
-        volume: Math.min(Math.max((event.volume ?? 1) * 0.7, 0), 1),
+        volume: Math.min(Math.max(event.volume ?? 1, 0), 1),
         rate: Math.min(Math.max((event.pitch ?? 1) * this.speed, 0.5), 2),
       });
     }

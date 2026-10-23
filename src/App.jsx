@@ -390,7 +390,7 @@ export default function App() {
   // The game's interface sounds for the whole page
   useEffect(() => {
     if (catalog) {
-      installUiSounds(catalog.modelsBase.replace("dota2-models", "dota2-sounds"));
+      installUiSounds(catalog.modelsBase.replace("dota2-models", "dota2-sounds"), catalog.modelsBase);
     }
   }, [catalog]);
 

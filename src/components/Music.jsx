@@ -1,33 +1,45 @@
 import { useEffect, useRef, useState } from "react";
-import { soundsBase } from "./Voice.jsx";
+import { createAudio, soundsBase } from "./Voice.jsx";
 import { getVolume, musicVolume, onVolume, setVolume } from "../volume.js";
+import { eventVolume, loadUiSounds, pickFile } from "../uiSounds.js";
+import { mixLevel } from "../viewer/soundPlayer.js";
 
-// The game's own menu music, one track after another, as the main menu plays it
-const TRACKS = [
-  "sounds/music/valve_dota_001/music/ui_main_01.mp3",
-  "sounds/music/valve_dota_001/music/ui_hero_select.wav",
-  "sounds/music/valve_dota_001/music/ui_main_02.mp3",
-  "sounds/music/valve_dota_001/music/ui_world_map.mp3",
-  "sounds/music/valve_dota_001/diretide/ui_main_03.mp3",
-];
+// The menu music as the game plays it (soundstacks_dota_music): coming to the menu,
+// <pack>.music.ui_startup (dota_update_ui_startup: one of its tracks by weight); when it has
+// played out, <pack>.music.ui_main (dota_update_ui_main: one of its tracks), and ui_main again
+// each time one ends. The volume is the event's (else its stack's) times the Music group's level
+// in the mixer, times the music slider. The default pack; the game takes the player's equipped one.
+const PACK = "valve_dota_001";
 
 export function useMenuMusic(modelsBase) {
   const audio = useRef(null);
-  const track = useRef(0);
+  const stage = useRef("ui_startup");
   useEffect(() => {
+    let data = null;
+    let cancelled = false;
     const play = () => {
+      if (!data || cancelled) {
+        return;
+      }
       if (musicVolume() <= 0) {
         audio.current?.pause();
         return;
       }
       if (!audio.current) {
-        const element = new Audio(soundsBase(modelsBase) + TRACKS[track.current]);
-        // On to the next track when one ends, round and round; one that will not load is skipped
+        const event = data.events[`${PACK}.music.${stage.current}`];
+        const file = event && pickFile(event);
+        if (!file) {
+          return;
+        }
+        const element = createAudio(soundsBase(modelsBase) + file);
+        element.eventVolume = eventVolume(event) * mixLevel(file);
+        // ui_main after the startup track, then ui_main again; a track that will not load is
+        // passed over the same way
         const next = () => {
           if (audio.current !== element) {
             return;
           }
-          track.current = (track.current + 1) % TRACKS.length;
+          stage.current = "ui_main";
           audio.current = null;
           play();
         };
@@ -35,14 +47,18 @@ export function useMenuMusic(modelsBase) {
         element.addEventListener("error", next);
         audio.current = element;
       }
-      audio.current.volume = Math.min(musicVolume(), 1);
+      audio.current.volume = Math.min(musicVolume() * audio.current.eventVolume, 1);
       audio.current.play().catch(() => {});
     };
+    loadUiSounds(modelsBase).then((value) => {
+      data = value;
+      play();
+    });
     // Browsers let a page play sound only after it was clicked
-    play();
     window.addEventListener("pointerdown", play, { once: true });
     const stop = onVolume(play);
     return () => {
+      cancelled = true;
       window.removeEventListener("pointerdown", play);
       stop();
       audio.current?.pause();

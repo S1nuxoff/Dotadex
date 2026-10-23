@@ -131,6 +131,18 @@ export class ParticleSystem {
     return Math.hypot(p[i] - q[i], p[i + 1] - q[i + 1], p[i + 2] - q[i + 2]) / STEP;
   }
 
+  // A named value (m_NamedValueLocals): the parent's, when it names the same one, else the system's
+  // own default; undefined when neither names it. The card edges' children declare SideCount at 0
+  // and emit one particle per particle of their edge, which gives its own (40 or 60)
+  namedValue(name) {
+    this.named ??= new Map();
+    if (!this.named.has(name)) {
+      const own = this.def.m_bEnableNamedValues ? this.def.m_NamedValueLocals?.find((local) => local.m_Name === name) : undefined;
+      this.named.set(name, this.parent?.namedValue(name) ?? own?.m_DefaultConfig?.m_ConfigValue);
+    }
+    return this.named.get(name);
+  }
+
   // The system's own control point, else its parent's, else the host's
   controlPoint(index) {
     const own = this.points.get(index);

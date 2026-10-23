@@ -17,6 +17,11 @@ function source(def) {
   const randomOf = (system, index) =>
     def.m_nRandomMode === "PF_RANDOM_MODE_VARYING" || index < 0 ? Math.random() : hashed(system.ids[index], seed);
   switch (def.m_nType) {
+    // A value the system names (m_NamedValueLocals), as its parent hands it down
+    case "PF_TYPE_NAMED_VALUE": {
+      const fallback = def.m_flLiteralValue ?? 0;
+      return (system) => system.namedValue?.(def.m_NamedValue) ?? fallback;
+    }
     case "PF_TYPE_LITERAL":
     case undefined:
       return () => def.m_flLiteralValue ?? 0;
@@ -104,6 +109,12 @@ export function compileFloat(def, fallback = 0) {
   }
   if (typeof def !== "object") {
     return () => fallback;
+  }
+  // A literal is the value itself: a map type the editor left on it is not applied (the card
+  // edges' glow has radius 24 and alpha 0.3 with a 0-1 curve left on, which would make both 0)
+  if (def.m_nType === "PF_TYPE_LITERAL") {
+    const literal = def.m_flLiteralValue ?? 0;
+    return () => literal;
   }
   const read = source(def);
   const looped = def.m_nInputMode === "PF_INPUT_MODE_LOOPED";

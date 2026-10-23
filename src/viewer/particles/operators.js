@@ -1026,11 +1026,13 @@ function path(params = {}) {
 // Particles laid along the path between two control points, in turn
 function sequentialPath(def) {
   const route = path(def.m_PathParams);
-  const count = def.m_flNumToAssign ?? 100;
+  // A number in CreateSequentialPath, an input in V2 (the card edges' named SideCount)
+  const countOf = compileFloat(def.m_flNumToAssign, 100);
   const loop = def.m_bLoop ?? true;
   let n = 0;
   return {
     init(system, start, end) {
+      const count = Math.round(countOf(system, -1));
       route.update(system);
       const p = system.float(0);
       const q = system.float(2);
@@ -2206,6 +2208,29 @@ DEFS.C_OP_SetCPOrientationToGroundNormal = (def) => {
       const point = system.ownControlPoint(output);
       point.position.copy(from.position);
       point.quaternion.copy(X_TO_UP);
+    },
+  };
+};
+
+// m_nOutputCP turned where it stands so its x axis points at m_nInputCP (away from it with
+// m_bPointAway; level with m_b2DOrientation): the card edges' CP5, along an edge
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+DEFS.C_OP_SetCPOrientationToPointAtCP = (def) => {
+  const input = def.m_nInputCP ?? 0;
+  const output = def.m_nOutputCP ?? 0;
+  const away = Boolean(def.m_bPointAway);
+  const flat = Boolean(def.m_b2DOrientation);
+  const direction = new THREE.Vector3();
+  return {
+    update(system) {
+      const at = system.controlPoint(output);
+      direction.subVectors(system.controlPoint(input).position, at.position);
+      if (away) direction.negate();
+      if (flat) direction.z = 0;
+      if (direction.lengthSq() < 1e-8) return;
+      const point = system.ownControlPoint(output);
+      if (point !== at) point.position.copy(at.position);
+      point.quaternion.setFromUnitVectors(X_AXIS, direction.normalize());
     },
   };
 };

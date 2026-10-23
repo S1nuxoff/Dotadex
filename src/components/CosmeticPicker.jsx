@@ -3,6 +3,7 @@ import { emptySlotIcon, heroSlots, itemIcon, itemsForSlot, personaOf, rarity, sl
 import { fetchData } from "../fetchData.js";
 import { useGameData } from "../gamedata.js";
 import { useUiLayout } from "./ui.jsx";
+import { startCardEdges } from "../viewer/cardEdges.js";
 
 // CUSTOMIZE on a hero's page as the game draws it: #HeroCustomize with its DOTACosmeticPicker
 // (ui_cosmetic_picker, hero_slot_item_picker_loadout, ui_econ_item_animated, collection_shared)
@@ -198,6 +199,7 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
             >
               {image && <img src={image} alt="" loading="lazy" className="size-full" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />}
             </span>
+            {top && <CardEdges base={base} name="armory_edge_set" rarity={look.id} equipped={equipped} />}
           </span>
         ) : (
           // #StaticItemViewContainer: two thirds of the width high, grey to light grey below the middle
@@ -299,6 +301,26 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
         style={{ borderImage: equipped ? "linear-gradient(#c2ced4, #727d81) 1" : previewing ? "linear-gradient(#fff, #fff) 1" : undefined }}
       />
     </li>
+  );
+}
+
+// #ArcanaBackgroundEffect: the particle edges, a scene of their own laid over the card's
+// (ui_econ_item_animated). The game shows them once the card's live scene is loaded, and loads
+// that on Immortal and Arcana sets only (client.dll 0x182b27790); Immortal's hue turned -90°.
+// The equipped set's are drawn at 0.98, in 0.2 s
+function CardEdges({ base, name, rarity, equipped }) {
+  const canvas = useRef(null);
+  useEffect(() => startCardEdges(base, canvas.current, name), [base, name]);
+  return (
+    <canvas
+      ref={canvas}
+      aria-hidden
+      className="pointer-events-none absolute inset-0 size-full transition-transform duration-200"
+      style={{
+        transform: `${equipped ? "scale(0.98) " : ""}translateY(-2px)`,
+        filter: rarity === "immortal" ? "hue-rotate(-90deg)" : undefined,
+      }}
+    />
   );
 }
 

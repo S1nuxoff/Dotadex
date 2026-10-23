@@ -337,7 +337,9 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
   const [status, setStatus] = useState({ store: true, unavailable: true });
   const [treasure, setTreasure] = useState(route.type === "treasure" ? route.id : null);
   // The item shown over the list, which has nothing to stand in the scene
-  const hasScene = (item) => SCENE_CATEGORIES.has(item.category) && (item.models.length > 0 || Boolean(item.scene && catalog.scenesById[item.scene]));
+  // An emblem has only its effect, which stands in the scene by itself
+  const hasScene = (item) =>
+    SCENE_CATEGORIES.has(item.category) && (item.models.length > 0 || Boolean(item.scene && catalog.scenesById[item.scene]) || Boolean(item.particles?.add?.length));
   const [details, setDetails] = useState(() => {
     if (audioCategory) {
       // The pack's item: an announcer by its folder, a music pack by its events' name, which holds

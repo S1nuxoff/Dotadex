@@ -365,7 +365,9 @@ export function outfitActivities(catalog, outfit) {
 // others ({ default: its own }, a weapon's points for the default weapon's glow)
 export function outfitParticles(catalog, outfit) {
   if (outfit.scene) {
-    return [];
+    // A weather over its map
+    const weather = outfit.focus && catalog.itemsById[outfit.focus]?.weather;
+    return weather ? [{ system: weather, models: [] }] : [];
   }
   if (!outfit.hero) {
     const item = catalog.itemsById[outfit.focus];

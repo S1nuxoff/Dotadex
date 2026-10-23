@@ -3,7 +3,7 @@
 // from the dataset's index.json in the browser, so new ones show up without a rebuild.
 import fs from "node:fs";
 import { MODELS_BASE } from "./dataset.mjs";
-import { armoryCategory } from "../src/armory.js";
+import { WEATHER_SCENE, WEATHER_SYSTEMS, armoryCategory } from "../src/armory.js";
 
 const FILES = "https://raw.githubusercontent.com/S1nuxoff/dota2-file-tracker/main/static";
 const PRICES_URL = "https://raw.githubusercontent.com/S1nuxoff/dota2-price-tacker/main/static/prices/latest.json";
@@ -102,6 +102,12 @@ function armoryFields(item, id) {
   if (modifiers.length) fields.modifiers = modifiers;
   // A bundle's contents by name, made ids once every item is known
   if (item.bundle && typeof item.bundle === "object") fields.contents = Object.keys(item.bundle);
+  // A weather: its effect by its weather_type, over the default terrain's map
+  const weather = Object.values(item.visuals ?? {}).find((visual) => visual?.type === "weather");
+  if (weather && WEATHER_SYSTEMS[Number(weather.weather_type)]) {
+    fields.weather = WEATHER_SYSTEMS[Number(weather.weather_type)];
+    fields.scene = WEATHER_SCENE;
+  }
   // An emoticon pack unlocks a range of emoticons (scripts/emoticons.txt ids)
   const usage = item.tool?.type === "emoticon_unlock" ? item.tool.usage : null;
   if (usage?.emoticon_id_start) {
@@ -141,6 +147,11 @@ function particlesOf(item) {
     // Shown only in the game's other loadout view (a hero's alternate form, as Terrorblade's
     // demon), not on the hero as it stands
     if (String(visual.spawn_in_alternate_loadout_only ?? "0") === "1") {
+      continue;
+    }
+    // Nor those of the match only (spawn_in_loadout_only 2: an emblem's player_base, beside its
+    // loadout effect at 1), as the site is the loadout
+    if (String(visual.spawn_in_loadout_only ?? "0") === "2") {
       continue;
     }
     const system = (value) => (typeof value === "string" && value.toLowerCase().endsWith(".vpcf") ? value.toLowerCase() : null);

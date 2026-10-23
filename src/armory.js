@@ -167,9 +167,26 @@ export function armoryCategory(item, prefabs, id) {
   return { category: "other" };
 }
 
+// The weather items' effects by their weather_type (client.dll's table at 0x184945790, 0 none)
+export const WEATHER_SYSTEMS = [
+  null,
+  "particles/rain_fx/econ_snow.vpcf",
+  "particles/rain_fx/econ_rain.vpcf",
+  "particles/rain_fx/econ_moonlight.vpcf",
+  "particles/rain_fx/econ_weather_pestilence.vpcf",
+  "particles/rain_fx/econ_weather_harvest.vpcf",
+  "particles/rain_fx/econ_weather_sirocco.vpcf",
+  "particles/rain_fx/econ_weather_spring.vpcf",
+  "particles/rain_fx/econ_weather_ash.vpcf",
+  "particles/rain_fx/econ_weather_aurora.vpcf",
+];
+// The map a weather is shown over (the game's is the match's map): the default terrain's preview
+export const WEATHER_SCENE = "terrain_previews/dota_default_preview";
+
 // The categories whose items the game shows in the Armory's scene beside a narrower list
 // (dashboard_page_collection's CollectionTab_* rules for #SceneGroup); the rest list 1470 wide
-export const SCENE_CATEGORIES = new Set(["couriers", "wards", "terrain", "creeps", "towers", "emblems", "roshan", "tormentor"]);
+// (and on the site the weather, over the default terrain's preview map)
+export const SCENE_CATEGORIES = new Set(["couriers", "wards", "terrain", "creeps", "towers", "emblems", "roshan", "tormentor", "weather"]);
 
 // Every category by its id: { id, label, icon, rows, tab, group }
 export const ARMORY_CATEGORIES = Object.fromEntries(

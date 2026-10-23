@@ -389,6 +389,15 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
     // Which hero these models are, told to the page once they come into view
     const shownHero = outfit?.hero ?? null;
     stageRef.current.onReveal = () => !cancelled && onShown?.(shownHero);
+    // Nothing to load: an item that is only its effects
+    if (!urls.length) {
+      stageRef.current.showEffectsOnly();
+      setAnimations([]);
+      setProgress(null);
+      return () => {
+        cancelled = true;
+      };
+    }
     stageRef.current
       .show(urls, (value) => !cancelled && setProgress(value))
       .then((names) => {

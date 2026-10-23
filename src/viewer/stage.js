@@ -1148,7 +1148,24 @@ export class Stage {
     });
   }
 
+  // An item that is only an effect (an emblem's loadout effect): the model on show goes, and an
+  // empty group at the stage's centre carries the effects
+  showEffectsOnly() {
+    this.request++;
+    if (this.group) {
+      this.mixer?.stopAllAction();
+      this.dropModel(this.group);
+    }
+    this.group = null;
+    this.parts = null;
+    this.firstUrl = null;
+    this.effectsAnchor ??= new THREE.Group();
+    if (!this.effectsAnchor.parent) this.scene.add(this.effectsAnchor);
+    this.particles?.setModel(this.effectsAnchor, []);
+  }
+
   replace(group, animations) {
+    this.effectsAnchor?.removeFromParent();
     if (this.group) {
       this.mixer?.stopAllAction();
       this.dropModel(this.group);
@@ -2816,6 +2833,8 @@ export class Stage {
       this.particles = new ParticleManager(this.particleScene, base);
       if (this.group) {
         this.particles.setModel(this.group, this.modelUrls);
+      } else if (this.effectsAnchor?.parent) {
+        this.particles.setModel(this.effectsAnchor, []);
       }
     }
     this.particles.setEffects(paths);

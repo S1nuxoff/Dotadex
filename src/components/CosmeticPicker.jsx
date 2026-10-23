@@ -413,6 +413,11 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
   };
 
   const first = (set) => catalog.itemsById[set.items[0]];
+  // A set's rarity: its store bundle's, else its first item's
+  const setRarity = (set) => {
+    const id = set.rarity ?? first(set)?.rarity;
+    return { ...rarity({ rarity: id }), id };
+  };
   const wornSet = sets.find((set) => set.items.every((id) => worn(catalog.itemsById[id]?.slot) === id));
   const rows = [
     ...(sets.length
@@ -437,14 +442,20 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
         worn: !changed,
         onPick: () => onOutfit({}),
       },
-      ...[...sets].sort((a, b) => (first(b)?.date ?? "").localeCompare(first(a)?.date ?? "")).map((set) => {
+      // The newest first, then as the game's FullSetPicker sorts them (client.dll 0x182e30df0, qsort
+      // with 0x182e2cb50): by the rarity of the set's bundle, highest value first
+      ...[...sets]
+        .sort((a, b) => (first(b)?.date ?? "").localeCompare(first(a)?.date ?? ""))
+        .sort((a, b) => setRarity(b).value - setRarity(a).value)
+        .map((set) => {
         const style = cardStyles[set.id] ?? (set === wornSet ? (outfit.slots[first(set).slot]?.style ?? 0) : 0);
-        const look = rarity(first(set) ?? {});
+        const look = setRarity(set);
+        const id = look.id;
         return {
           key: set.id,
           name: set.name,
           image: set.icon ? portrait(set.icon, style) : null,
-          look: { ...look, id: first(set)?.rarity },
+          look: { ...look, id },
           styles: setStyles(catalog, set),
           style,
           onStyle: (index) => {

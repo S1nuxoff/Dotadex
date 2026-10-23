@@ -1,16 +1,17 @@
 import { fetchData } from "./fetchData.js";
 // Rarity colors as the game shows them, in the game's order
+// value: the rarity's "value" in items_game (rarities), the order the game sorts by
 export const RARITIES = {
-  default: { name: "Default", color: "#b0c3d9", rank: 0 },
-  common: { name: "Common", color: "#b0c3d9", rank: 1 },
-  uncommon: { name: "Uncommon", color: "#5e98d9", rank: 2 },
-  rare: { name: "Rare", color: "#4b69ff", rank: 3 },
-  mythical: { name: "Mythical", color: "#8847ff", rank: 4 },
-  legendary: { name: "Legendary", color: "#d32ce6", rank: 5 },
-  immortal: { name: "Immortal", color: "#e4ae39", rank: 6 },
-  arcana: { name: "Arcana", color: "#ade55c", rank: 7 },
-  ancient: { name: "Ancient", color: "#eb4b4b", rank: 8 },
-  seasonal: { name: "Seasonal", color: "#fff34f", rank: 2 },
+  default: { name: "Default", color: "#b0c3d9", rank: 0, value: 0 },
+  common: { name: "Common", color: "#b0c3d9", rank: 1, value: 1 },
+  uncommon: { name: "Uncommon", color: "#5e98d9", rank: 2, value: 2 },
+  rare: { name: "Rare", color: "#4b69ff", rank: 3, value: 3 },
+  mythical: { name: "Mythical", color: "#8847ff", rank: 4, value: 4 },
+  legendary: { name: "Legendary", color: "#d32ce6", rank: 5, value: 5 },
+  immortal: { name: "Immortal", color: "#e4ae39", rank: 6, value: 7 },
+  arcana: { name: "Arcana", color: "#ade55c", rank: 7, value: 8 },
+  ancient: { name: "Ancient", color: "#eb4b4b", rank: 8, value: 6 },
+  seasonal: { name: "Seasonal", color: "#fff34f", rank: 2, value: 9 },
 };
 
 export const HERO_COLOR = "#c9a45c";

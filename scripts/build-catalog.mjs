@@ -229,7 +229,9 @@ for (const [id, item] of Object.entries(gameItems)) {
 
 const itemById = new Map(items.map((item) => [item.id, item]));
 
-// Sets of a hero's items, worn together
+// Sets of a hero's items, worn together. A set's rarity is its store bundle's (the game's card
+// takes the bundle item's: Hell's Legion is Immortal though most of its items are Mythical)
+const rarityByName = new Map(Object.values(itemsGame.items ?? {}).map((item) => [item.name, item.item_rarity]));
 const sets = [];
 for (const [key, set] of Object.entries(itemsGame.item_sets ?? {})) {
   const ids = Object.keys(set.items ?? {})
@@ -242,6 +244,10 @@ for (const [key, set] of Object.entries(itemsGame.item_sets ?? {})) {
   const record = { id: key, name: localize(set.name) ?? set.store_bundle ?? key, hero: [...heroesOfSet][0], items: ids };
   if (set.portrait_image) {
     record.icon = set.portrait_image;
+  }
+  const bundleRarity = rarityByName.get(set.store_bundle);
+  if (bundleRarity) {
+    record.rarity = bundleRarity;
   }
   sets.push(record);
   for (const id of ids) {

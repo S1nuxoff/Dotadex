@@ -25,14 +25,24 @@ export function createAudio(url) {
   return audio;
 }
 
+// A sound loading ahead of when it is played (playSound's `audio`): a line fetched only when the
+// animation says it starts late, after its download
+export function prepareSound(url) {
+  const audio = createAudio(url);
+  audio.preload = "auto";
+  return audio;
+}
+
 // One sound at a time across the page. A line the hero says (speech) is also told to the stage,
 // whose hero moves its face with it ("dotadex:speech")
 let current = null;
-export function playSound(url, onEnd, { speech = false } = {}) {
+export function playSound(url, onEnd, { speech = false, audio = createAudio(url) } = {}) {
   current?.pause();
-  const audio = createAudio(url);
   audio.volume = Math.min(effectsVolume(), 1);
-  audio.addEventListener("canplay", () => audio.play().catch(() => onEnd?.()), { once: true });
+  const start = () => audio.play().catch(() => onEnd?.());
+  // HAVE_FUTURE_DATA: a prepared sound may have loaded already
+  if (audio.readyState >= 3) start();
+  else audio.addEventListener("canplay", start, { once: true });
   audio.addEventListener("ended", () => onEnd?.());
   audio.addEventListener("pause", () => onEnd?.());
   current = audio;

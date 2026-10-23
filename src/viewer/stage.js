@@ -1208,6 +1208,8 @@ export class Stage {
       ?? (seq ? undefined : names.find((name) => /spawn/i.test(name) && !/respawn|loadout/i.test(name)));
     // Whether the spawn says its own line (AE_CL_SPEECH), so no other is said for it
     this.spawnSpeaks = Boolean(spawn && !reducedMotion.matches && seq?.get(spawn)?.speech?.length);
+    // Its lines are picked and loaded ahead, so they start on the frame that says them
+    if (this.spawnSpeaks) this.onSpeechAhead?.(seq.get(spawn).speech);
     // The frame and the ground are set from the idle pose: a spawn starts mid-leap or crouched.
     // The first model of a stage is framed at once, with no flight in from the starting camera.
     if (idle) {

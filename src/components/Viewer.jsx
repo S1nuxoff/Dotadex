@@ -18,7 +18,8 @@ import {
 import { Stage, T_POSE } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName, wornOnHero } from "../catalog.js";
 import { GAME_BUTTON, GamePills, IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
-import { playSound, soundsBase } from "./Voice.jsx";
+import { playSound, prepareSound, soundsBase } from "./Voice.jsx";
+import { loadSpeech } from "../viewer/face.js";
 import { ATTRIBUTES, abilityIcon, useGameData } from "../gamedata.js";
 import { unlockSound } from "../viewer/soundPlayer.js";
 import { getViewSettings, onViewSettings } from "../viewSettings.js";
@@ -525,19 +526,36 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
   // (older data) says one of the hero's spawn lines once its model shows up
   const spawnLine = useRef({ files: null, shown: false });
   useEffect(() => {
-    const line = (spawnLine.current = { files: null, shown: false, speech: [] });
-    const play = (files) => files?.length && playSound(soundsBase(catalog.modelsBase) + files[Math.floor(Math.random() * files.length)], null, { speech: true });
+    const line = (spawnLine.current = { files: null, shown: false, speech: [], ahead: [], prepared: new Map() });
+    // A line picked and loaded before it is said (its sound and its phonemes)
+    const prepare = (files) => {
+      if (!files?.length) return null;
+      const url = soundsBase(catalog.modelsBase) + files[Math.floor(Math.random() * files.length)];
+      loadSpeech(url).catch(() => {});
+      return { url, audio: prepareSound(url) };
+    };
+    const play = (prepared) => prepared && playSound(prepared.url, null, { speech: true, audio: prepared.audio });
     const speak = () => {
-      if (line.files?.length && line.shown && sound && !stageRef.current.spawnSpeaks) {
+      if (line.files && line.shown && sound && !stageRef.current.spawnSpeaks) {
         play(line.files);
         line.files = null;
       }
     };
     const answer = () => {
       if (!line.voices || !line.rules) return;
-      for (const speech of line.speech.splice(0)) {
-        play(portraitLine(line.rules, line.voices, speech, hero.id));
+      for (const speech of line.ahead.splice(0)) {
+        if (!line.prepared.has(speech)) line.prepared.set(speech, prepare(portraitLine(line.rules, line.voices, speech, hero.id)));
       }
+      for (const speech of line.speech.splice(0)) {
+        const prepared = line.prepared.get(speech);
+        line.prepared.delete(speech);
+        play(prepared ?? prepare(portraitLine(line.rules, line.voices, speech, hero.id)));
+      }
+    };
+    stageRef.current.onSpeechAhead = (speeches) => {
+      if (!sound || !hero) return;
+      line.ahead.push(...speeches);
+      answer();
     };
     stageRef.current.onShow = () => {
       line.shown = true;
@@ -559,7 +577,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
       .then((res) => (res.ok ? res.json() : []))
       .then((lines) => {
         line.voices = lines;
-        line.files = lines.filter((entry) => /_spawn|_respawn/.test(entry.event)).flatMap((entry) => entry.files);
+        line.files = prepare(lines.filter((entry) => /_spawn|_respawn/.test(entry.event)).flatMap((entry) => entry.files));
         speak();
         answer();
       })

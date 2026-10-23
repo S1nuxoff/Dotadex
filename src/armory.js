@@ -185,8 +185,9 @@ export const WEATHER_SCENE = "terrain_previews/dota_default_preview";
 
 // The categories whose items the game shows in the Armory's scene beside a narrower list
 // (dashboard_page_collection's CollectionTab_* rules for #SceneGroup); the rest list 1470 wide
-// (and on the site the weather, over the default terrain's preview map)
-export const SCENE_CATEGORIES = new Set(["couriers", "wards", "terrain", "creeps", "towers", "emblems", "roshan", "tormentor", "weather"]);
+// (and on the site the weather, over the default terrain's preview map, the pets and the Ancients,
+// which the game lists without a scene but have models to see)
+export const SCENE_CATEGORIES = new Set(["couriers", "wards", "terrain", "creeps", "towers", "emblems", "roshan", "tormentor", "weather", "pet_effigy", "ancient"]);
 
 // Every category by its id: { id, label, icon, rows, tab, group }
 export const ARMORY_CATEGORIES = Object.fromEntries(

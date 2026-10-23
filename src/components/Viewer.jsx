@@ -493,7 +493,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
       unlockSound();
       stageRef.current.castAbility(ability, index, sounds);
       if (lines?.length && Math.random() < 0.6) {
-        playSound(soundsBase(catalog.modelsBase) + lines[Math.floor(Math.random() * lines.length)]);
+        playSound(soundsBase(catalog.modelsBase) + lines[Math.floor(Math.random() * lines.length)], null, { speech: true });
       }
     };
     const onEmote = (event) => {
@@ -504,12 +504,16 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
         stageRef.current.playOnce(name);
       }
       if (files?.length) {
-        playSound(soundsBase(catalog.modelsBase) + files[Math.floor(Math.random() * files.length)]);
+        playSound(soundsBase(catalog.modelsBase) + files[Math.floor(Math.random() * files.length)], null, { speech: true });
       }
     };
+    // The hero's face says the lines it speaks
+    const onSpeech = (event) => stageRef.current.speak(event.detail.audio, event.detail.url);
     window.addEventListener("dotadex:cast", onCast);
     window.addEventListener("dotadex:emote", onEmote);
+    window.addEventListener("dotadex:speech", onSpeech);
     return () => {
+      window.removeEventListener("dotadex:speech", onSpeech);
       window.removeEventListener("dotadex:cast", onCast);
       window.removeEventListener("dotadex:emote", onEmote);
     };
@@ -522,7 +526,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
   const spawnLine = useRef({ files: null, shown: false });
   useEffect(() => {
     const line = (spawnLine.current = { files: null, shown: false, speech: [] });
-    const play = (files) => files?.length && playSound(soundsBase(catalog.modelsBase) + files[Math.floor(Math.random() * files.length)]);
+    const play = (files) => files?.length && playSound(soundsBase(catalog.modelsBase) + files[Math.floor(Math.random() * files.length)], null, { speech: true });
     const speak = () => {
       if (line.files?.length && line.shown && sound && !stageRef.current.spawnSpeaks) {
         play(line.files);

@@ -110,6 +110,22 @@ async function makeAnimations(gltf) {
   return gltf;
 }
 
+// Source2Viewer names each morph target (a flex descriptor: jawOpen, ...) in its accessor, and only
+// newer exports in the mesh's extras.targetNames: the meshes' dictionaries get the accessors' names,
+// which the face goes by (face.js)
+function nameMorphTargets(gltf) {
+  const { json, associations } = gltf.parser;
+  gltf.scene.traverse((node) => {
+    if (!node.isMesh || !node.morphTargetInfluences) return;
+    const at = associations.get(node);
+    const targets = at && json.meshes[at.meshes]?.primitives[at.primitives ?? 0]?.targets;
+    if (!targets) return;
+    const dictionary = {};
+    targets.forEach((target, index) => (dictionary[json.accessors[target.POSITION]?.name ?? index] = index));
+    node.morphTargetDictionary = dictionary;
+  });
+}
+
 // The parsed glTF of a model; onProgress({ loaded, total }) as its file comes in
 export async function loadGlb(url, onProgress) {
   const start = performance.now();
@@ -119,6 +135,7 @@ export async function loadGlb(url, onProgress) {
   const downloaded = performance.now();
   const gltf = await loader.parseAsync(await gunzip(bytes), url.slice(0, url.lastIndexOf("/") + 1));
   const parsed = performance.now();
+  nameMorphTargets(gltf);
   await makeAnimations(gltf);
   if (perfOn) loadTimes.set(url, { download: downloaded - start, "gunzip and parse": parsed - downloaded, "clips (in slices)": performance.now() - parsed });
   return gltf;

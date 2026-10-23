@@ -25,9 +25,10 @@ export function createAudio(url) {
   return audio;
 }
 
-// One sound at a time across the page
+// One sound at a time across the page. A line the hero says (speech) is also told to the stage,
+// whose hero moves its face with it ("dotadex:speech")
 let current = null;
-export function playSound(url, onEnd) {
+export function playSound(url, onEnd, { speech = false } = {}) {
   current?.pause();
   const audio = createAudio(url);
   audio.volume = Math.min(effectsVolume(), 1);
@@ -35,6 +36,7 @@ export function playSound(url, onEnd) {
   audio.addEventListener("ended", () => onEnd?.());
   audio.addEventListener("pause", () => onEnd?.());
   current = audio;
+  if (speech) window.dispatchEvent(new CustomEvent("dotadex:speech", { detail: { audio, url } }));
   return audio;
 }
 
@@ -85,7 +87,7 @@ function Line({ url, label, playing, onPlay }) {
   );
 }
 
-export function SoundList({ base, files, labels }) {
+export function SoundList({ base, files, labels, speech = false }) {
   const [playing, setPlaying] = useState(null);
   const ref = useRef(null);
   useEffect(() => () => ref.current?.pause(), []);
@@ -96,7 +98,7 @@ export function SoundList({ base, files, labels }) {
       return;
     }
     setPlaying(file);
-    ref.current = playSound(base + file, () => setPlaying((value) => (value === file ? null : value)));
+    ref.current = playSound(base + file, () => setPlaying((value) => (value === file ? null : value)), { speech });
   };
   return (
     <ul className="space-y-0.5">
@@ -167,7 +169,7 @@ export default function Voice({ modelsBase, heroKey }) {
             {category} <span className="text-xs text-ash tabular-nums">{list.length}</span>
           </summary>
           <div className="mt-1.5">
-            <SoundList base={base} files={list.map((entry) => entry.file)} labels={list.map((entry) => entry.label)} />
+            <SoundList base={base} files={list.map((entry) => entry.file)} labels={list.map((entry) => entry.label)} speech />
           </div>
         </details>
       ))}

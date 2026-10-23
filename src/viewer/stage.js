@@ -14,6 +14,7 @@ import { StageEffects, stageTint } from "./effects.js";
 import { RockStage } from "./rocks.js";
 import { ParticleManager } from "./particles/manager.js";
 import { Cloth, loadCloth } from "./cloth.js";
+import { Face, loadFlex, loadSpeech } from "./face.js";
 import { frameLights, SCENE_DEPTH } from "./particles/render.js";
 import { playLoaded, playWhenReady, preloadSound } from "./soundPlayer.js";
 import { playUiSound } from "../uiSounds.js";
@@ -885,7 +886,7 @@ export class Stage {
       const [url, skin] = entry.split("#skin=");
       return { url, skin: Number(skin) || 0 };
     });
-    const [gltfs, skins, sequences, cloths] = await Promise.all([
+    const [gltfs, skins, sequences, cloths, flexes] = await Promise.all([
       Promise.all(
         entries.map(({ url }) =>
           loadModel(url, (event) => {
@@ -898,6 +899,8 @@ export class Stage {
       Promise.all(entries.map(({ url }) => loadSequences(url))),
       // The cloth, hair and beards each model moves on its own
       Promise.all(entries.map(({ url }) => loadCloth(url))),
+      // The flex controllers and rules that move each model's face as the hero speaks
+      Promise.all(entries.map(({ url }) => loadFlex(url))),
       // Materials whose parameters change over time, needed before the materials are made
       loadMaterialPrograms(entries[0].url.slice(0, entries[0].url.indexOf("/models/") + 1)),
       // The cube maps the materials reflect, before the materials are made
@@ -914,6 +917,9 @@ export class Stage {
         rootIndex = index;
       }
     });
+
+    this.flexByModel ??= new Map();
+    entries.forEach(({ url }, index) => flexes[index] && this.flexByModel.set(url, flexes[index]));
 
     // The parts worn on the root (not a hero base a body-replacing model hides)
     const partIndices = gltfs.map((gltf, index) => index).filter((index) => index !== rootIndex && !(index === 0 && rootIndex !== 0 && gltf.animations.length > 10));
@@ -1069,6 +1075,7 @@ export class Stage {
       }
     }
     this.claimClothBones();
+    this.face = new Face(group, this.flexByModel);
     // What changeParts works on: the body and its parts
     this.animatedBones = animatedBones;
     this.partsRoot = root;
@@ -2108,6 +2115,10 @@ export class Stage {
       this.dither(part, 0, 1);
     }
     this.claimClothBones();
+    // The line being said carries on over the new parts
+    const speech = this.face?.speech;
+    this.face = new Face(this.group, this.flexByModel);
+    this.face.speech = speech;
     this.modelUrls = entries.map((entry) => entry.url);
     trimModels(new Set([...this.modelUrls, this.pedestalUrl, ...(this.summonUrls ?? [])]));
     this.particles?.setModel(this.group, this.modelUrls);
@@ -2485,6 +2496,8 @@ export class Stage {
       this.speakAnimationLines();
     }
 
+    // The face along with the voice line playing
+    this.face?.update();
     this.effects.update(delta);
     // Materials the game moves every frame: scrolling details, pulsing glows
     const time = this.timer.getElapsed();
@@ -2982,6 +2995,13 @@ export class Stage {
   // { concept, criteria }, handed to onSpeech, which the hero's response rules turn into a line),
   // with or without particles; a clip that just ended says what was left of it (Broodmother
   // speaks at her spawn's last frame, the frame it hands over to the stance)
+  // The hero's face says the voice line `audio` plays (from the sounds dataset's `url`), when the
+  // line has phonemes; the next line takes over
+  async speak(audio, url) {
+    const speech = await loadSpeech(url).catch(() => null);
+    if (speech && !audio.ended) this.face?.speak(audio, speech);
+  }
+
   speakAnimationLines() {
     if (!this.current) return;
     const clip = this.current.getClip();

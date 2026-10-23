@@ -175,51 +175,6 @@ input:not([type]) {
   scrollbar-color: var(--color-line) transparent;
 }
 
-/* Sliders as in Dota's settings: a dark sunken track, the filled part in a cold light gradient,
-   a small bevelled bar for the thumb. --fill is set from the value by the slider itself. */
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 18px;
-  background: transparent;
-}
-input[type="range"]::-webkit-slider-runnable-track {
-  height: 6px;
-  border: 1px solid #000;
-  background: linear-gradient(90deg, #6f8496, #c4d3de) 0 / var(--fill, 50%) 100% no-repeat, #0b0e12;
-  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.8), 0 1px 0 rgb(255 255 255 / 0.06);
-}
-input[type="range"]::-moz-range-track {
-  height: 6px;
-  border: 1px solid #000;
-  background: #0b0e12;
-  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.8), 0 1px 0 rgb(255 255 255 / 0.06);
-}
-input[type="range"]::-moz-range-progress {
-  height: 6px;
-  background: linear-gradient(90deg, #6f8496, #c4d3de);
-}
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 8px;
-  height: 16px;
-  margin-top: -6px;
-  border: 1px solid #000;
-  background: linear-gradient(180deg, #f2f5f7, #9aa7b1);
-  box-shadow: inset 0 1px 0 #fff, 0 1px 3px rgb(0 0 0 / 0.7);
-}
-input[type="range"]::-moz-range-thumb {
-  width: 8px;
-  height: 16px;
-  border: 1px solid #000;
-  border-radius: 0;
-  background: linear-gradient(180deg, #f2f5f7, #9aa7b1);
-  box-shadow: inset 0 1px 0 #fff, 0 1px 3px rgb(0 0 0 / 0.7);
-}
-input[type="range"]:hover::-webkit-slider-thumb {
-  background: linear-gradient(180deg, #fff, #b8c4cd);
-}
-
 /* Text fields and the boxes around them: sunken, dark, a fine edge that lights up on focus */
 label:has(> input[type="text"]),
 label:has(> input:not([type])),

@@ -1,12 +1,12 @@
 // How loud things are, kept on this device: everything, the menu music, and the rest
 // (voice lines, animation sounds, previews)
-const DEFAULTS = { master: 0.9, music: 0.5, effects: 0.8 };
+export const VOLUME_DEFAULTS = { master: 0.9, music: 0.5, effects: 0.8 };
 
 function load() {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("volume") ?? "{}") };
+    return { ...VOLUME_DEFAULTS, ...JSON.parse(localStorage.getItem("volume") ?? "{}") };
   } catch {
-    return { ...DEFAULTS };
+    return { ...VOLUME_DEFAULTS };
   }
 }
 

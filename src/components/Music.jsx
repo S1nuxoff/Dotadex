@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { createAudio, soundsBase } from "./Voice.jsx";
-import { getVolume, musicVolume, onVolume, setVolume } from "../volume.js";
+import { musicVolume, onVolume } from "../volume.js";
 import { eventVolume, loadUiSounds, pickFile } from "../uiSounds.js";
 import { mixLevel } from "../viewer/soundPlayer.js";
 import { getViewSettings, onViewSettings } from "../viewSettings.js";
@@ -120,38 +120,4 @@ export function useMenuMusic(modelsBase) {
       audio.current?.pause();
     };
   }, [modelsBase]);
-}
-
-function Slider({ label, value, onChange }) {
-  return (
-    <label className="block">
-      <span className="flex justify-between text-xs text-ash">
-        <span>{label}</span>
-        <span className="tabular-nums">{Math.round(value * 100)}%</span>
-      </span>
-      <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.01"
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        style={{ "--fill": `${value * 100}%` }}
-        className="mt-1 w-full"
-      />
-    </label>
-  );
-}
-
-// The volume of everything, the music and the other sounds
-export function VolumeSliders() {
-  const [levels, setLevels] = useState(getVolume);
-  useEffect(() => onVolume(setLevels), []);
-  return (
-    <div className="space-y-3">
-      <Slider label="Overall" value={levels.master} onChange={(master) => setVolume({ master })} />
-      <Slider label="Music" value={levels.music} onChange={(music) => setVolume({ music })} />
-      <Slider label="Voice and sounds" value={levels.effects} onChange={(effects) => setVolume({ effects })} />
-    </div>
-  );
 }

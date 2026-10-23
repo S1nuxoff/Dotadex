@@ -1,0 +1,705 @@
+/* The game's settings window (popup_settings_reborn.css, dotastyles.css), in the game's layout
+   pixels. Panorama's brightness works on linear colour: brightness 2 is about 1.37 on sRGB, 1.2
+   about 1.09, 0.8 about 0.9. */
+.gs-popup {
+  --lightest-grey: #dae2e5;
+  --lighter-grey: #b0bcc2;
+  --light-grey: #8b989e;
+  --settings-blue: #63a4ff;
+  --settings-blue-dark: #4588e4;
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 50%;
+  width: 1332px;
+  margin-left: -666px;
+  font-size: 18px;
+  color: var(--lighter-grey);
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+/* PopupSettingsReborn.Hidden: translateZ(-40px) under the panel's perspective, 1000 / 1040 as large */
+.gs-popup.gs-hidden {
+  opacity: 0;
+  transform: scale(0.9615);
+  transition-duration: 0.3s;
+  transition-timing-function: cubic-bezier(0, 0.9, 0, 0.9);
+}
+
+/* DOTADashboard.PopupBackgroundBlur on everything behind: blur gaussian(5) (a standard deviation
+   of 4 screen pixels, as panorama.dll turns it into its blur command), saturation 0.25, and
+   wash-color #657b7baa multiplying in linear colour (the overlay is that product in sRGB); 0.35 s
+   as #DashboardForeground's transition */
+#root {
+  transition: filter 0.35s;
+}
+html.popup-blur #root {
+  filter: blur(var(--popup-blur, 4px)) saturate(0.25);
+}
+.gs-wash {
+  position: absolute;
+  inset: 0;
+  background: rgb(173 182 182);
+  mix-blend-mode: multiply;
+  transition: opacity 0.35s;
+}
+
+.gs-container {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 1320px;
+  display: flex;
+  background: #1f2123;
+}
+.gs-container-border {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border: 1px solid rgb(255 255 255 / 0.02);
+  pointer-events: none;
+}
+
+/* ButtonPrimary, and its LightGrey look on the close button */
+.gs-button {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(#525f65, #2f363a) padding-box,
+    linear-gradient(#ffffff08, #ffffff03) border-box;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+  transition: filter 0.1s ease;
+}
+.gs-button-light {
+  background:
+    linear-gradient(#525f65, #2f363a) padding-box,
+    linear-gradient(#ffffff20, #ffffff06) border-box;
+}
+.gs-button:hover {
+  filter: brightness(1.37);
+}
+.gs-button:active {
+  background:
+    linear-gradient(#2f363a, #525f65) padding-box,
+    linear-gradient(#ffffff08, #ffffff03) border-box;
+  filter: brightness(0.9);
+  transition-duration: 0.05s;
+}
+.gs-button-label {
+  margin: -1px 0 1px;
+  font-size: 16px;
+  line-height: 20px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: white;
+  opacity: 0.8;
+  text-shadow: 0 1px 4px #000;
+}
+.gs-button:hover .gs-button-label {
+  opacity: 1;
+}
+.gs-button:active .gs-button-label,
+.gs-button:active .gs-button-image {
+  transform: translateY(0.5px);
+}
+.gs-button-image {
+  width: 20px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--lightest-grey);
+}
+.gs-button:hover .gs-button-image {
+  background: white;
+}
+.gs-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 4;
+  padding: 0 10px;
+}
+
+/* #SettingsNavigationContainer */
+.gs-nav {
+  position: relative;
+  width: 330px;
+  height: 100%;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(#121618, #0c1011);
+}
+/* The rock texture at 0.3, faded by gradient(linear, 0% 0%, 160% 20%): towards the right and
+   down, gone 566.8 pixels along (111.3 degrees on the 330 by 1032 panel) */
+.gs-nav-rock {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.3;
+  mask-image: linear-gradient(111.3deg, #fff 0, transparent 566.8px);
+  pointer-events: none;
+}
+.gs-nav-shadow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 32px;
+  height: 100%;
+  background: linear-gradient(to left, #000, transparent);
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.gs-search {
+  position: relative;
+  flex-shrink: 0;
+}
+.gs-search input {
+  display: block;
+  width: calc(100% - 32px);
+  height: 40px;
+  margin: 16px;
+  padding: 6px 7px 3px 36px;
+  border-radius: 6px;
+  border: 1px solid rgb(218 238 255 / 0.05);
+  background: rgb(37 42 46);
+  color: white;
+  font-size: 20px;
+  outline: none;
+  transition: border-color 0.1s, background-color 0.1s;
+}
+.gs-search input::placeholder {
+  color: var(--light-grey);
+  font-size: 18px;
+  opacity: 1;
+  transition: opacity 0.1s;
+}
+.gs-search input:hover {
+  border-color: rgb(218 238 255 / 0.2);
+}
+.gs-search input:focus {
+  background: rgb(44 51 58);
+  animation: gs-glow-search 1s 0.1s infinite alternate-reverse;
+}
+.gs-search input:focus::placeholder {
+  opacity: 0;
+}
+@keyframes gs-glow-search {
+  0% {
+    box-shadow: 0 0 24px #63a4ff11;
+    border-color: #63a4ff;
+  }
+  100% {
+    box-shadow: 0 0 24px #63a4ff44;
+    border-color: rgb(194 237 255);
+  }
+}
+.gs-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 24px;
+  width: 24px;
+  height: 24px;
+  margin-top: -12px;
+  background: white;
+  pointer-events: none;
+}
+.gs-search-clear {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  visibility: hidden;
+  background-position: center;
+  background-size: 22px 22px;
+  background-repeat: no-repeat;
+  opacity: 0.4;
+  transition: opacity 0.1s;
+}
+.gs-search-clear:hover {
+  opacity: 1;
+}
+.gs-search-clear-shown {
+  visibility: visible;
+}
+
+/* #SettingsNavigationButtonsContainer: scrolls through soft_top_bottom_vscroll, stretched */
+.gs-nav-buttons {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin-top: -20px;
+  padding: 20px 0 48px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  mask: var(--scroll-mask, none) 0 0 / 100% 100% no-repeat luminance;
+  transition: opacity 0.1s ease-out;
+}
+.gs-nav-none .gs-nav-buttons {
+  opacity: 0;
+}
+.gs-nav-anim {
+  overflow: hidden;
+  transition: height 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+/* Text in the game's vertical colour gradients */
+.gs-nav-text,
+.gs-section-title,
+.gs-subtitle {
+  background-image: linear-gradient(var(--lighter-grey), var(--light-grey));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gs-nav-section {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 48px;
+  padding-left: 15px;
+  border: 1px solid transparent;
+  transition: background-color 0.05s;
+}
+.gs-nav-icon {
+  width: 22px;
+  height: 22px;
+  margin-right: 10px;
+  background: var(--light-grey);
+  transition: background-color 0.1s;
+}
+.gs-nav-text {
+  margin-left: 2px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.4));
+}
+.gs-nav-section:hover {
+  background: linear-gradient(to right, #c8e9ff09, #ffffff00 95%);
+}
+.gs-nav-section:hover .gs-nav-text {
+  background-image: linear-gradient(var(--lightest-grey), var(--lightest-grey));
+}
+.gs-nav-section:hover .gs-nav-icon {
+  background: var(--lightest-grey);
+}
+/* :selected, its border drawn by the brush gradient( settingsBlue, settingsBlueDark&00 ) */
+.gs-nav-section.gs-selected {
+  background: linear-gradient(to right, #63a4ff11 30%, #63a4ff00);
+  border-image: linear-gradient(to right, rgb(99 164 255 / 0.1), rgb(69 136 228 / 0)) 1;
+}
+.gs-nav-section.gs-selected .gs-nav-text {
+  background-image: linear-gradient(var(--settings-blue), var(--settings-blue-dark));
+}
+.gs-nav-section.gs-selected .gs-nav-icon {
+  background: var(--settings-blue);
+}
+.gs-nav-section.gs-selected:hover {
+  background: linear-gradient(to right, #63a4ff22 30%, #63a4ff00);
+  border-image: linear-gradient(to right, rgb(99 164 255 / 0.3), rgb(69 136 228 / 0)) 1;
+}
+.gs-nav-section.gs-selected:hover .gs-nav-text {
+  background-image: linear-gradient(white, var(--lightest-grey));
+}
+.gs-nav-section.gs-selected:hover .gs-nav-icon {
+  background: white;
+}
+.gs-nav-section:active .gs-nav-text,
+.gs-nav-section:active .gs-nav-icon,
+.gs-nav-sub:active .gs-nav-sub-text,
+.gs-result:active .gs-result-text {
+  transform: translateY(1px);
+}
+
+.gs-nav-sub {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 38px;
+  padding-left: 44px;
+  border-left: 1px solid transparent;
+}
+.gs-nav-sub-text {
+  color: var(--light-grey);
+  font-size: 16px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.gs-nav-sub:hover,
+.gs-result:hover {
+  background: linear-gradient(to right, #c8e9ff09, #ffffff00 95%);
+}
+.gs-nav-sub:hover .gs-nav-sub-text {
+  color: var(--lightest-grey);
+}
+.gs-nav-sub.gs-selected {
+  background: linear-gradient(to right, #d1edff14, #ffffff00 95%);
+  border-left-color: #63a4ff99;
+}
+.gs-nav-sub.gs-selected .gs-nav-sub-text {
+  color: white;
+}
+
+.gs-result {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 30px;
+  padding: 5px 5px 5px 65px;
+  text-align: left;
+}
+.gs-result-text {
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.gs-result.gs-selected {
+  background: linear-gradient(to right, #cfecff14, #ffffff00 95%);
+}
+.gs-result.gs-selected .gs-result-text {
+  color: white;
+}
+
+/* #NoSearchResultsContainer: 150 high, centred 120 above the middle */
+.gs-none {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 150px;
+  margin-top: -135px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease-out;
+}
+.gs-nav-none .gs-none {
+  opacity: 1;
+}
+.gs-none-image {
+  flex: 1;
+  width: 100%;
+  background-position: center top;
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+.gs-none-text {
+  color: white;
+  text-align: center;
+}
+
+/* .SearchedText */
+.gs-searched {
+  color: white;
+  background: #4588e4;
+}
+.gs-nav .gs-searched {
+  background: transparent;
+}
+
+.gs-body-border {
+  width: 1px;
+  height: 100%;
+  margin-right: -1px;
+  z-index: 1;
+  flex-shrink: 0;
+  background: rgb(255 255 255 / 0.01);
+}
+
+/* #SettingsBody, scrolling under VerticalScrollBar's 8 wide #566767 thumb */
+.gs-body {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-color: #566767 transparent;
+}
+.gs-body::-webkit-scrollbar {
+  width: 8px;
+}
+.gs-body::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  background: #566767;
+  border-top: 1px solid #aaaaaa22;
+  border-right: 1px solid #000000aa;
+}
+.gs-body::-webkit-scrollbar-thumb:hover {
+  background: #86989f;
+}
+
+.gs-section {
+  padding: 24px 24px 32px;
+  border-top: 1px solid;
+  border-image: linear-gradient(to right, #8b989e11, #8b989e00) 1;
+  background: radial-gradient(100% 600px at 0 0, #8b989e11, #8b989e03 50%, #8b989e00);
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+.gs-section.gs-active {
+  border-image: linear-gradient(to right, #63a4ff11, #63a4ff00) 1;
+  background: radial-gradient(100% 600px at 0 0, #63a4ff11, #63a4ff03 50%, #63a4ff00);
+  opacity: 1;
+}
+.gs-section-title-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.gs-section-icon {
+  width: 30px;
+  height: 30px;
+  margin-right: 16px;
+  flex-shrink: 0;
+  background: linear-gradient(var(--lighter-grey), var(--light-grey));
+}
+.gs-section-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.5));
+}
+.gs-active .gs-section-icon {
+  background: linear-gradient(var(--settings-blue), var(--settings-blue-dark));
+  filter: brightness(1.09);
+}
+.gs-active .gs-section-title {
+  background-image: linear-gradient(var(--settings-blue), var(--settings-blue-dark));
+  filter: brightness(1.09) drop-shadow(0 2px 6px rgb(0 0 0 / 0.5));
+}
+
+.gs-subtitle {
+  margin: 8px 0;
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.4));
+}
+.gs-subsection.gs-active .gs-subtitle {
+  background-image: linear-gradient(white, whitesmoke);
+}
+
+/* .FilledBackground, lit in the active subsection */
+.gs-filled {
+  margin-bottom: 16px;
+  padding: 20px;
+  border: 1px solid rgb(0 0 0 / 0.5);
+  background: #0000003f;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+.gs-filled-active {
+  border-color: rgb(72 75 79 / 0.662);
+  border-left-color: #4588e499;
+  background: #50575b31;
+  box-shadow: 0 2px 12px -1px rgb(0 0 0 / 0.3);
+}
+
+.gs-label {
+  color: var(--lighter-grey);
+}
+
+/* DOTASettingsCheckbox */
+.gs-checkbox {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 1px 4px;
+  text-align: left;
+}
+.gs-tickbox {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  background: black;
+  border: 2px solid #5e686966;
+  box-shadow: 0 0 1px 3px #00000055;
+  transition: all 0.2s ease-in-out;
+}
+.gs-checkbox:hover .gs-tickbox {
+  border-color: #697879;
+}
+.gs-checkbox[aria-checked="true"] .gs-tickbox {
+  background: linear-gradient(#e7f6f5, #a0d6d7);
+  border: 3px solid #000;
+  box-shadow: 0 0 8px 0 #5b62bf77;
+}
+.gs-checkbox-label {
+  margin-left: 8px;
+  font-size: 18px;
+  line-height: 24px;
+  letter-spacing: 0.3px;
+  color: var(--lighter-grey);
+  transition: color 0.2s linear;
+}
+.gs-checkbox:hover .gs-checkbox-label {
+  color: #d2d6d1;
+}
+.gs-checkbox[aria-checked="true"] .gs-checkbox-label {
+  color: whitesmoke;
+}
+
+/* DOTASettingsSlider: Slider.HorizontalSlider, 30 high, its track 16 high with a 10 pixel inset
+   the progress and the thumb run in */
+.gs-slider {
+  display: block;
+}
+.gs-slider-body {
+  position: relative;
+  display: block;
+  height: 30px;
+}
+.gs-slider-track {
+  position: absolute;
+  top: 7px;
+  left: 0;
+  right: 0;
+  height: 16px;
+  background: black;
+  border: 2px solid #5e686966;
+  box-shadow: 0 0 1px 3px #00000055;
+}
+.gs-slider-progress {
+  position: absolute;
+  top: 1px;
+  left: 9px;
+  height: 10px;
+  width: calc((100% - 18px) * var(--value));
+  background: linear-gradient(to right, #222222, #444f52);
+  box-shadow: inset -2px 1px 3px 0 black;
+}
+.gs-slider-thumb {
+  position: absolute;
+  top: 0;
+  left: calc(10px + (100% - 20px) * var(--value) - 8px);
+  width: 16px;
+  height: 30px;
+  border-radius: 13%;
+  background: radial-gradient(circle at 50% 50%, #91a5b9 -5%, #444f52 60%);
+  box-shadow: 1px 1px 13px 0 black;
+  pointer-events: none;
+}
+.gs-slider:hover .gs-slider-thumb {
+  background: radial-gradient(circle at 50% 50%, #b8c5d3 -5%, #444f52 60%);
+}
+.gs-slider input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+}
+
+/* DropDown (its arrow 32 square, 38 in from the right, a third down) and DropDownMenu */
+.gs-dropdown {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 41px;
+  padding: 4px 8px;
+  border: 2px solid #5e686966;
+  background: var(--arrow) right 38px top 35% / 32px 32px no-repeat, linear-gradient(#292e2e, #191e1e);
+  box-shadow: 0 0 1px 3px #00000055;
+  font-size: 18px;
+  text-align: left;
+  color: var(--lighter-grey);
+}
+.gs-dropdown:hover {
+  background: var(--arrow) right 38px top 35% / 32px 32px no-repeat, linear-gradient(#393e3e, #292e2e);
+}
+.gs-dropdown span {
+  margin: 3px 29px 0 6px;
+  transition: color 0.15s linear;
+}
+.gs-dropdown:focus span,
+.gs-dropdown-open span {
+  color: white;
+}
+.gs-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 5;
+  width: 100%;
+  max-height: 444px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: #3d4448;
+  box-shadow: 0 0 6px 0 #00000066;
+  opacity: 0;
+  transform: translateY(-40px);
+  pointer-events: none;
+  transition: opacity 0.15s ease-in, transform 0.15s ease-in;
+}
+.gs-dropdown-menu-visible {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.gs-dropdown-menu button {
+  width: 100%;
+  flex-shrink: 0;
+  padding: 6px 0 2px 16px;
+  border-top: 1px solid #00000066;
+  border-bottom: 1px solid #00000066;
+  background: #3d4448;
+  font-size: 18px;
+  text-align: left;
+  color: #ffffff99;
+  transition: background-color 0.2s ease-in-out;
+}
+.gs-dropdown-menu button:hover {
+  background: #585e62;
+}
+
+.gs-notice {
+  padding: 0 24px 24px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--light-grey);
+  opacity: 0.6;
+}
+
+/* SearchResultSelectedAnimation: grows to 1.08 and back twice, lit blue */
+.gs-pulse {
+  animation: gs-pulse 0.8s 0.1s 1;
+}
+@keyframes gs-pulse {
+  0% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.08);
+    background-color: #63a4ff22;
+    filter: brightness(1.37);
+  }
+  40% {
+    transform: scale(1);
+  }
+  60% {
+    transform: scale(1.08);
+    background-color: #63a4ff22;
+  }
+  100% {
+    transform: scale(1);
+  }
+}

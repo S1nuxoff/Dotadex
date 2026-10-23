@@ -1,10 +1,9 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Code2, Database } from "lucide-react";
-import { LANGUAGES } from "../gamedata.js";
-import { Popover, Select, useDismiss, useUiScale, VALVE_NOTICE } from "./ui.jsx";
-import { useMenuMusic, VolumeSliders } from "./Music.jsx";
+import { useUiScale } from "./ui.jsx";
+import { useMenuMusic } from "./Music.jsx";
+import Settings from "./Settings.jsx";
 import { getVolume, onVolume, setVolume } from "../volume.js";
-import { getViewSettings, onViewSettings, setViewSettings } from "../viewSettings.js";
 
 // The sections across the top, as the game's dashboard has them, and the pages of each below
 export const SECTIONS = [
@@ -120,52 +119,22 @@ function RightButton({ label, center, hover, href, onClick, children }) {
   );
 }
 
-function SettingsMenu({ language, onLanguage }) {
+// The gear opens the game's settings window over the whole screen
+function SettingsButton({ base, language, onLanguage }) {
   const [open, setOpen] = useState(false);
-  const ref = useDismiss(open, setOpen);
+  const close = useCallback(() => setOpen(false), []);
   return (
-    <div ref={ref} className="relative">
+    <>
       <BarButton
         label="Settings"
         onClick={() => setOpen(!open)}
-        // #DOTASettingsButton opens the settings, #DOTACloseSettingsButton closes them
-        data-sound={open ? "ui_settings_out_multi" : "ui_settings_multi"}
+        // #DOTASettingsButton opens the settings
+        data-sound="ui_settings_multi"
         className={`h-[57px] w-[32px] ${open ? "text-[#9999aa]" : ""}`}>
         <MaskIcon src={`${UI}gear.png`} size={[27, 27]} />
       </BarButton>
-      <Popover open={open} className="top-[54px] left-0 w-72 space-y-4 p-4 text-left">
-        <div>
-          <span className="mb-1 block text-xs text-ash">Language</span>
-          <Select
-            label="Language"
-            value={language}
-            onChange={onLanguage}
-            className="w-full"
-            options={LANGUAGES.map(([value, label]) => ({ value, label }))}
-          />
-        </div>
-        <VolumeSliders />
-        <SettingToggle name="freeCamera" label="Free camera" hint="Turn, zoom and pan on hero pages" />
-        <SettingToggle name="particles" label="Particles" hint="The game's effects on heroes and items" />
-        <SettingToggle name="fog" label="Fog between heroes" hint="Drifting fog instead of the game's crossfade" />
-        <p className="border-t border-line pt-3 text-[11px] leading-snug text-ash/80">{VALVE_NOTICE}</p>
-      </Popover>
-    </div>
-  );
-}
-
-// A switch of the view settings kept on this device
-function SettingToggle({ name, label, hint }) {
-  const [on, setOn] = useState(() => getViewSettings()[name]);
-  useEffect(() => onViewSettings((settings) => setOn(settings[name])), [name]);
-  return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 text-xs text-ash">
-      <span>
-        {label}
-        <span className="block text-[11px] text-ash/60">{hint}</span>
-      </span>
-      <input type="checkbox" checked={on} onChange={(event) => setViewSettings({ [name]: event.target.checked })} className="size-4 accent-[#c5dcff]" />
-    </label>
+      <Settings open={open} onClose={close} base={base} language={language} onLanguage={onLanguage} />
+    </>
   );
 }
 
@@ -227,7 +196,7 @@ export default function TopNav({ catalog, tab, onTab, onSection, onHome, onBack,
 
           {/* Settings, then back and forward */}
           <div className="absolute top-0 left-[62px] flex h-[61px] items-center">
-            <SettingsMenu language={language} onLanguage={onLanguage} />
+            <SettingsButton base={catalog.modelsBase} language={language} onLanguage={onLanguage} />
             <span aria-hidden className="ml-[16px] h-[36px] w-[2px] border-r border-l border-r-[#66666622] border-l-black" />
             <div className="ml-[10px] flex">
               <BarButton label="Back" onClick={onBack} disabled={!canBack} className="h-[57px] w-[24px]">

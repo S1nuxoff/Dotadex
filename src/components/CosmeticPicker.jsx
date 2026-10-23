@@ -494,7 +494,10 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
   for (const card of cards) counts[kindOf(card)] += 1;
   const order = { owned: 0, available: 1, unavailable: 2 };
   const anyFilter = filters.owned || filters.available || filters.unavailable;
-  const shown = cards.filter((card) => !anyFilter || filters[kindOf(card)] || card.worn).sort((a, b) => order[kindOf(a)] - order[kindOf(b)]);
+  // The sets stay in the game's order (by rarity, above); the slots' items go by what can be had
+  const shown = cards
+    .filter((card) => !anyFilter || filters[kindOf(card)] || card.worn)
+    .sort((a, b) => (isSets ? 0 : order[kindOf(a)] - order[kindOf(b)]));
 
   const title = rows.find((row) => row.id === selected)?.name ?? "";
   // The shuffle: something else of what is shown, at random

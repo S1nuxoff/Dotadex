@@ -38,6 +38,14 @@ const summonOfUnit = (unit) => (unit.includes("npc_dota_beastmaster_greater_boar
 // The ways a part is told apart: its model and material variant
 const partKey = (entry) => `${entry.url}#${entry.skin}`;
 const CROSSFADE = `opacity ${FADE_MS}ms ease`;
+// The loadout's turning (client.dll's sf_loadout_rotate_* convars): degrees a pixel of a drag,
+// degrees a frame a wheel notch adds to the spin, degrees a frame the spin slows by, and the share
+// of the way to its target the hero goes a second (see Stage.turn)
+const LOADOUT_GRAB_SCALE = 0.5;
+const LOADOUT_ROTATE_SCALE = 2;
+const LOADOUT_ROTATE_DRAG = 0.19;
+const LOADOUT_ROTATE_FRAMETIME = 8;
+const LOADOUT_FRAME_RATE = 60;
 // The longest a new model waits for its cloth to settle before it is shown anyway
 const HOLD_LIMIT_MS = 2000;
 
@@ -1152,6 +1160,7 @@ export class Stage {
 
     this.group = group;
     // A new hero comes in facing ahead, its pedestal with it
+    this.spin = { yaw: 0, target: 0, speed: 0, steps: 0 };
     if (this.pedestal) {
       this.pedestal.rotation.y = 0;
     }
@@ -1604,8 +1613,12 @@ export class Stage {
     }
   }
 
-  // On a hero's page the camera stays where the game puts it and a drag turns the hero round, as
-  // in the game, unless the free camera is chosen in the settings
+  // On a hero's page the camera stays where the game puts it and the hero turns round as the
+  // game's loadout turns it (its scene panel, client.dll), unless the free camera is chosen in the
+  // settings: a drag turns it by sf_loadout_rotate_grab_scale degrees a pixel and stops its spin;
+  // a notch of the mouse wheel adds sf_loadout_rotate_scale degrees a frame to its spin, which
+  // slows by sf_loadout_rotate_drag degrees a frame; the hero follows where these put it, a share
+  // sf_loadout_rotate_frametime_multiplier x the frame's time of the way each frame (see turn)
   setFreeCamera(on) {
     this.freeCamera = on;
     this.applyControls();
@@ -1618,6 +1631,7 @@ export class Stage {
     this.controls.enablePan = !locked;
     this.turnLocked = locked;
     if (!locked && this.group) {
+      this.spin = { yaw: 0, target: 0, speed: 0, steps: 0 };
       this.group.rotation.y = 0;
       if (this.pedestal) {
         this.pedestal.rotation.y = 0;
@@ -1635,16 +1649,26 @@ export class Stage {
       }
     });
     this.canvas.addEventListener("pointermove", (event) => {
-      if (last === null || !this.turnLocked || !this.group) {
+      if (last === null || !this.turnLocked || !this.spin) {
         return;
       }
-      // The pedestal turns with the hero, as in the game
-      this.group.rotation.y += (event.clientX - last) * 0.01;
-      if (this.pedestal) {
-        this.pedestal.rotation.y = this.group.rotation.y;
-      }
+      // The game's panels count the screen's pixels
+      this.spin.target += (event.clientX - last) * window.devicePixelRatio * LOADOUT_GRAB_SCALE;
+      this.spin.speed = 0;
       last = event.clientX;
     });
+    this.canvas.addEventListener(
+      "wheel",
+      (event) => {
+        if (!this.turnLocked || !this.spin) return;
+        event.preventDefault();
+        // A notch up is one up in the game; a pixel-scrolling wheel or a touchpad gives about 100
+        // pixels a notch, a line-scrolling one 3 lines
+        const notches = -event.deltaY / (event.deltaMode === 1 ? 3 : event.deltaMode === 2 ? 0.1 : 100);
+        this.spin.speed += LOADOUT_ROTATE_SCALE * notches;
+      },
+      { passive: false }
+    );
     const stop = () => {
       last = null;
     };
@@ -2500,6 +2524,7 @@ export class Stage {
 
     // The face along with the voice line playing
     this.face?.update();
+    this.turn(delta);
     this.effects.update(delta);
     // Materials the game moves every frame: scrolling details, pulsing glows
     const time = this.timer.getElapsed();
@@ -2997,6 +3022,26 @@ export class Stage {
   // { concept, criteria }, handed to onSpeech, which the hero's response rules turn into a line),
   // with or without particles; a clip that just ended says what was left of it (Broodmother
   // speaks at her spawn's last frame, the frame it hands over to the stance)
+  // The hero's turn on its page, as the loadout's scene panel moves it each frame (client.dll):
+  // the spin slows towards none by at most the drag and carries the target round, and the hero
+  // goes the frame's share of the way to the target. The game does this once a frame; here in
+  // steps of a 60 fps frame, so the spin lasts as long whatever the screen's rate.
+  turn(delta) {
+    const spin = this.spin;
+    if (!spin || !this.group) return;
+    spin.steps += delta * LOADOUT_FRAME_RATE;
+    for (; spin.steps >= 1; spin.steps--) {
+      spin.speed = spin.speed > LOADOUT_ROTATE_DRAG ? spin.speed - LOADOUT_ROTATE_DRAG : spin.speed < -LOADOUT_ROTATE_DRAG ? spin.speed + LOADOUT_ROTATE_DRAG : 0;
+      spin.target += spin.speed;
+    }
+    spin.yaw += (spin.target - spin.yaw) * Math.min(1, Math.max(0, delta * LOADOUT_ROTATE_FRAMETIME));
+    // The pedestal turns with the hero, as in the game
+    this.group.rotation.y = THREE.MathUtils.degToRad(spin.yaw);
+    if (this.pedestal) {
+      this.pedestal.rotation.y = this.group.rotation.y;
+    }
+  }
+
   // The hero's face says the voice line `audio` plays (from the sounds dataset's `url`), when the
   // line has phonemes; the next line takes over
   async speak(audio, url) {

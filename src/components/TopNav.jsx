@@ -8,17 +8,9 @@ import { getVolume, onVolume, setVolume } from "../volume.js";
 // The sections across the top, as the game's dashboard has them, and the pages of each below
 export const SECTIONS = [
   { id: "heroes", name: "Heroes", tabs: [["heroes", "Heroes"]] },
-  // The game's Armory: its own tabs (Hero, World, Treasury, All Items) are on its page
+  // The game's Armory: its own tabs (Hero, World, Interface, Treasury, All Items) are on its page
   { id: "armory", name: "Armory", tabs: [["armory", "Armory"]] },
   { id: "items", name: "Items", tabs: [["shop", "Items"]] },
-  {
-    id: "music",
-    name: "Music",
-    tabs: [
-      ["music", "Music packs"],
-      ["announcers", "Announcers"],
-    ],
-  },
   { id: "scenes", name: "Scenes", tabs: [["scenes", "Scenes"]] },
 ];
 

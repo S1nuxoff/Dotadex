@@ -1,4 +1,5 @@
 import { fetchData } from "./fetchData.js";
+import { ARMORY_CATEGORIES } from "./armory.js";
 // Rarity colors as the game shows them, in the game's order
 // value: the rarity's "value" in items_game (rarities), the order the game sorts by
 export const RARITIES = {
@@ -558,6 +559,16 @@ export function pageMeta(type, entry, catalog) {
       title,
       description: `${name} from Dota 2 in 3D: the hero's model, animations, voice lines and every cosmetic item and set, with the game's own shading.`,
       image: `${catalog.modelsBase}images/heroes/selection/npc_dota_hero_${entry.id}_png.png`,
+    };
+  }
+  // An Armory item with nothing in 3D: a loading screen, a music pack, a sticker...
+  if (type === "item" && entry.category && !entry.models?.length) {
+    const category = ARMORY_CATEGORIES[entry.category];
+    const date = entry.date ? `, released ${entry.date}` : "";
+    return {
+      title,
+      description: `${name}: ${/^[AEIOU]/.test(rarity(entry).name) ? "an" : "a"} ${rarity(entry).name} Dota 2 item of the Armory's ${category.label}${date}.`,
+      image: itemIcon(entry),
     };
   }
   if (type === "item") {

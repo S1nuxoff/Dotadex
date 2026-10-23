@@ -1,12 +1,6 @@
 import { Box } from "lucide-react";
 import { RARITIES, itemIcon, treasureScene } from "../catalog.js";
-import { GAME_BUTTON, ItemCard } from "./ui.jsx";
-import { SoundList, soundsBase } from "./Voice.jsx";
-import { useEffect, useState } from "react";
-import { fetchData } from "../fetchData.js";
-import { loadUiSounds } from "../uiSounds.js";
-import { menuMusicPack } from "./Music.jsx";
-import { getViewSettings, onViewSettings, setViewSettings } from "../viewSettings.js";
+import { ItemCard } from "./ui.jsx";
 
 function Page({ children }) {
   return (
@@ -68,64 +62,6 @@ export function TreasurePage({ catalog, id, onOpen }) {
           </section>
         );
       })}
-    </Page>
-  );
-}
-
-// A music pack with menu music is equipped as in the game's Armory: its tracks play in the menu
-function EquipMusic({ modelsBase, folder }) {
-  const [playable, setPlayable] = useState(false);
-  const [equipped, setEquipped] = useState(() => getViewSettings().musicPack === folder);
-  useEffect(() => {
-    let cancelled = false;
-    loadUiSounds(modelsBase).then((data) => !cancelled && setPlayable(Boolean(menuMusicPack(data, folder))));
-    const stop = onViewSettings((settings) => setEquipped(settings.musicPack === folder));
-    setEquipped(getViewSettings().musicPack === folder);
-    return () => {
-      cancelled = true;
-      stop();
-    };
-  }, [modelsBase, folder]);
-  if (!playable) {
-    return null;
-  }
-  return equipped ? (
-    <p className="mt-4 text-sm tracking-[1.5px] text-[#c5dcff] uppercase">Equipped</p>
-  ) : (
-    // #ActionButton:active, as the Armory's EQUIP
-    <button onClick={() => setViewSettings({ musicPack: folder })} data-sound="ui_loadout_equipped" className={`${GAME_BUTTON} mt-4`}>
-      Equip
-    </button>
-  );
-}
-
-export function AudioPage({ catalog, id }) {
-  const pack = catalog.audioById[id];
-  const [files, setFiles] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    setFiles(null);
-    fetchData(`${catalog.modelsBase}data/audio-library.json`)
-      .then((res) => res.json())
-      .then((library) => {
-        const [kind, folder] = id.split("/");
-        if (!cancelled) {
-          setFiles(library[kind]?.[folder] ?? []);
-        }
-      })
-      .catch(() => !cancelled && setFiles([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [catalog, id]);
-
-  return (
-    <Page>
-      <p className="text-sm text-ash">{pack.kind === "announcers" ? "Announcer pack" : "Music pack"}</p>
-      <h2 className="mt-1 font-display text-4xl leading-tight text-bone sm:text-5xl">{pack.name}</h2>
-      <p className="mt-2 text-sm text-ash">{pack.count} sounds.</p>
-      {pack.kind === "music" && <EquipMusic modelsBase={catalog.modelsBase} folder={id.split("/")[1]} />}
-      <div className="mt-8">{files ? <SoundList base={soundsBase(catalog.modelsBase)} files={files} /> : <p className="text-sm text-ash">Loading the list</p>}</div>
     </Page>
   );
 }

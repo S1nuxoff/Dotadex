@@ -3,6 +3,7 @@
 // from the dataset's index.json in the browser, so new ones show up without a rebuild.
 import fs from "node:fs";
 import { MODELS_BASE } from "./dataset.mjs";
+import { armoryCategory } from "../src/armory.js";
 
 const FILES = "https://raw.githubusercontent.com/S1nuxoff/dota2-file-tracker/main/static";
 const PRICES_URL = "https://raw.githubusercontent.com/S1nuxoff/dota2-price-tacker/main/static/prices/latest.json";
@@ -48,6 +49,8 @@ function heroName(id) {
 }
 
 const heroIdOf = (key) => key.replace("npc_dota_hero_", "");
+// The heroes an item is for; some say used_by_heroes "1" (couriers, music packs), which names none
+const heroKeysOf = (item) => (item.used_by_heroes && typeof item.used_by_heroes === "object" ? Object.keys(item.used_by_heroes) : []);
 
 // INDEX_FILE: a local index.json, to try the site with a full catalog before an export
 const [index, itemsGame, english, prices] = await Promise.all([
@@ -64,6 +67,30 @@ function priceOf(name) {
   const steam = prices[name]?.steam;
   const value = steam && (steam.last_30d ?? steam.last_7d ?? steam.last_90d ?? steam.last_ever);
   return value ? Math.round(value * 100) / 100 : undefined;
+}
+
+// Whether the store sells an item now: it has a store price, is not kept out of the store and
+// has not expired (the Armory's Purchasable / Unavailable filters)
+const now = new Date().toISOString().slice(0, 10);
+function inStore(item) {
+  return Boolean(item.price_info) && item.hide_in_store !== "1" && !(item.expiration_date && item.expiration_date.slice(0, 10) < now);
+}
+
+// An item's place in the Armory's World or Interface tab, and what its preview plays: a music
+// pack's events (<pack>.music.*), an announcer's sound folder
+function armoryFields(item) {
+  const place = armoryCategory(item, itemsGame.prefabs);
+  if (!place) return null;
+  const fields = { category: place.category };
+  if (place.row) fields.row = place.row;
+  for (const visual of Object.values(item.visuals ?? {})) {
+    if (visual?.type === "sound" && typeof visual.modifier === "string" && visual.modifier.endsWith(".music.")) {
+      fields.music = visual.modifier.slice(0, -".music.".length);
+    } else if (visual?.type === "announcer" && typeof visual.asset === "string") {
+      fields.announcer = visual.asset.replace(/^npc_dota_hero_/, "");
+    }
+  }
+  return fields;
 }
 
 const heroes = {};
@@ -151,7 +178,7 @@ for (const [id, item] of Object.entries(gameItems)) {
     continue;
   }
   const particles = particlesOf(item);
-  for (const key of particles ? Object.keys(item.used_by_heroes ?? {}) : []) {
+  for (const key of particles ? heroKeysOf(item) : []) {
     const hero = heroes[heroIdOf(key)];
     if (hero) {
       hero.particles = [...new Set([...(hero.particles ?? []), ...(particles.add ?? [])])];
@@ -159,7 +186,7 @@ for (const [id, item] of Object.entries(gameItems)) {
   }
   // And its activity modifiers, which such an item gives too
   const activities = activitiesOf(item);
-  for (const key of activities ? Object.keys(item.used_by_heroes ?? {}) : []) {
+  for (const key of activities ? heroKeysOf(item) : []) {
     const hero = heroes[heroIdOf(key)];
     if (hero) {
       hero.activities = [...(hero.activities ?? []), ...activities];
@@ -169,7 +196,7 @@ for (const [id, item] of Object.entries(gameItems)) {
 
 for (const [id, entry] of Object.entries(index.items)) {
   const item = gameItems[id];
-  const heroKeys = Object.keys(item.used_by_heroes ?? {});
+  const heroKeys = heroKeysOf(item);
   const hero = heroKeys.length === 1 ? heroIdOf(heroKeys[0]) : null;
   const kind = item.prefab === "courier" ? "courier" : item.prefab === "ward" ? "ward" : hero ? "wearable" : "other";
 
@@ -220,16 +247,43 @@ for (const [id, entry] of Object.entries(index.items)) {
   if (price) {
     record.price = price;
   }
+  if (inStore(item)) {
+    record.store = 1;
+  }
+  Object.assign(record, hero ? null : armoryFields(item));
 
   items.push(record);
   idByName.set(entry.name, id);
+}
+
+// The Armory's other items, which have no model: loading screens, HUDs, music packs, stickers,
+// bundles... (those of the World and Interface tabs), with their picture. Hidden ones and those
+// without a picture (league passes, event tools) are left out
+for (const [id, item] of Object.entries(gameItems)) {
+  if (index.items[id] || id === "default" || item.hidden === "1" || !item.image_inventory) {
+    continue;
+  }
+  const fields = armoryFields(item);
+  if (!fields) {
+    continue;
+  }
+  const name = localize(item.item_name) ?? item.name;
+  const record = { id, name, kind: "other", rarity: item.item_rarity ?? "common", models: [], icon: item.image_inventory, ...fields };
+  if (item.creation_date) record.date = item.creation_date;
+  const particles = particlesOf(item);
+  if (particles) record.particles = particles;
+  const price = priceOf(item.name);
+  if (price) record.price = price;
+  if (inStore(item)) record.store = 1;
+  items.push(record);
+  idByName.set(item.name, id);
 }
 
 // A hero's base items with no model of their own (the Arcanas that change the hero itself:
 // Legion Commander's Blades of Voth Domosh, a skin of her model and effects): in the game's
 // hero_base slot, worn like any other item, so their sets are complete
 for (const [id, item] of Object.entries(gameItems)) {
-  const heroKeys = Object.keys(item.used_by_heroes ?? {});
+  const heroKeys = heroKeysOf(item);
   if (index.items[id] || item.prefab !== "wearable" || item.item_slot !== "hero_base" || heroKeys.length !== 1 || !item.image_inventory) {
     continue;
   }
@@ -253,6 +307,7 @@ for (const [id, item] of Object.entries(gameItems)) {
   if (heroSkins) record.heroSkins = heroSkins;
   const price = priceOf(item.name);
   if (price) record.price = price;
+  if (inStore(item)) record.store = 1;
   items.push(record);
   idByName.set(item.name, id);
 }
@@ -269,7 +324,7 @@ for (const [id, item] of Object.entries(gameItems)) {
     : item.image_inventory
     ? { id, slot: item.item_slot ?? "weapon", models: [], name: localize(item.item_name) ?? item.name, icon: item.image_inventory }
     : null;
-  for (const key of entry ? Object.keys(item.used_by_heroes ?? {}) : []) {
+  for (const key of entry ? heroKeysOf(item) : []) {
     heroes[heroIdOf(key)]?.defaults.push(entry);
   }
 }

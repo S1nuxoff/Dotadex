@@ -16,7 +16,7 @@ import Wardrobe, { EquippedSummary } from "./components/Wardrobe.jsx";
 import { OutfitPicker } from "./components/CosmeticPicker.jsx";
 import HeroInfo from "./components/HeroInfo.jsx";
 import Voice from "./components/Voice.jsx";
-import { AudioPage, TreasurePage } from "./components/InfoPages.jsx";
+import { TreasurePage } from "./components/InfoPages.jsx";
 import ItemsPage from "./components/ItemsPage.jsx";
 import {
   HOME_TITLE,
@@ -47,11 +47,9 @@ function tabFor(catalog, route) {
   if (route.type === "shop") {
     return "shop";
   }
-  if (route.type === "treasure") {
+  // Treasures, and music and announcer packs (the Interface tab's Audio), are in the Armory
+  if (route.type === "treasure" || route.type === "audio") {
     return "armory";
-  }
-  if (route.type === "audio") {
-    return catalog.audioById[route.id]?.kind ?? "music";
   }
   if (route.type === "scene") {
     return "scenes";
@@ -572,7 +570,6 @@ export default function App() {
 
           <div className="relative min-w-0 flex-1">
             {route.type === "treasure" && <TreasurePage catalog={catalog} id={route.id} onOpen={open} />}
-            {route.type === "audio" && <AudioPage catalog={catalog} id={route.id} />}
             {viewer}
             <button
               onClick={() => setBrowse(true)}

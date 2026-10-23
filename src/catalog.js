@@ -309,7 +309,16 @@ export function outfitUrls(catalog, outfit) {
       urls.push(...hero.defaults.filter((entry) => entry.slot === slot).flatMap((entry) => entry.models).map((model) => catalog.modelsBase + model));
     }
   }
-  return [...new Set(urls)];
+  // What is worn puts its own models in place of others ("model" modifiers: Blades of Voth
+  // Domosh's swords for Legion Commander's weapons), those of the style worn
+  const swaps = new Map();
+  for (const slot of Object.keys(outfit.slots).filter((slot) => personaOf(slot) === persona)) {
+    const chosen = catalog.itemsById[outfit.slots[slot].id];
+    for (const [from, to, style] of chosen?.swaps ?? []) {
+      if (style === undefined || style === (outfit.slots[slot].style ?? 0)) swaps.set(catalog.modelsBase + from, catalog.modelsBase + to);
+    }
+  }
+  return [...new Set(urls.map((url) => swaps.get(url.split("#")[0]) ?? url))];
 }
 
 // What a hero wears, chosen or by default: [{ item, models, style }]
@@ -446,7 +455,9 @@ export function withExported(catalog, exported) {
     // Styles whose models are not exported yet are left out
     .map((item) =>
       item.styles ? { ...item, styles: item.styles.map((style) => (ready(style.models) ? style : { ...style, missing: true })) } : item
-    );
+    )
+    // Swaps whose model is not exported yet are left out
+    .map((item) => (item.swaps ? { ...item, swaps: item.swaps.filter(([, to]) => ready([to])) } : item));
 
   const itemsById = Object.fromEntries(items.map((item) => [item.id, item]));
   const itemsByHero = {};

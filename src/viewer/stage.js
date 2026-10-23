@@ -40,7 +40,7 @@ const partKey = (entry) => `${entry.url}#${entry.skin}`;
 const CROSSFADE = `opacity ${FADE_MS}ms ease`;
 // The loadout's turning (client.dll's sf_loadout_rotate_* convars): degrees a pixel of a drag,
 // degrees a frame a wheel notch adds to the spin, degrees a frame the spin slows by, and the share
-// of the way to its target the hero goes a second (see Stage.turn)
+// of the way to its target the hero goes a second (see Stage.spinHero)
 const LOADOUT_GRAB_SCALE = 0.5;
 const LOADOUT_ROTATE_SCALE = 2;
 const LOADOUT_ROTATE_DRAG = 0.19;
@@ -1618,7 +1618,7 @@ export class Stage {
   // settings: a drag turns it by sf_loadout_rotate_grab_scale degrees a pixel and stops its spin;
   // a notch of the mouse wheel adds sf_loadout_rotate_scale degrees a frame to its spin, which
   // slows by sf_loadout_rotate_drag degrees a frame; the hero follows where these put it, a share
-  // sf_loadout_rotate_frametime_multiplier x the frame's time of the way each frame (see turn)
+  // sf_loadout_rotate_frametime_multiplier x the frame's time of the way each frame (see spinHero)
   setFreeCamera(on) {
     this.freeCamera = on;
     this.applyControls();
@@ -2524,7 +2524,7 @@ export class Stage {
 
     // The face along with the voice line playing
     this.face?.update();
-    this.turn(delta);
+    this.spinHero(delta);
     this.effects.update(delta);
     // Materials the game moves every frame: scrolling details, pulsing glows
     const time = this.timer.getElapsed();
@@ -3018,15 +3018,11 @@ export class Stage {
     return action.loop === THREE.LoopOnce ? Math.min(action.time / duration, 1) : (action.time % duration) / duration;
   }
 
-  // What the current animation says between the last frame's point and this one's (AE_CL_SPEECH:
-  // { concept, criteria }, handed to onSpeech, which the hero's response rules turn into a line),
-  // with or without particles; a clip that just ended says what was left of it (Broodmother
-  // speaks at her spawn's last frame, the frame it hands over to the stance)
   // The hero's turn on its page, as the loadout's scene panel moves it each frame (client.dll):
   // the spin slows towards none by at most the drag and carries the target round, and the hero
   // goes the frame's share of the way to the target. The game does this once a frame; here in
   // steps of a 60 fps frame, so the spin lasts as long whatever the screen's rate.
-  turn(delta) {
+  spinHero(delta) {
     const spin = this.spin;
     if (!spin || !this.group) return;
     spin.steps += delta * LOADOUT_FRAME_RATE;
@@ -3049,6 +3045,10 @@ export class Stage {
     if (speech && !audio.ended) this.face?.speak(audio, speech);
   }
 
+  // What the current animation says between the last frame's point and this one's (AE_CL_SPEECH:
+  // { concept, criteria }, handed to onSpeech, which the hero's response rules turn into a line),
+  // with or without particles; a clip that just ended says what was left of it (Broodmother
+  // speaks at her spawn's last frame, the frame it hands over to the stance)
   speakAnimationLines() {
     if (!this.current) return;
     const clip = this.current.getClip();

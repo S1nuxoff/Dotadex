@@ -275,49 +275,52 @@ function NeutralTable({ base, items, tiers, selected, search, onPick, onHover })
   );
 }
 
-// DOTAShopItemCombines: what the item builds into above it, its components below, joined by the
-// faint connectors (.Connector.NothingtoNothing); 66 wide items on a recessed ground
+// DOTAShopItemCombines as client.dll lays it out (0x182faecd0; the rows from 0x182fbf930): the items
+// this one builds into (item_type 2) on top, the item (0) in the middle, its components (1) below.
+// Empty rows are left out and the others share the height with equal gaps, gap = (H - n * h) / (n + 1);
+// in a row each item is centred in an equal share of the width. A connector (0x182fa92f0) runs from
+// the centre of each outer item to the item's centre under the pictures: 3 high, rounded, a black
+// shadow, turned to the angle between them, NothingtoNothing outside a match (white 0.05 at the outer
+// item to 0.2 at the item made).
 function Combines({ base, items, name, upgrades, components, onPick }) {
   const WIDTH = 66;
-  const HEIGHT = Math.round(WIDTH * 0.727);
+  const HEIGHT = WIDTH * 0.727;
+  // #ItemCombines: 350 x 200 less its 2px black edge
   const AREA = [346, 196];
-  const rows = [upgrades, [name], components];
-  const tops = [6, (AREA[1] - HEIGHT) / 2, AREA[1] - HEIGHT - 6];
-  const place = (list, row) =>
+  const rows = [
+    [2, upgrades],
+    [0, [name]],
+    [1, components],
+  ].filter(([, list]) => list.length);
+  const gap = (AREA[1] - rows.length * HEIGHT) / (rows.length + 1);
+  const placed = rows.map(([type, list], row) =>
     list.map((entry, index) => {
-      const gap = Math.min(12, (AREA[0] - list.length * WIDTH) / (list.length + 1));
-      const span = list.length * WIDTH + (list.length - 1) * gap;
-      return { name: entry, x: (AREA[0] - span) / 2 + index * (WIDTH + gap), y: tops[row] };
+      const share = AREA[0] / list.length;
+      return { name: entry, x: index * share + share / 2 - WIDTH / 2, y: row * (gap + HEIGHT) + gap, middle: type === 0 };
+    })
+  );
+  const middle = placed.flat().find((entry) => entry.middle);
+  const centre = (entry) => [entry.x + WIDTH / 2, entry.y + HEIGHT / 2];
+  const connectors = placed
+    .flat()
+    .filter((entry) => entry !== middle && middle)
+    .map((entry) => {
+      const [x1, y1] = centre(entry);
+      const [x2, y2] = centre(middle);
+      return { key: `${entry.name}-${entry.x}-${entry.y}`, x: x1, y: y1, length: Math.hypot(x2 - x1, y2 - y1), angle: (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI };
     });
-  const placed = rows.map(place);
-  const middle = placed[1][0];
-  const lines = [...placed[0], ...placed[2]].map((entry) => {
-    const above = entry.y < middle.y;
-    return {
-      key: `${entry.name}-${entry.x}`,
-      x1: entry.x + WIDTH / 2,
-      y1: above ? entry.y + HEIGHT : entry.y,
-      x2: middle.x + WIDTH / 2,
-      y2: above ? middle.y : middle.y + HEIGHT,
-    };
-  });
   return (
     <div className="relative h-[200px] w-full shrink-0 overflow-hidden border-2 border-black bg-cover" style={{ backgroundImage: `url(${panorama(base, "hud/reborn/bg_item_breakdown_recessed_psd")})` }}>
-      <svg aria-hidden className="absolute inset-0 size-full" viewBox={`0 0 ${AREA[0]} ${AREA[1]}`} preserveAspectRatio="none">
-        {/* from Middle (white 0.05) to Nothing (white 0.2) at the item made */}
-        <defs>
-          {lines.map((line, index) => (
-            <linearGradient key={line.key} id={`connector-${index}`} gradientUnits="userSpaceOnUse" x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2}>
-              <stop offset="0" stopColor="#fff" stopOpacity="0.05" />
-              <stop offset="0.55" stopColor="#fff" stopOpacity="0.05" />
-              <stop offset="1" stopColor="#fff" stopOpacity="0.2" />
-            </linearGradient>
-          ))}
-        </defs>
-        {lines.map(({ key, ...line }, index) => (
-          <line key={key} {...line} stroke={`url(#connector-${index})`} strokeWidth="3" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 3px black)" }} />
-        ))}
-      </svg>
+      {/* #ConnectorsContainer */}
+      {connectors.map((line) => (
+        <span
+          key={line.key}
+          aria-hidden
+          className="absolute h-[3px] origin-[0%_50%] rounded-[1px] bg-[linear-gradient(90deg,rgb(255_255_255/0.05),rgb(255_255_255/0.05)_45%,rgb(255_255_255/0.05)_55%,rgb(255_255_255/0.2))] shadow-[0_0_6px_black]"
+          style={{ left: line.x, top: line.y - 1.5, width: line.length, transform: `rotate(${line.angle}deg)` }}
+        />
+      ))}
+      {/* #ItemsContainer */}
       {placed.flat().map((entry, index) => {
         const recipe = entry.name.startsWith("item_recipe_");
         return (
@@ -341,7 +344,8 @@ function Combines({ base, items, name, upgrades, components, onPick }) {
   );
 }
 
-// #AbilityTarget's lines: ABILITY (the behavior), AFFECTS (the targets, not for a passive), DAMAGE TYPE
+// #AbilityTarget's lines: ABILITY (the behavior), AFFECTS (the targets, not for a passive), DAMAGE
+// TYPE, PIERCES DEBUFF IMMUNITY, DISPELLABLE
 function targetLines(item) {
   const behavior = String(item.AbilityBehavior ?? "");
   const has = (flag) => behavior.includes(`DOTA_ABILITY_BEHAVIOR_${flag}`);
@@ -380,6 +384,23 @@ function targetLines(item) {
   if (damage) {
     lines.push(["DAMAGE TYPE:", damage[0], damage[1]]);
   }
+  // DOTA_ToolTip_PiercesSpellImmunity_* and DOTA_ToolTip_Dispellable_*
+  const immunity = {
+    SPELL_IMMUNITY_ENEMIES_YES: ["Yes", "#70EA72"],
+    SPELL_IMMUNITY_ENEMIES_NO: ["No"],
+    SPELL_IMMUNITY_ALLIES_YES_ENEMIES_NO: ["Allies Yes, Enemies No"],
+  }[String(item.SpellImmunityType ?? "").trim()];
+  if (immunity) {
+    lines.push(["PIERCES DEBUFF IMMUNITY:", immunity[0], immunity[1]]);
+  }
+  const dispel = {
+    SPELL_DISPELLABLE_YES: ["Yes"],
+    SPELL_DISPELLABLE_YES_STRONG: ["Strong Dispels Only", "#cc0000"],
+    SPELL_DISPELLABLE_NO: ["Cannot be dispelled", "#cc0000"],
+  }[String(item.SpellDispellableType ?? "").trim()];
+  if (dispel) {
+    lines.push(["DISPELLABLE:", dispel[0], dispel[1]]);
+  }
   return lines;
 }
 
@@ -408,6 +429,8 @@ function AbilityDetails({ base, items, texts, name, neutralTier, shopsOf, extra,
     ["ability_cooldown_icon_psd", abilityValue(item, "AbilityCooldown")],
     ["ability_manacost_icon_psd", abilityValue(item, "AbilityManaCost")],
     ["ability_healthcost_icon_psd", abilityValue(item, "AbilityHealthCost")],
+    // .HasCastRange (1200 on Vladmir's Offering in the game)
+    ["ability_castrange_icon_psd", abilityValue(item, "AbilityCastRange")],
   ].filter(([, value]) => value && !/^0(\.0+)?$/.test(value));
   const shops = SHOP_ICONS.filter(([id]) => shopsOf.has(id));
   const target = targetLines(item);

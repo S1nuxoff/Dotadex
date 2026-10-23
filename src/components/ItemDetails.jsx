@@ -7,6 +7,7 @@ import { getViewSettings, onViewSettings, setViewSettings } from "../viewSetting
 import { GAME_BUTTON } from "./ui.jsx";
 import { SoundList, soundsBase } from "./Voice.jsx";
 import { menuMusicPack } from "./Music.jsx";
+import { Emoticon, emoticonRange, useEmoticons } from "./Emoticons.jsx";
 
 // An Armory item with nothing to stand in the scene (an Interface tab's: a loading screen, a
 // music pack...), shown over the list until its own page is ported from the game's item details
@@ -81,12 +82,36 @@ function useSounds(modelsBase, item) {
   return state;
 }
 
+// The Armory's pictures by item (data/armory.json): a loading screen's full picture
+let armoryData = null;
+function useArmoryPicture(modelsBase, item) {
+  const [picture, setPicture] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    setPicture(null);
+    if (item.category !== "loading_screens") {
+      return;
+    }
+    armoryData ??= fetchData(`${modelsBase}data/armory.json`)
+      .then((res) => (res.ok ? res.json() : {}))
+      .catch(() => ({}));
+    armoryData.then((data) => !cancelled && setPicture(data.loadingScreens?.[item.id] ?? null));
+    return () => {
+      cancelled = true;
+    };
+  }, [modelsBase, item]);
+  return picture && `${modelsBase}${picture}`;
+}
+
 export default function ItemDetails({ catalog, item, onClose }) {
   const look = rarity(item);
   const category = ARMORY_CATEGORIES[item.category];
   const row = category?.rows?.find(([id]) => id === item.row)?.[1];
   const { folder, files } = useSounds(catalog.modelsBase, item);
   const sounds = Boolean(item.music || item.announcer);
+  const picture = useArmoryPicture(catalog.modelsBase, item);
+  const emoticons = useEmoticons(catalog.modelsBase);
+  const unlocked = item.emoticons && emoticons ? emoticonRange(emoticons, item.emoticons) : [];
   useEffect(() => {
     const onKey = (event) => event.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -102,9 +127,12 @@ export default function ItemDetails({ catalog, item, onClose }) {
         className="relative flex max-h-[86%] w-[880px] flex-col overflow-hidden bg-[radial-gradient(140%_100%_at_0%_0%,#202833f4,#06080e)] shadow-[0_28px_120px_-8px_rgb(0_0_0/0.8)]"
       >
         <span aria-hidden className="h-[4px] shrink-0" style={{ background: look.color }} />
+        {/* A loading screen's own picture, as wide as the card */}
+        {picture && <img src={picture} alt="" className="aspect-video w-full shrink-0 bg-black object-cover" />}
         <div className="flex gap-[24px] p-[24px]">
           <img
             src={itemIcon(item)}
+            hidden={Boolean(picture)}
             alt=""
             className="h-[220px] w-[330px] shrink-0 bg-gradient-to-b from-[#424142] from-50% to-[#9d9d9d] object-cover"
             onError={(event) => (event.currentTarget.style.visibility = "hidden")}
@@ -130,6 +158,13 @@ export default function ItemDetails({ catalog, item, onClose }) {
             ×
           </button>
         </div>
+        {unlocked.length > 0 && (
+          <div className="flex flex-wrap border-t border-white/[0.04] px-[20px] py-[12px]">
+            {unlocked.map((emoticon) => (
+              <Emoticon key={emoticon.id} modelsBase={catalog.modelsBase} emoticon={emoticon} size={64} />
+            ))}
+          </div>
+        )}
         {sounds && (
           <div className="min-h-0 flex-1 overflow-y-auto border-t border-white/[0.04] px-[24px] py-[16px] scrollbar-thin">
             {files === null ? (

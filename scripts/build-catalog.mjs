@@ -90,6 +90,11 @@ function armoryFields(item) {
       fields.announcer = visual.asset.replace(/^npc_dota_hero_/, "");
     }
   }
+  // An emoticon pack unlocks a range of emoticons (scripts/emoticons.txt ids)
+  const usage = item.tool?.type === "emoticon_unlock" ? item.tool.usage : null;
+  if (usage?.emoticon_id_start) {
+    fields.emoticons = [Number(usage.emoticon_id_start), Number(usage.emoticon_id_end ?? usage.emoticon_id_start)];
+  }
   return fields;
 }
 

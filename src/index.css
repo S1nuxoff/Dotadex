@@ -226,6 +226,16 @@ label:has(> input:focus) {
   box-shadow: 0 0 8px #00ffff44;
   animation: hero-card-found 0.8s infinite;
 }
+/* An emoticon's strip of frames, stepped through (src/components/Emoticons.jsx) */
+@keyframes emoticon-strip {
+  from {
+    background-position-x: 0%;
+  }
+  to {
+    background-position-x: 100%;
+  }
+}
+
 @keyframes hero-card-found {
   50% {
     filter: brightness(2);

@@ -4,6 +4,7 @@ import { formatPrice, heroSlots, itemIcon, personaOf, rarity, slotName, sortItem
 import { ARMORY_CATEGORIES, ARMORY_GROUPS, SCENE_CATEGORIES, categoryIcon } from "../armory.js";
 import { useDismiss, useUiLayout } from "./ui.jsx";
 import ItemDetails from "./ItemDetails.jsx";
+import { EmoticonsContent } from "./Emoticons.jsx";
 
 // The game's Armory (dashboard_page_collection, dashboard_tabs_collection, collection_shared,
 // ui_econ_item_animated): the tabs under the top bar; a 300 wide column of heroes or categories on
@@ -658,6 +659,7 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
                 <SearchBox value={query} onChange={setQuery} placeholder="Filter by keyword" className={`w-[360px] ${statusCounts ? "ml-auto" : ""}`} />
                 <span className={`text-[16px] text-[#8b989e] ${statusCounts ? "ml-[16px]" : "ml-auto"}`}>{total.toLocaleString("en")}</span>
               </div>
+              {category?.id === "emoticons" && <EmoticonsContent modelsBase={base} />}
               <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto pt-[12px] pr-[8px] pb-[12px] pl-[12px] shadow-[inset_0_1px_0_rgb(238_245_255/0.02)] scrollbar-thin">
                 {total ? rendered : <p className="py-[32px] text-center text-[18px] text-[#8b989e]/50">Nothing to display</p>}
                 {shown < total && <div ref={sentinel} className="h-px" />}

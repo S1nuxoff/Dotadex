@@ -565,3 +565,13 @@ label:has(> input:focus) {
     transition: none;
   }
 }
+
+/* The Items page's quick search (quick_search's QuickSearchFadeOut, 1 s) */
+@keyframes quick-search {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

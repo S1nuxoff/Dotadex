@@ -16,7 +16,8 @@ import Wardrobe, { EquippedSummary } from "./components/Wardrobe.jsx";
 import { OutfitPicker } from "./components/CosmeticPicker.jsx";
 import HeroInfo from "./components/HeroInfo.jsx";
 import Voice from "./components/Voice.jsx";
-import { AudioPage, ShopPage, TreasurePage } from "./components/InfoPages.jsx";
+import { AudioPage, TreasurePage } from "./components/InfoPages.jsx";
+import ItemsPage from "./components/ItemsPage.jsx";
 import {
   HOME_TITLE,
   isKnown,
@@ -563,12 +564,13 @@ export default function App() {
         />
       ) : scenes ? (
         <Scenes catalog={catalog} route={route} viewer={viewer} onOpen={open} />
+      ) : section.id === "items" ? (
+        <ItemsPage catalog={catalog} id={route.type === "shop" ? route.id : null} language={language} onOpen={open} />
       ) : (
         <div className="flex min-h-0 flex-1">
           <div className="hidden w-[23rem] shrink-0 border-r border-line lg:block xl:w-[26rem]">{sidebar}</div>
 
           <div className="relative min-w-0 flex-1">
-            {route.type === "shop" && <ShopPage catalog={catalog} id={route.id} language={language} onOpen={open} />}
             {route.type === "treasure" && <TreasurePage catalog={catalog} id={route.id} onOpen={open} />}
             {route.type === "audio" && <AudioPage catalog={catalog} id={route.id} />}
             {viewer}

@@ -394,7 +394,8 @@ const texts = Object.fromEntries(Object.entries(englishTexts ?? {}).map(([key, v
 
 const shop = [];
 for (const [name, item] of Object.entries(shopData ?? {})) {
-  const title = texts[`dota_tooltip_ability_${name}`.toLowerCase()];
+  // The newer neutral items keep their names under a ":n" key
+  const title = texts[`dota_tooltip_ability_${name}`.toLowerCase()] ?? texts[`dota_tooltip_ability_${name}:n`.toLowerCase()];
   // Recipes and hidden or event items have no shop name
   if (name.startsWith("item_recipe_") || !title || item.IsObsolete === "1") {
     continue;

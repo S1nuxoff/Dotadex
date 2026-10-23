@@ -82,12 +82,7 @@ function tick(now) {
       card.canvas.width = width;
       card.canvas.height = height;
     }
-    // The card is the canvas less the spill each way; the camera frames the card, its view
-    // widened over the spill
-    const spill = card.spill * card.ratio;
-    const inner = [Math.max(1, width - 2 * spill), Math.max(1, height - 2 * spill)];
-    card.camera.aspect = inner[0] / inner[1];
-    card.camera.setViewOffset(inner[0], inner[1], -spill, -spill, width, height);
+    card.camera.aspect = width / height;
     card.camera.updateProjectionMatrix();
     card.camera.updateMatrixWorld();
     card.scene.updateMatrixWorld();
@@ -112,13 +107,12 @@ function tick(now) {
 }
 
 // Starts the edges on a card's canvas: name the effect the card starts (armory_edge_set,
-// armory_edge_icon), spill the CSS pixels the canvas reaches past the card each way. Returns the
-// function that stops them.
-export function startCardEdges(base, canvas, name, spill = 0) {
+// armory_edge_icon). Returns the function that stops them.
+export function startCardEdges(base, canvas, name) {
   const renderer = sharedRenderer();
   const scene = new THREE.Scene();
   const manager = new ParticleManager(scene, base);
-  const card = { canvas, scene, manager, camera: null, visible: true, spill, ratio: Math.min(window.devicePixelRatio, 2) };
+  const card = { canvas, scene, manager, camera: null, visible: true, ratio: Math.min(window.devicePixelRatio, 2) };
   let live = true;
   loadScene(base).then(({ effects, camera }) => {
     const effect = effects.find((entry) => entry.name === name);

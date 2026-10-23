@@ -307,21 +307,17 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
 // #ArcanaBackgroundEffect: the particle edges, a scene of their own laid over the card's
 // (ui_econ_item_animated). The game shows them once the card's live scene is loaded, and loads
 // that on Immortal and Arcana sets only (client.dll 0x182b27790); Immortal's hue turned -90°.
-// The equipped set's are drawn at 0.98, in 0.2 s. The panel does not clip (overflow: noclip):
-// the glow round the corners reaches past the card, so the canvas is EDGE_SPILL larger each way
-const EDGE_SPILL = 48;
+// The equipped set's are drawn at 0.98, in 0.2 s. The scene is drawn into the panel's own size,
+// so its glow ends at the card's edge (overflow: noclip does not widen what a scene panel draws)
 function CardEdges({ base, name, rarity, equipped }) {
   const canvas = useRef(null);
-  useEffect(() => startCardEdges(base, canvas.current, name, EDGE_SPILL), [base, name]);
+  useEffect(() => startCardEdges(base, canvas.current, name), [base, name]);
   return (
     <canvas
       ref={canvas}
       aria-hidden
-      className="pointer-events-none absolute transition-transform duration-200"
+      className="pointer-events-none absolute inset-0 size-full transition-transform duration-200"
       style={{
-        inset: -EDGE_SPILL,
-        width: `calc(100% + ${2 * EDGE_SPILL}px)`,
-        height: `calc(100% + ${2 * EDGE_SPILL}px)`,
         transform: `${equipped ? "scale(0.98) " : ""}translateY(-2px)`,
         filter: rarity === "immortal" ? "hue-rotate(-90deg)" : undefined,
       }}

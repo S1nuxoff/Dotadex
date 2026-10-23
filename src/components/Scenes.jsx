@@ -207,7 +207,6 @@ export default function Scenes({ catalog, route, viewer, onOpen }) {
                       <li key={scene.id}>
                         <button
                           onClick={() => onOpen({ type: "scene", id: scene.id })}
-                          data-sound="click"
                           aria-current={scene.id === current?.id}
                           className={`${row(scene.id === current?.id)} px-[12px] py-[6px]`}
                         >

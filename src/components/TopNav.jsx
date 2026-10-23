@@ -37,7 +37,7 @@ function Slashed({ items, active, onPick, className }) {
       )}
       <button
         onClick={() => onPick(id)}
-        data-sound="toptab"
+        data-sound="ui_rollover_micro"
         aria-pressed={active === id}
         className={`${className} transition-colors ${active === id ? "text-bone [text-shadow:0_0_14px_rgb(255_255_255/0.3)]" : "text-ash/70 hover:text-bone"}`}
       >
@@ -86,7 +86,6 @@ function BarButton({ label, onClick, disabled, className = "", children, ...rest
       disabled={disabled}
       title={label}
       aria-label={label}
-      data-sound="click"
       className={`grid place-items-center text-[#444a55] transition-colors duration-200 ease-out enabled:hover:text-[#9999aa] enabled:active:text-[#ddddff] disabled:text-[#111111] ${className}`}
       {...rest}
     >
@@ -106,7 +105,6 @@ function RightButton({ label, center, hover, href, onClick, children }) {
       onClick={onClick}
       title={label}
       aria-label={label}
-      data-sound="click"
       className="group absolute top-0 grid h-[61px] w-[76px] place-items-center"
       style={{ right: center - 38 }}
     >
@@ -127,7 +125,12 @@ function SettingsMenu({ language, onLanguage }) {
   const ref = useDismiss(open, setOpen);
   return (
     <div ref={ref} className="relative">
-      <BarButton label="Settings" onClick={() => setOpen(!open)} className={`h-[57px] w-[32px] ${open ? "text-[#9999aa]" : ""}`}>
+      <BarButton
+        label="Settings"
+        onClick={() => setOpen(!open)}
+        // #DOTASettingsButton opens the settings, #DOTACloseSettingsButton closes them
+        data-sound={open ? "ui_settings_out_multi" : "ui_settings_multi"}
+        className={`h-[57px] w-[32px] ${open ? "text-[#9999aa]" : ""}`}>
         <MaskIcon src={`${UI}gear.png`} size={[27, 27]} />
       </BarButton>
       <Popover open={open} className="top-[54px] left-0 w-72 space-y-4 p-4 text-left">
@@ -237,7 +240,7 @@ export default function TopNav({ catalog, tab, onTab, onSection, onHome, onBack,
           </div>
 
           {/* The Dota logo, home to the hero grid */}
-          <button onClick={onHome} data-sound="toptab" aria-label="Dotadex, all heroes" title="Dotadex" className="group absolute top-[-3px] left-[188px] h-[80px] w-[200px]">
+          <button onClick={onHome} aria-label="Dotadex, all heroes" title="Dotadex" className="group absolute top-[-3px] left-[188px] h-[80px] w-[200px]">
             <span
               aria-hidden
               className="pointer-events-none absolute top-[3px] left-[48px] h-[86px] w-[108px] bg-[length:100%_100%] opacity-0 transition-opacity duration-200 group-hover:opacity-100"
@@ -250,7 +253,7 @@ export default function TopNav({ catalog, tab, onTab, onSection, onHome, onBack,
               <button
                 key={entry.id}
                 onClick={() => onSection(entry)}
-                data-sound="toptab"
+                data-select-sound={index === active ? undefined : "ui_topmenu_activate"}
                 aria-current={index === active ? "page" : undefined}
                 className="topbar-tab absolute top-0 h-[60px] font-display"
                 style={{ left: TAB_LEFT + TAB_PITCH * index, width: TAB_PITCH }}

@@ -135,8 +135,6 @@ export default function ChatWheel({ modelsBase, heroId }) {
           const box = event.currentTarget.getBoundingClientRect();
           openAt(window.innerWidth * 0.3, window.innerHeight * 0.5 || box.top);
         }}
-        data-sound="click"
-        data-hover
         className="w-[60px] text-center"
         title="Phrases (hold T)"
       >

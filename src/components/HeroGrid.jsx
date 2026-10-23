@@ -50,7 +50,6 @@ function FilterButton({ icon, label, selected, onClick }) {
   return (
     <button
       onClick={onClick}
-      data-sound="toggle"
       title={label}
       aria-label={label}
       aria-pressed={selected}
@@ -81,7 +80,6 @@ function SortPicker({ value, options, onChange, label }) {
       <div className="relative ml-[8px] flex-1">
         <button
           onClick={() => setOpen(!open)}
-          data-sound="click"
           aria-expanded={open}
           className="flex h-[34px] w-full items-center rounded-[3px] border border-white/15 bg-gradient-to-b from-[#2b3139] to-[#1a1e24] pl-[6px] shadow-[0_2px_8px_rgb(0_0_0/0.3)] hover:brightness-200 active:brightness-150"
         >
@@ -101,7 +99,6 @@ function SortPicker({ value, options, onChange, label }) {
                     onChange(option.value);
                     setOpen(false);
                   }}
-                  data-sound="click"
                   className={`w-full px-[10px] py-[5px] text-left text-[16px] hover:bg-white/10 ${option.value === value ? "text-white" : "text-[#9aa6b6]"}`}
                 >
                   {option.label}
@@ -127,7 +124,8 @@ function HeroCard({ hero, name, portrait, video, facts, state, onOpen, onPrefetc
           onPrefetch?.({ type: "hero", id: hero.id });
         }}
         onPointerLeave={() => setHovered(false)}
-        data-hover
+        // .HeroCard:hover
+        data-hover-sound="UI.HeroCard.Hover"
         aria-label={name}
         className="group absolute inset-0"
       >

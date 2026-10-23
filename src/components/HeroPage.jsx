@@ -416,7 +416,7 @@ function Label({ children }) {
 // ButtonPrimary DarkGrey with an icon
 function DarkButton({ label, onClick, children }) {
   return (
-    <button onClick={onClick} data-sound="click" aria-label={label} title={label} className={GAME_BUTTON}>
+    <button onClick={onClick} data-sound="ui_generic_button_click" aria-label={label} title={label} className={GAME_BUTTON}>
       {children}
     </button>
   );
@@ -519,7 +519,6 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
       <div className="mt-[7px] mb-[12px] flex flex-wrap items-center">
         <button
           onClick={onAbout}
-          data-sound="click"
           title="Talents"
           className="mr-[8px] mb-[8px] size-[52px]"
         >
@@ -533,7 +532,6 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
         {abilities.map((name) => ability(name, false))}
         <button
           onClick={onAbout}
-          data-sound="click"
           title="Aghanim's Scepter and Shard"
           className="mr-[8px] mb-[8px] size-[52px]"
         >
@@ -778,7 +776,6 @@ function PersonaSelector({ base, heroKey, info, texts, persona, onPersona }) {
           role="tab"
           aria-selected={persona === value}
           onClick={() => persona !== value && onPersona(value)}
-          data-sound="toptab"
           className={`mx-[2px] flex items-center rounded-full border px-[20px] py-[6px] outline-none text-[16px] leading-[20px] tracking-[1px] uppercase ${
             persona === value
               ? "border-white/[0.07] bg-gradient-to-b from-[#445055] to-[#2f363a] text-white shadow-[0_2px_4px_rgb(0_0_0/0.2)] [text-shadow:0_0_12px_rgb(197_222_255/0.3)]"
@@ -805,7 +802,6 @@ function HeroNav({ hero, base, tab, onTab, previous, next, onOpen }) {
     other && (
       <button
         onClick={() => onOpen({ type: "hero", id: other.id })}
-        data-sound="toptab"
         className={`flex items-center p-[12px] text-[16px] leading-[20px] tracking-[1px] text-[#b0bcc2] uppercase opacity-20 transition-opacity duration-100 hover:opacity-100 hover:brightness-150 active:translate-y-px ${forward ? "flex-row-reverse" : ""}`}
       >
         {forward ? (
@@ -838,7 +834,8 @@ function HeroNav({ hero, base, tab, onTab, previous, next, onOpen }) {
             <button
               role="tab"
               aria-selected={tab === id}
-              data-sound="toptab"
+              // .SecondaryTabButton:active
+              data-sound="ui_rollover_micro"
               onClick={() => onTab(id)}
               className={`mt-[4px] text-[20px] tracking-[3px] uppercase transition-colors ${tab === id ? "text-white [text-shadow:0_0_12px_#5d7070]" : "text-[#768e8d] hover:text-white"}`}
             >
@@ -972,10 +969,8 @@ export default function HeroPage({
       return;
     }
     wasCustomize.current = customize;
-    // .HeroCustomizeEnter / .HeroCustomizeExit #HeroCustomize: ui_loadout_slide_in (map_open at
-    // 0.4, pitch 0.8) / ui_loadout_slide_out (shortwhoosh at 0.4)
-    if (customize) playUiSound("loadout-slide-in", 0.4, 0.8);
-    else playUiSound("loadout-slide-out", 0.4);
+    // .HeroCustomizeEnter / .HeroCustomizeExit #HeroCustomize
+    playUiSound(customize ? "ui_loadout_slide_in" : "ui_loadout_slide_out");
     if (customize) {
       setPickerShown(true);
       return;
@@ -1023,7 +1018,6 @@ export default function HeroPage({
       {preview && (
         <button
           onClick={togglePreview}
-          data-sound="click"
           aria-label="Back to the loadout"
           title="Back to the loadout"
           className="absolute right-[24px] bottom-[24px] z-10 grid size-[40px] place-items-center rounded-[2px] bg-gradient-to-b from-[#3b434e] to-[#262c34] text-[#e6ebef] opacity-40 shadow-[0_2px_8px_rgb(0_0_0/0.5)] transition hover:opacity-100 hover:brightness-150"
@@ -1125,7 +1119,7 @@ export default function HeroPage({
               </div>
               <button
                 onClick={() => setTab("loadout")}
-                data-sound="back"
+                data-sound="ui_generic_button_click"
                 aria-label="Back to the loadout"
                 title="Back to the loadout"
                 className="absolute top-[10px] right-[10px] grid size-[32px] place-items-center rounded-[2px] bg-gradient-to-b from-[#3b434e] to-[#262c34] text-[#e6ebef] shadow-[0_2px_8px_rgb(0_0_0/0.5)] hover:brightness-150"

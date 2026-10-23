@@ -93,7 +93,7 @@ function HeroPanel({ catalog, outfit, language, wardrobe, onView }) {
             )}
             <button
               role="tab"
-              data-sound="toptab"
+              data-sound="ui_rollover_micro"
               aria-selected={view === id}
               onClick={() => setView(id)}
               className={`font-display text-[15px] tracking-[0.14em] transition-colors ${

@@ -57,7 +57,8 @@ export function SecondaryTabs({ tabs = TABS, tab, onTab }) {
           <button
             role="tab"
             aria-selected={tab === id}
-            data-sound="toptab"
+            // .SecondaryTabButton:active
+            data-sound="ui_rollover_micro"
             onClick={() => onTab(id)}
             className={`mt-[4px] text-[20px] tracking-[3px] uppercase transition-colors ${tab === id ? "text-white [text-shadow:0_0_12px_#5d7070]" : "text-[#768e8d] hover:text-white"}`}
           >
@@ -103,7 +104,6 @@ function DropDown({ value, options, onChange, label }) {
     <div ref={ref} className="relative w-[200px]">
       <button
         onClick={() => setOpen(!open)}
-        data-sound="click"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={label}
@@ -123,7 +123,6 @@ function DropDown({ value, options, onChange, label }) {
                   onChange(id);
                   setOpen(false);
                 }}
-                data-sound="click"
                 className="w-full border-y border-black/40 bg-[#3d4448] pt-[6px] pb-[2px] pl-[16px] text-left text-[18px] text-white/60 hover:bg-[#585e62] hover:text-white"
               >
                 {name}
@@ -155,7 +154,8 @@ function Tile({ size, image, name, detail, look, active, tall, onClick }) {
     <li className="m-[6px]" style={{ width, height }}>
       <button
         onClick={onClick}
-        data-sound="click"
+        // DOTAEconItemAnimated:selected
+        data-select-sound={active ? undefined : "ui_generic_button_click"}
         title={name}
         className={`group relative flex size-full flex-col overflow-hidden text-left shadow-[0_6px_24px_-8px_rgb(0_0_0/0.8)] active:scale-[0.985] active:brightness-50 ${
           tall ? "bg-gradient-to-b from-[#1c2332] to-[#2b415a]" : "bg-[linear-gradient(135deg,#111419_25%,#000)] hover:bg-[linear-gradient(135deg,#1b1f27_25%,#0a0b0d)]"
@@ -329,7 +329,8 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
             <button
               key={id}
               onClick={() => setKind(id)}
-              data-sound="toptab"
+              // .TabItem:selected
+              data-select-sound={kind === id ? undefined : "ui_generic_button_click"}
               className={`mx-[2px] rounded-full border px-[20px] py-[6px] text-[16px] leading-[20px] tracking-[1px] uppercase outline-none ${
                 kind === id ? "border-white/[0.07] bg-gradient-to-b from-[#445055] to-[#2f363a] text-white shadow-[0_2px_4px_rgb(0_0_0/0.2)]" : "border-transparent text-[#768e8d] hover:text-[#dae2e5]"
               }`}
@@ -450,7 +451,7 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
         <ul className="min-h-0 flex-1 overflow-y-auto pt-[8px] pb-[144px] scrollbar-thin">
           {heroList.map((entry) => (
             <li key={entry.id}>
-              <button onClick={() => onOpen({ type: "hero", id: entry.id, slots: {} })} data-sound="click" className={`${row(entry.id === heroId)} p-[6px]`}>
+              <button onClick={() => onOpen({ type: "hero", id: entry.id, slots: {} })} data-sound="ui_generic_button_click" className={`${row(entry.id === heroId)} p-[6px]`}>
                 <img src={heroIcon(base, entry.id)} alt="" className="size-[28px]" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />
                 <span className="-mt-px ml-[12px] h-[24px] truncate text-[19px] leading-[24px] font-semibold tracking-[1.5px] uppercase">
                   {entry.name}{" "}
@@ -465,7 +466,7 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
       <ul className="pt-[8px]">
         {WORLD.map(([id, name]) => (
           <li key={id}>
-            <button onClick={() => setWorld(id)} data-sound="click" className={`${row(world === id)} px-[12px] py-[8px]`}>
+            <button onClick={() => setWorld(id)} data-sound="ui_generic_button_click" className={`${row(world === id)} px-[12px] py-[8px]`}>
               <span className="text-[19px] leading-none font-semibold tracking-[1.5px] uppercase">{name}</span>
             </button>
           </li>
@@ -474,7 +475,7 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
     ) : tab === "treasury" ? (
       <ul className="pt-[8px]">
         <li>
-          <button onClick={() => setTreasure(null)} data-sound="click" className={`${row(!treasure)} px-[12px] py-[8px]`}>
+          <button onClick={() => setTreasure(null)} data-sound="ui_generic_button_click" className={`${row(!treasure)} px-[12px] py-[8px]`}>
             <span className="text-[19px] leading-none font-semibold tracking-[1.5px] uppercase">Treasures</span>
           </button>
         </li>

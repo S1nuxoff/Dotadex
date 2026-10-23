@@ -15,7 +15,6 @@ import {
   sortItems,
 } from "../catalog.js";
 import { ItemCard, Select } from "./ui.jsx";
-import { equipSound } from "../uiSounds.js";
 
 function SlotRow({ slot, item, isDefault, onOpen }) {
   const icon = item && itemIcon(item);
@@ -154,14 +153,14 @@ function useContentBox(src) {
 
 // A card of the loadout grid, as the game's: the item standing tall, its name, and what
 // picking it does (DEFAULT, EQUIP) or that it is worn (EQUIPPED, in a gold frame)
-function LoadoutCard({ image, name, color, state, sound, onPick }) {
+function LoadoutCard({ image, name, color, state, onPick }) {
   const worn = state === "equipped";
   const box = useContentBox(image);
   return (
     <button
       onClick={onPick}
-      data-sound={worn ? undefined : sound}
-      data-hover
+      // DOTAEconItemAnimated:selected
+      data-select-sound={worn ? undefined : "ui_generic_button_click"}
       className={`group relative flex flex-col overflow-hidden border text-left transition-colors ${
         worn ? "border-aegis shadow-[0_0_0_1px_var(--color-aegis)]" : "border-black/80 hover:border-ash/50"
       }`}
@@ -201,8 +200,8 @@ function LoadoutSlot({ image, name, count, active, onSelect }) {
   return (
     <button
       onClick={onSelect}
-      data-sound="click"
-      data-hover
+      // DOTAHeroSlotItemPickerLoadout.IsActive
+      data-select-sound={active ? undefined : "ui_preview_button_click"}
       className={`relative flex w-full items-center gap-2.5 border-b border-black/60 px-2 py-2 text-left transition-colors ${
         active ? "bg-gradient-to-r from-[#2a313a] to-[#1d2228]" : "hover:bg-raised/50"
       }`}
@@ -225,7 +224,7 @@ const heroCrop = (hero) => `https://cdn.steamstatic.com/apps/dota2/images/dota_r
 // filling a light steel tile with a white corner and a thin bar along the bottom
 function LoadoutTile({ label, image, big, caption, onSelect }) {
   return (
-    <button onClick={onSelect} data-sound="click" data-hover className={`group shrink-0 text-left ${big ? "w-52" : "w-[7.5rem]"}`}>
+    <button onClick={onSelect} data-select-sound="ui_preview_button_click" className={`group shrink-0 text-left ${big ? "w-52" : "w-[7.5rem]"}`}>
       <span className="block truncate pb-1.5 font-sans text-[15px] uppercase tracking-[0.08em] text-ash group-hover:text-bone">{label}</span>
       <span
         className={`relative block overflow-hidden bg-gradient-to-b from-[#232a32] to-[#151a20] shadow-[0_2px_6px_rgb(0_0_0/0.5)] ring-1 ring-black/70 transition group-hover:brightness-110 ${
@@ -281,7 +280,6 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
             name: set.name,
             color: first ? rarity(first).color : "#8b96a3",
             state: worn ? "equipped" : "equip",
-            sound: "equip",
             onPick: () => onEquipSet(set),
           };
         });
@@ -299,7 +297,6 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
         name: slot.defaultItem.name,
         color: rarity(slot.defaultItem).color,
         state: chosen ? "default" : "equipped",
-        sound: "unequip",
         onPick: () => onEquip(slot.slot, null),
       });
     }
@@ -313,7 +310,6 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
         name: item.name,
         color: rarity(item).color,
         state: chosen?.id === item.id ? "equipped" : "equip",
-        sound: equipSound(slot.slot),
         onPick: () => onEquip(slot.slot, item.id),
       });
     }
@@ -335,7 +331,7 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
     return (
       <div className="px-8 pt-5 pb-8">
         {changed && (
-          <button onClick={onReset} data-sound="click" className="mb-3 inline-flex items-center gap-1.5 text-xs text-ash hover:text-bone">
+          <button onClick={onReset} data-sound="ui_generic_button_click" className="mb-3 inline-flex items-center gap-1.5 text-xs text-ash hover:text-bone">
             <RotateCcw className="size-3.5" /> Back to the default look
           </button>
         )}
@@ -378,7 +374,7 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
                   <button
                     key={label}
                     onClick={() => setPage((page + step + pages) % pages)}
-                    data-sound="click"
+                    data-sound="ui_select_arrow"
                     aria-label={label}
                     className="grid size-7 place-items-center rounded-full bg-raised text-ash hover:text-bone"
                   >
@@ -402,7 +398,7 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
                     </p>
                     <button
                       onClick={() => onEquipSet(set)}
-                      data-sound="equip"
+                      data-sound="ui_generic_button_click"
                       className="mt-2 bg-gradient-to-b from-[#3f8f63] to-[#2b6847] py-1.5 font-sans text-sm font-semibold uppercase tracking-[0.12em] text-bone shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] hover:from-[#4aa673]"
                     >
                       Equip
@@ -422,7 +418,7 @@ export default function Wardrobe({ catalog, outfit, onEquip, onEquipSet, onReset
     return (
       <div className="px-8 pt-4 pb-8">
         <div className="flex items-center gap-3">
-          <button onClick={() => setSelected(null)} data-sound="back" className="inline-flex items-center gap-1 font-display text-xs tracking-[0.16em] text-ash hover:text-bone">
+          <button onClick={() => setSelected(null)} data-sound="ui_generic_button_click" className="inline-flex items-center gap-1 font-display text-xs tracking-[0.16em] text-ash hover:text-bone">
             <ChevronLeft className="size-4" /> Loadout
           </button>
           <span className="text-ash/35">/</span>
@@ -560,7 +556,6 @@ export function EquippedSummary({ catalog, outfit, onChange }) {
           <button
             key={slot}
             onClick={() => onChange(slot)}
-            data-sound="click"
             title={`${slotName(slot)}${item ? `: ${item.name}` : ""}`}
             className="group relative mr-[8px] mb-[8px] size-[76px] overflow-hidden border border-black/80 bg-gradient-to-b from-[#3a4250] to-[#232831] shadow-[0_2px_8px_rgb(0_0_0/0.5)] hover:brightness-125"
           >
@@ -572,7 +567,7 @@ export function EquippedSummary({ catalog, outfit, onChange }) {
       {/* ButtonPrimary Large LightGrey, 56 high with 48 to the sides */}
       <button
         onClick={() => onChange("sets")}
-        data-sound="click"
+        data-sound="ui_generic_button_click"
         className="mt-[24px] h-[56px] self-start rounded-[3px] border border-white/[0.08] bg-gradient-to-b from-[#525f65] to-[#2f363a] px-[48px] text-[20px] leading-[24px] font-semibold tracking-[1.5px] text-white/80 uppercase shadow-[0_4px_24px_-2px_rgb(0_0_0/0.4)] [text-shadow:0_1px_4px_#000] hover:brightness-150 active:from-[#2f363a] active:to-[#525f65]"
       >
         Customize
@@ -664,7 +659,8 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
         </h2>
         <button
           onClick={onClose}
-          data-sound="back"
+          // .DoneCustomizingButton, a ButtonPrimary
+          data-sound="ui_generic_button_click"
           aria-label="Close"
           className="grid h-[34px] w-[64px] place-items-center rounded-[2px] bg-gradient-to-b from-[#3b434e] to-[#262c34] text-[#e6ebef] shadow-[0_2px_8px_rgb(0_0_0/0.5)] hover:brightness-150"
         >
@@ -678,7 +674,8 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
             <li key={row.id}>
               <button
                 onClick={() => setSelected(row.id)}
-                data-sound="click"
+                // DOTAHeroSlotItemPickerLoadout.IsActive
+                data-select-sound={selected === row.id ? undefined : "ui_preview_button_click"}
                 className={`relative flex h-[92px] w-full items-center gap-[14px] border-b border-black/40 pl-[8px] text-left text-[18px] transition-colors ${
                   selected === row.id ? "bg-[#3a414b] text-white" : "text-[#c9d1da] hover:bg-white/5"
                 }`}
@@ -704,7 +701,7 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
             </label>
             <span className="ml-auto text-[15px] tracking-[1px] text-[#808fa6] uppercase">Sort</span>
             <Select label="Sort" value={sort} onChange={setSort} align="right" className="w-[150px]" options={SORTS.map((entry) => ({ value: entry.id, label: entry.name }))} />
-            <button onClick={shuffle} data-sound="click" title="Something at random" aria-label="Something at random" className="grid size-[30px] place-items-center text-[#c9d1da] hover:text-white">
+            <button onClick={shuffle} title="Something at random" aria-label="Something at random" className="grid size-[30px] place-items-center text-[#c9d1da] hover:text-white">
               <Shuffle className="size-[20px]" />
             </button>
           </div>
@@ -733,7 +730,8 @@ function OutfitCard({ name, image, look, price, worn, tall, onPick }) {
     <li>
       <button
         onClick={worn ? undefined : onPick}
-        data-sound={worn ? undefined : "equip"}
+        // DOTAEconItemAnimated:selected
+        data-select-sound={worn ? undefined : "ui_generic_button_click"}
         className={`group relative flex w-full flex-col overflow-hidden bg-gradient-to-b from-[#2a2f38] to-[#14171c] text-left shadow-[0_4px_12px_rgb(0_0_0/0.5)] ${
           worn ? "outline-2 -outline-offset-2 outline-white/80" : "hover:brightness-125"
         }`}

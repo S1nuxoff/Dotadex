@@ -853,7 +853,7 @@ export class Stage {
     const sameBody = Boolean(this.group && this.parts && urls[0] === this.firstUrl);
     if (this.useFog && this.group && !reducedMotion.matches && !sameBody) {
       if (this.veilTarget !== 1) {
-        playUiSound("veil-in", 0.8);
+        playUiSound("veil-in");
       }
       this.veilTarget = 1;
       this.veilSince = performance.now();
@@ -1089,7 +1089,7 @@ export class Stage {
     this.particles?.setModel(group, this.modelUrls);
     this.releaseHeld();
     if (this.veilTarget === 1) {
-      playUiSound("veil-out", 0.7);
+      playUiSound("veil-out");
     }
     this.veilTarget = 0;
     // Told once the fog has parted enough to see the model, not when it is swapped in behind it

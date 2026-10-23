@@ -297,7 +297,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
           <button
             key={entry.id}
             onClick={() => onTab(entry.id)}
-            data-sound="toptab"
+            data-sound="ui_rollover_micro"
             aria-pressed={tab === entry.id}
             className={`shrink-0 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
               tab === entry.id ? "bg-raised text-bone" : "text-ash hover:text-bone"
@@ -326,8 +326,6 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
                   <button
                     onClick={() => onOpen(row.route)}
                     onPointerEnter={() => onPrefetch?.(row.route)}
-                    data-sound={row.route?.type === "hero" ? undefined : "click"}
-                    data-hover
                     disabled={row.disabled}
                     title={row.disabled ? "The hero's model is not exported yet" : undefined}
                     aria-current={active ? "true" : undefined}

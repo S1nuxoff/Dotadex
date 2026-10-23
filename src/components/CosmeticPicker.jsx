@@ -71,6 +71,7 @@ const BUTTON =
   "flex h-[34px] shrink-0 items-center justify-center rounded-[3px] border px-[16px] text-[16px] leading-[20px] text-white/80 uppercase shadow-[0_2px_8px_rgb(0_0_0/0.3)] transition-[filter] duration-100 hover:text-white hover:brightness-200";
 const LIGHT_GREY = "border-white/[0.07] bg-gradient-to-b from-[#525f65] to-[#2f363a] active:from-[#2f363a] active:to-[#525f65]";
 const DARK_GREY = "border-white/[0.03] bg-gradient-to-b from-[#262c30] to-[#121719] active:from-[#121719] active:to-[#262c30]";
+const GREEN = "border-white/[0.12] bg-gradient-to-b from-[#5aa15e] to-[#406c55] active:from-[#406c55] active:to-[#5aa15e]";
 
 // ToggleButton.FilterCheck: the black tick box, its label 18 high in LighterGrey
 function FilterCheck({ label, checked, onChange }) {
@@ -560,15 +561,14 @@ function hasPrices(catalog, setId) {
 }
 
 // DOTASetPreviewControls under the hero while customizing: EQUIPPED and the set's name (or, wearing
-// what is not the hero's own, PREVIEWING with those items and REVERT), then RANDOMIZE. The game's
-// SAVE (a saved set) and demo button are left out: the site shares a look by its link already and
-// has no demo mode
+// what is not the hero's own, PREVIEWING with those items and REVERT), then RANDOMIZE and the demo
 function SetPreviewControls({ icons, catalog, outfit, slots, onOutfit }) {
   const hero = catalog.heroesById[outfit.hero];
   const previewed = Object.entries(outfit.slots)
     .map(([, entry]) => catalog.itemsById[entry.id])
     .filter(Boolean);
   const previewing = previewed.length > 0;
+  const [copied, setCopied] = useState(false);
   // DOTASetPreviewRandomizeSet: something of every slot at random, the hero's own among them
   const randomize = () => {
     const next = {};
@@ -578,6 +578,12 @@ function SetPreviewControls({ icons, catalog, outfit, slots, onOutfit }) {
       if (pick < pool.length) next[slot.slot] = { id: pool[pick].id, style: 0 };
     }
     onOutfit(next);
+  };
+  const save = () => {
+    navigator.clipboard?.writeText(window.location.href).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
   };
   return (
     <div className="set-preview-controls pointer-events-none absolute flex w-[800px] -translate-x-1/2 flex-col items-center" style={{ bottom: CONTROLS_BOTTOM, left: `calc(50% - ${SCENE_SHIFT}px)` }}>
@@ -602,6 +608,9 @@ function SetPreviewControls({ icons, catalog, outfit, slots, onOutfit }) {
         ) : (
           <div className="pointer-events-auto flex h-[34px] items-center">
             <span className="my-[4px] text-[18px] tracking-[0.2px] text-white/80 [text-shadow:0_0_12px_rgb(0_0_0/0.4)]">{hero.name}</span>
+            <button onClick={save} data-sound="ui_generic_button_click" title="Copy a link to this look" className={`${BUTTON} ${LIGHT_GREY} ml-[12px]`}>
+              {copied ? "Copied" : "Save"}
+            </button>
           </div>
         )}
       </div>
@@ -611,6 +620,14 @@ function SetPreviewControls({ icons, catalog, outfit, slots, onOutfit }) {
         <button onClick={randomize} data-sound="ui_generic_button_click" title="Pick a random item for each slot" className={`${BUTTON} ${DARK_GREY}`}>
           Randomize
         </button>
+        {/* DemoModeButton: the game's demo mode, which this site has not */}
+        <span title="Demo mode is in the game only" className={`${BUTTON} ${GREEN} ml-[8px] cursor-default pr-0 hover:brightness-100`}>
+          Demo Hero
+          <span className="mx-[4px] size-[20px] bg-[#dae2e5]" style={washed(`${icons}arrow_top_right.svg`)} />
+          <span className="ml-[8px] flex h-full w-[34px] items-center justify-center border-l border-black/30">
+            <span className="size-0 border-x-[5px] border-t-[6px] border-x-transparent border-t-[#dae2e5]" />
+          </span>
+        </span>
       </div>
     </div>
   );

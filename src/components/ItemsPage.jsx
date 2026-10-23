@@ -139,11 +139,13 @@ function bonusLines(item, name, texts) {
 
 // DOTAShopItem in a table: 72.7% as high as wide, a black shadow, a little dim until hovered;
 // the selected one glows gold, a search dims the others and rings the matches aqua
-function ShopTile({ base, name, item, width, selected, search, secret, onPick }) {
+function ShopTile({ base, name, item, width, selected, search, secret, onPick, onHover }) {
   const highlighted = search && search.has(name);
   return (
     <button
       onClick={() => onPick(name)}
+      onMouseEnter={(event) => onHover?.(name, event.currentTarget)}
+      onMouseLeave={() => onHover?.(null)}
       aria-label={name}
       aria-pressed={selected}
       className={`relative mr-[6px] mb-[6px] shrink-0 bg-black transition-[box-shadow,filter] duration-200 ${
@@ -164,7 +166,7 @@ function ShopTile({ base, name, item, width, selected, search, secret, onPick })
 
 // DOTAGameItemTable: the basics and upgrades columns, each 749 high on #000c, sections of 50 wide
 // items wrapping in at most 600; the Secret Shop keeper under the basics
-function ItemTable({ base, items, shops, mainShop, selected, search, onPick }) {
+function ItemTable({ base, items, shops, mainShop, selected, search, onPick, onHover }) {
   return (
     <div className="ml-[12px] flex">
       {COLUMNS.map(([title, id, categories]) => (
@@ -188,6 +190,7 @@ function ItemTable({ base, items, shops, mainShop, selected, search, onPick }) {
                           search={search}
                           secret={category === "secretshop" && !mainShop.has(name)}
                           onPick={onPick}
+                          onHover={onHover}
                         />
                       ))}
                     </div>
@@ -216,9 +219,25 @@ function tierTime(start) {
   return `${minutes}:${String(seconds).padStart(2, "0")}+`;
 }
 
+// The enchantments once each as the game lists them (checked on a game shot): tier by tier, in each
+// the strength, agility, intelligence and universal heroes' groups and then the global one
+const ENCHANT_GROUPS = ["strength", "agility", "intelligence", "universal", "global"];
+function enchantmentsOf(tiers) {
+  const list = [];
+  for (const [, entry] of tiers) {
+    const groups = entry.enhancements ?? {};
+    for (const group of [...ENCHANT_GROUPS, ...Object.keys(groups).filter((key) => !ENCHANT_GROUPS.includes(key))]) {
+      for (const name of Object.keys(groups[group] ?? {})) {
+        if (!list.includes(name)) list.push(name);
+      }
+    }
+  }
+  return list;
+}
+
 // DOTAGameNeutralItemTable: the neutral items by tier on #000c (330 wide, 44 wide items), then the
-// enchantments by tier on #111c
-function NeutralTable({ base, items, tiers, selected, search, onPick }) {
+// enchantments in one list on #111c
+function NeutralTable({ base, items, tiers, selected, search, onPick, onHover }) {
   const tier = ([number, entry], list) => (
     <div key={number} className="mb-[16px] flex flex-col">
       <div className="flex w-full items-center">
@@ -231,12 +250,11 @@ function NeutralTable({ base, items, tiers, selected, search, onPick }) {
       </div>
       <div className="flex max-w-[380px] flex-wrap">
         {list.map((name) => (
-          <ShopTile key={name} base={base} name={name} item={items[name]} width={44} selected={selected === name} search={search} onPick={onPick} />
+          <ShopTile key={name} base={base} name={name} item={items[name]} width={44} selected={selected === name} search={search} onPick={onPick} onHover={onHover} />
         ))}
       </div>
     </div>
   );
-  const enchantments = (entry) => [...new Set(Object.values(entry.enhancements ?? {}).flatMap((group) => Object.keys(group ?? {})))];
   return (
     <div className="flex flex-col">
       <h3 className={COLUMN_TITLE}>Neutral Items</h3>
@@ -245,7 +263,13 @@ function NeutralTable({ base, items, tiers, selected, search, onPick }) {
       </div>
       <span className="mb-[2px] ml-[16px] text-[14px] tracking-[1px] text-[#748B8B] uppercase">Neutral Enchantments</span>
       <div className="flex w-[330px] flex-wrap bg-[#111c] pt-px pr-[10px] pl-[16px]">
-        {tiers.map((entry) => tier(entry, enchantments(entry[1]).filter((name) => items[name])))}
+        <div className="mb-[16px] flex max-w-[380px] flex-wrap">
+          {enchantmentsOf(tiers)
+            .filter((name) => items[name])
+            .map((name) => (
+              <ShopTile key={name} base={base} name={name} item={items[name]} width={44} selected={selected === name} search={search} onPick={onPick} onHover={onHover} />
+            ))}
+        </div>
       </div>
     </div>
   );
@@ -317,8 +341,58 @@ function Combines({ base, items, name, upgrades, components, onPick }) {
   );
 }
 
-// DOTAAbilityDetails as the Items page shows it (.IsItem .ShowExtraDescription)
-function ItemDetails({ base, items, texts, name, neutralTier, shopsOf, onPick, upgrades, components }) {
+// #AbilityTarget's lines: ABILITY (the behavior), AFFECTS (the targets, not for a passive), DAMAGE TYPE
+function targetLines(item) {
+  const behavior = String(item.AbilityBehavior ?? "");
+  const has = (flag) => behavior.includes(`DOTA_ABILITY_BEHAVIOR_${flag}`);
+  const lines = [];
+  const cast = has("PASSIVE")
+    ? "Passive"
+    : has("UNIT_TARGET") && has("POINT")
+    ? "Unit or Point Target"
+    : has("UNIT_TARGET")
+    ? "Unit Target"
+    : has("POINT")
+    ? "Point Target"
+    : has("NO_TARGET")
+    ? "No Target"
+    : null;
+  if (cast) {
+    lines.push(["ABILITY:", cast]);
+  }
+  const team = String(item.AbilityUnitTargetTeam ?? "");
+  const type = String(item.AbilityUnitTargetType ?? "");
+  if (!has("PASSIVE") && team) {
+    const heroes = type.includes("HERO") && !type.includes("BASIC");
+    const creeps = type.includes("BASIC") && !type.includes("HERO");
+    const affects = team.includes("ENEMY")
+      ? heroes ? "Enemy Heroes" : creeps ? "Enemy Creeps" : type.includes("TREE") ? "Trees and Enemy Units" : type ? "Enemy Units" : "Enemies"
+      : team.includes("FRIENDLY")
+      ? heroes ? "Allied Heroes" : creeps ? "Allied Creeps" : type ? "Allied Units" : "Allies"
+      : team.includes("BOTH")
+      ? heroes ? "Heroes" : "Units"
+      : null;
+    if (affects) {
+      lines.push(["AFFECTS:", affects]);
+    }
+  }
+  const damage = { DAMAGE_TYPE_PHYSICAL: ["Physical", "#ae2f28"], DAMAGE_TYPE_MAGICAL: ["Magical", "#5b93d1"], DAMAGE_TYPE_PURE: ["Pure", "#d8ae53"] }[String(item.AbilityUnitDamageType ?? "").trim()];
+  if (damage) {
+    lines.push(["DAMAGE TYPE:", damage[0], damage[1]]);
+  }
+  return lines;
+}
+
+const SHOP_ICONS = [
+  ["main", "shop_icon_main_psd", "Available at Home Shop"],
+  ["side", "shop_icon_side_psd", "Available at Side Shop"],
+  ["secret", "shop_icon_secret_psd", "Available at Secret Shop"],
+];
+
+// DOTAAbilityDetails for an item (.IsItem): the header, #AbilityTarget, the bonuses, the
+// description with the costs over it, the notes (the page's .ShowExtraDescription, a tooltip's Alt)
+// and the lore. The page's #AbilityCoreDetails scrolls at 440.
+function AbilityDetails({ base, items, texts, name, neutralTier, shopsOf, extra, page }) {
   const item = items[name];
   if (!item) {
     return null;
@@ -335,16 +409,12 @@ function ItemDetails({ base, items, texts, name, neutralTier, shopsOf, onPick, u
     ["ability_manacost_icon_psd", abilityValue(item, "AbilityManaCost")],
     ["ability_healthcost_icon_psd", abilityValue(item, "AbilityHealthCost")],
   ].filter(([, value]) => value && !/^0(\.0+)?$/.test(value));
-  const shops = [
-    ["main", "shop_icon_main_psd", "Available at Home Shop"],
-    ["side", "shop_icon_side_psd", "Available at Side Shop"],
-    ["secret", "shop_icon_secret_psd", "Available at Secret Shop"],
-  ].filter(([id]) => shopsOf.has(id));
+  const shops = SHOP_ICONS.filter(([id]) => shopsOf.has(id));
+  const target = targetLines(item);
 
   return (
-    <>
       <div
-        className="mr-[-8px] ml-[2px] flex min-h-0 flex-col bg-no-repeat p-[8px]"
+        className={`flex min-h-0 flex-col bg-no-repeat p-[8px] ${page ? "mr-[-8px] ml-[2px]" : ""}`}
         style={{ backgroundImage: `url(${panorama(base, "hud/ability_tooltip_psd")})`, backgroundPosition: "0 -44px" }}
       >
         {/* #Header: the picture, the name, the cost or the neutral tier, the shops' icons */}
@@ -381,8 +451,19 @@ function ItemDetails({ base, items, texts, name, neutralTier, shopsOf, onPick, u
           </div>
         </div>
 
-        {/* #AbilityCoreDetails: 16 below, at most 440 high, scrolling */}
-        <div className="mt-[16px] max-h-[440px] overflow-y-auto pr-[10px] scrollbar-thin">
+        {/* #AbilityTarget: between two #29353b rules, #596e89 lines */}
+        {target.length > 0 && (
+          <div className="mt-[5px] mb-[5px] flex w-full flex-col border-y border-[#29353b] pt-[5px] pr-0 pb-[2px] pl-[8px] text-[16px] text-[#596e89]">
+            {target.map(([label, value, color]) => (
+              <span key={label}>
+                {label} <span style={color ? { color } : undefined}>{value}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* #AbilityCoreDetails: 16 below, on the page at most 440 high, scrolling */}
+        <div className={page ? "mt-[16px] max-h-[440px] overflow-y-auto pr-[10px] scrollbar-thin" : "mt-[16px]"}>
           {bonuses.length > 0 && (
             <div className="mb-[10px] ml-[4px] text-[17px] text-[#748090] [text-shadow:2px_2px_0_#00000088]">
               {bonuses.map((line) => (
@@ -429,7 +510,7 @@ function ItemDetails({ base, items, texts, name, neutralTier, shopsOf, onPick, u
               })}
             </div>
           </div>
-          {notes.length > 0 && (
+          {notes.length > 0 && extra && (
             <div className="bg-[rgb(37,56,68)] px-[12px] pt-[4px] pb-[8px] text-[16px] text-[rgb(158,182,197)]">
               {notes.map((note, index) => (
                 <p key={index} className="whitespace-pre-line">
@@ -440,7 +521,26 @@ function ItemDetails({ base, items, texts, name, neutralTier, shopsOf, onPick, u
           )}
           {lore && <p className="mt-[12px] ml-px w-[330px] bg-[#0b1215] px-[10px] py-[5px] text-[14px] text-[#3d4e5b] italic">{lore}</p>}
         </div>
+        {/* .AltDetailsHelp: the notes wait for Alt in a tooltip */}
+        {!page && notes.length > 0 && !extra && (
+          <div className="m-[4px] mt-[8px] flex items-center justify-end border-t border-white/[0.02] pt-[6px]">
+            <span className="mb-[2px] text-[14px] text-[#808080]">More Details</span>
+            <img src={panorama(base, "control_icons/alt_key_png")} alt="Alt" className="ml-[4px] w-[28px]" />
+          </div>
+        )}
       </div>
+  );
+}
+
+// The page's #ItemDetails contents: the item's details, where it is sold and its recipe
+function ItemDetails({ base, items, texts, name, neutralTier, shopsOf, onPick, upgrades, components }) {
+  if (!items[name]) {
+    return null;
+  }
+  const shops = SHOP_ICONS.filter(([id]) => shopsOf.has(id));
+  return (
+    <>
+      <AbilityDetails base={base} items={items} texts={texts} name={name} neutralTier={neutralTier} shopsOf={shopsOf} extra page />
       <div className="flex-1" />
       {/* #ItemAvailability */}
       <div className="flex w-full flex-col">
@@ -454,6 +554,51 @@ function ItemDetails({ base, items, texts, name, neutralTier, shopsOf, onPick, u
       {!neutralTier && <Combines base={base} items={items} name={name} upgrades={upgrades} components={components} onPick={onPick} />}
     </>
   );
+}
+
+// DOTATooltipAbility: 360 wide on #10171c and bg_tooltip, a 2px black edge, beside the tile (to its
+// left when the page has no room on the right), centred on it and kept on the page
+function ItemTooltip({ base, items, texts, hover, neutralTier, shopsOf, extra }) {
+  const WIDTH = 364;
+  const GAP = 8;
+  const right = hover.right + GAP + WIDTH <= hover.width;
+  return (
+    <div
+      role="tooltip"
+      className="pointer-events-none absolute z-50 w-[364px] -translate-y-1/2 border-2 border-black bg-[#10171c] bg-no-repeat [background-position:left_top] shadow-[0_0_12px_#000]"
+      style={{
+        left: right ? hover.right + GAP : hover.left - GAP - WIDTH,
+        top: Math.max(hover.middle, 0),
+        backgroundImage: `url(${panorama(base, "hud/reborn/bg_tooltip_psd")})`,
+      }}
+    >
+      <AbilityDetails base={base} items={items} texts={texts} name={hover.name} neutralTier={neutralTier} shopsOf={shopsOf} extra={extra} />
+    </div>
+  );
+}
+
+// Whether Alt is held, for a tooltip's further details
+function useAltKey() {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    const down = (event) => {
+      if (event.key === "Alt") {
+        event.preventDefault();
+        setHeld(true);
+      }
+    };
+    const up = (event) => event.key === "Alt" && setHeld(false);
+    const blur = () => setHeld(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
+  return held;
 }
 
 // DOTAQuickSearch: typing on the page writes the letters across it in 100 high capitals that fade
@@ -492,6 +637,20 @@ export default function ItemsPage({ catalog, id, language, onOpen }) {
   // shops.json came with data version 19; until it is in the dataset the tables wait for it
   const { data: shopData, error: shopError } = useGameData(base, ["shops.json"], language);
   const [query, flash] = useQuickSearch();
+  const [hover, setHover] = useState(null);
+  const alt = useAltKey();
+  const contentsRef = useRef(null);
+  // The tooltip beside the tile under the pointer, in the page's own (unzoomed) units
+  const onHover = (name, element) => {
+    if (!name || !contentsRef.current) {
+      setHover(null);
+      return;
+    }
+    const box = contentsRef.current.getBoundingClientRect();
+    const tile = element.getBoundingClientRect();
+    const unit = box.width / contentsRef.current.offsetWidth || 1;
+    setHover({ name, left: (tile.left - box.left) / unit, right: (tile.right - box.left) / unit, middle: (tile.top + tile.height / 2 - box.top) / unit, width: contentsRef.current.offsetWidth });
+  };
 
   const items = data?.items ?? {};
   const texts = data?.texts;
@@ -535,16 +694,17 @@ export default function ItemsPage({ catalog, id, language, onOpen }) {
     const sold = mainShop.size ? [...new Set([...mainShop, ...(shops.secretshop ?? [])])] : Object.keys(items);
     return sold.filter((name) => componentsOf(items, name).includes(selected));
   }, [selected, items, mainShop, shops]);
-  const shopsOf = useMemo(() => {
+  const shopsFor = (name) => {
     const result = new Set();
-    if (!selected || tierOf[selected]) {
+    if (!name || tierOf[name]) {
       return result;
     }
-    if (mainShop.has(selected)) result.add("main");
-    if (items[selected]?.SideShop === "1") result.add("side");
-    if (items[selected]?.SecretShop === "1") result.add("secret");
+    if (mainShop.has(name)) result.add("main");
+    if (items[name]?.SideShop === "1") result.add("side");
+    if (items[name]?.SecretShop === "1") result.add("secret");
     return result;
-  }, [selected, items, mainShop, tierOf]);
+  };
+  const shopsOf = shopsFor(selected);
 
   const message = error ? `The items' data did not load. ${error}` : !data ? "Loading the items" : null;
 
@@ -557,13 +717,13 @@ export default function ItemsPage({ catalog, id, language, onOpen }) {
           <p className="mt-[160px] text-center text-[18px] text-[#8b989e]">{message}</p>
         ) : (
           // #PageContents: centred, the tables and the details side by side
-          <div className="isolate mx-auto mt-[69px] flex shrink-0">
+          <div ref={contentsRef} className="relative isolate mx-auto mt-[99px] flex shrink-0">
             {shopError ? (
               <p className="ml-[12px] w-[600px] pt-[40px] text-[16px] text-[#8b989e]">The shop's categories are not in the dataset yet.</p>
             ) : shopData ? (
-              <ItemTable base={base} items={items} shops={shops} mainShop={mainShop} selected={selected} search={search} onPick={pick} />
+              <ItemTable base={base} items={items} shops={shops} mainShop={mainShop} selected={selected} search={search} onPick={pick} onHover={onHover} />
             ) : null}
-            <NeutralTable base={base} items={items} tiers={tiers} selected={selected} search={search} onPick={pick} />
+            <NeutralTable base={base} items={items} tiers={tiers} selected={selected} search={search} onPick={pick} onHover={onHover} />
             {/* #ItemDetails: 350 wide, its contents 749 high on the tooltip's ground */}
             <div className="ml-[12px] flex w-[350px] flex-col">
               <h3 className={COLUMN_TITLE}>Item Details</h3>
@@ -586,6 +746,7 @@ export default function ItemsPage({ catalog, id, language, onOpen }) {
                 )}
               </div>
             </div>
+            {hover && texts && items[hover.name] && <ItemTooltip base={base} items={items} texts={texts} hover={hover} neutralTier={tierOf[hover.name]} shopsOf={shopsFor(hover.name)} extra={alt} />}
           </div>
         )}
         </div>

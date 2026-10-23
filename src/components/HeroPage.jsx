@@ -963,8 +963,7 @@ export default function HeroPage({
 
   // CHANGE OUTFIT as the game's page does it (dashboard_page_hero_new_v2.css, .EnableHeroCustomize):
   // the scene, the columns and the backdrop's picture move aside in CSS transitions both ways,
-  // the picker comes in over them. It stays on the page until its way out (0.2 s late, 0.5 s
-  // long) is over
+  // the picker comes in over them. It stays on the page until its way out (0.2 s) is over
   const customize = wardrobeOpen && tab === "loadout";
   const [pickerShown, setPickerShown] = useState(customize);
   const wasCustomize = useRef(customize);
@@ -981,7 +980,7 @@ export default function HeroPage({
       setPickerShown(true);
       return;
     }
-    const timer = setTimeout(() => setPickerShown(false), 700);
+    const timer = setTimeout(() => setPickerShown(false), 250);
     return () => clearTimeout(timer);
   }, [customize]);
 

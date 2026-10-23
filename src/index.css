@@ -359,42 +359,46 @@ label:has(> input:focus) {
 }
 
 /* CHANGE OUTFIT on a hero's page, as the game's (dashboard_page_hero_new_v2.css,
-   .EnableHeroCustomize; HeroCustomiseSlideDuration 0.5s). As in Panorama, the timing of the state
-   a part goes to is the one it goes there with. Lengths are the game's 1080-high layout's; the
-   scene is not in the zoomed layer, so it scales them itself */
+   .EnableHeroCustomize; HeroCustomiseSlideDuration 0.5s). Each part goes with the timing of the
+   state it leaves: so the stylesheet reads throughout (delays and soft ends on what comes in, quick
+   ease-in on what goes: the columns, the middle, the shard, the set preview, the set's name), so
+   here each state holds the other's. Lengths are the game's 1080-high layout's; the scene is not
+   in the zoomed layer, so it scales them itself */
 .hero-page .hero-scene {
   transition: transform 0.5s cubic-bezier(0, 1, 0, 1);
 }
 .hero-page[data-customize] .hero-scene {
   transform: translate(calc(-500px * var(--ui-scale)), calc(-40px * var(--ui-scale)));
 }
-/* #LeftColumn, #RightColumn, #HeroName */
+/* #LeftColumn, #RightColumn, #HeroName: out at once in 0.15 s, back after 0.2 s in 0.4 s */
 .hero-page .hero-column {
   transition-property: transform, opacity;
-  transition-duration: 0.15s;
-  transition-timing-function: ease-in;
+  transition-duration: 0.4s;
+  transition-delay: 0.2s;
+  transition-timing-function: cubic-bezier(0, 1, 0, 1);
 }
 .hero-page[data-customize] .hero-column {
   opacity: 0;
   transform: translateX(-60px);
-  transition-duration: 0.4s;
-  transition-delay: 0.2s;
-  transition-timing-function: cubic-bezier(0, 1, 0, 1);
+  transition-duration: 0.15s;
+  transition-delay: 0s;
+  transition-timing-function: ease-in;
   pointer-events: none;
 }
 /* #MiddleColumn, the bottom middle of the page, where the model's controls are here (they stand at
-   0.8, so 16 moved down is 20 of theirs) */
+   0.8, so 16 moved down is 20 of theirs): out in 0.15 s, back after 0.4 s in 0.3 s */
 .hero-page .hero-middle {
   transition-property: transform, opacity;
-  transition-duration: 0.15s;
-  transition-timing-function: cubic-bezier(0.8, 0, 1, 0.2);
+  transition-duration: 0.3s;
+  transition-delay: 0.4s;
+  transition-timing-function: cubic-bezier(0, 0.9, 0, 0.9);
 }
 .hero-page[data-customize] .hero-middle {
   opacity: 0;
   transform: translateY(20px);
-  transition-duration: 0.3s;
-  transition-delay: 0.4s;
-  transition-timing-function: cubic-bezier(0, 0.9, 0, 0.9);
+  transition-duration: 0.15s;
+  transition-delay: 0s;
+  transition-timing-function: cubic-bezier(0.8, 0, 1, 0.2);
   pointer-events: none;
 }
 /* .HeroPageNavigation */
@@ -405,25 +409,25 @@ label:has(> input:focus) {
   opacity: 0;
   pointer-events: none;
 }
-/* .EquippedBackgroundShard */
+/* .EquippedBackgroundShard: out in 0.1 s, back after 0.4 s in 0.2 s */
 .hero-page .hero-shard {
-  transition: opacity 0.1s;
+  transition: opacity 0.2s 0.4s;
 }
 .hero-page[data-customize] .hero-shard {
   opacity: 0;
-  transition: opacity 0.2s 0.4s;
+  transition: opacity 0.1s;
 }
-/* #HeroCustomize: in quickly (0.2 s, ease-in), out slowly after a pause (0.2 s, then 0.5 s) */
+/* #HeroCustomize: in after 0.2 s, sliding 0.5 s from 120 right at 1.1; out in 0.2 s, ease-in */
 .hero-page .hero-customize {
   opacity: 0;
   transform: translateX(120px) scale(1.1);
-  transition: transform 0.5s cubic-bezier(0, 1, 0, 1) 0.2s, opacity 0.5s cubic-bezier(0, 1, 0, 1) 0.2s;
+  transition: transform 0.2s ease-in, opacity 0.2s ease-in;
   pointer-events: none;
 }
 .hero-page[data-customize] .hero-customize {
   opacity: 1;
   transform: none;
-  transition: transform 0.2s ease-in, opacity 0.2s ease-in;
+  transition: transform 0.5s cubic-bezier(0, 1, 0, 1) 0.2s, opacity 0.5s cubic-bezier(0, 1, 0, 1) 0.2s;
   pointer-events: auto;
 }
 @starting-style {

@@ -502,12 +502,16 @@ export default function Settings({ open, onClose, base, language, onLanguage }) 
   }
   const { clientWidth, clientHeight } = document.documentElement;
   return createPortal(
-    <div className="fixed inset-0 z-[70] overflow-hidden">
+    <>
+      {/* Its own layer in the page's stacking context: inside the window's container the
+          multiply would blend with nothing and draw a flat grey */}
       <div aria-hidden className={`gs-wash ${visible ? "" : "opacity-0"}`} />
-      <div className="absolute top-0 left-0 origin-top-left" style={{ width: clientWidth / scale, height: clientHeight / scale, transform: `scale(${scale})` }}>
-        <SettingsWindow base={base} language={language} onLanguage={onLanguage} onClose={onClose} visible={visible} />
+      <div className="fixed inset-0 z-[70] overflow-hidden">
+        <div className="absolute top-0 left-0 origin-top-left" style={{ width: clientWidth / scale, height: clientHeight / scale, transform: `scale(${scale})` }}>
+          <SettingsWindow base={base} language={language} onLanguage={onLanguage} onClose={onClose} visible={visible} />
+        </div>
       </div>
-    </div>,
+    </>,
     document.body
   );
 }

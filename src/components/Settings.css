@@ -38,8 +38,10 @@ html.popup-blur #root {
   filter: blur(var(--popup-blur, 4px)) saturate(0.25);
 }
 .gs-wash {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  z-index: 69;
+  pointer-events: none;
   background: rgb(173 182 182);
   mix-blend-mode: multiply;
   transition: opacity 0.35s;

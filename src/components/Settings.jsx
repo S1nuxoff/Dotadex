@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { createPortal } from "react-dom";
 import { LANGUAGES } from "../gamedata.js";
 import { getVolume, onVolume, setVolume, VOLUME_DEFAULTS } from "../volume.js";
+import { playUiSound } from "../uiSounds.js";
 import { getViewSettings, onViewSettings, setViewSettings } from "../viewSettings.js";
 import { useDismiss, useUiLayout, VALVE_NOTICE } from "./ui.jsx";
 import "./Settings.css";
@@ -492,7 +493,13 @@ export default function Settings({ open, onClose, base, language, onLanguage }) 
     if (!open) {
       return;
     }
-    const escape = (event) => event.key === "Escape" && onClose();
+    // The close button's sound, which a click plays by its data-sound
+    const escape = (event) => {
+      if (event.key === "Escape") {
+        playUiSound("ui_settings_out_multi");
+        onClose();
+      }
+    };
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
   }, [open, onClose]);

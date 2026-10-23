@@ -266,7 +266,7 @@ export default function ItemDetails({ catalog, item, onClose, onOpen }) {
           </div>
           <div className="mt-[6px] mr-[16px] ml-auto flex flex-col items-end text-[16px] leading-[22px] text-[#8b989e]">
             <span>{item.store ? "Purchasable" : "Unavailable"}</span>
-            {item.price !== undefined && <span>Market: {formatPrice(item.price)}</span>}
+            {item.price !== undefined && <span title="The lowest offer on DMarket and Skinport">Market: from {formatPrice(item.price)}</span>}
           </div>
         </div>
         {/* .SectionList */}

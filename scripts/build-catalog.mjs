@@ -63,10 +63,9 @@ const [index, itemsGame, english, prices] = await Promise.all([
 const gameItems = itemsGame.items;
 const localize = (token) => (token?.startsWith("#") ? english[token.slice(1)] : null);
 
-// A market price: the average of the last month, or the last sale for items rarely sold
+// An approximate market price: the lowest offer on the trading platforms (DMarket, Skinport)
 function priceOf(name) {
-  const steam = prices[name]?.steam;
-  const value = steam && (steam.last_30d ?? steam.last_7d ?? steam.last_90d ?? steam.last_ever);
+  const value = prices[name]?.price;
   return value ? Math.round(value * 100) / 100 : undefined;
 }
 

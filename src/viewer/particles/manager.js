@@ -57,6 +57,11 @@ function loadAttachedModels(base) {
     .catch(() => null);
 }
 
+// What makes an effect the same one: its system and everything it is started with
+function effectKey(effect) {
+  return `${effect.system}@${(effect.models ?? []).join(",")}${effect.snapshots ? JSON.stringify(effect.snapshots) : ""}${effect.controlPoints ? JSON.stringify(effect.controlPoints) : ""}${effect.config ?? ""}${effect.points ? JSON.stringify(effect.points) : ""}`;
+}
+
 function fetchJson(url) {
   return fetch(url)
     .then((res) => (res.ok ? res.json() : null))
@@ -299,8 +304,12 @@ export class ParticleManager {
     const request = ++this.modelRequest;
     let ready;
     this.modelReady = new Promise((resolve) => (ready = resolve));
-    // What the last model's animations started goes with it
-    this.clearFired();
+    // What the last model's animations started, and its effects, go with it; the same body with
+    // other parts on keeps them running, as the game's loadout (restart starts only what is new)
+    if (group !== this.model) {
+      this.clearFired();
+      this.clear();
+    }
     this.model = group;
     this.bones = group ? bonesOf(group) : new Map();
     this.meshes = [];
@@ -367,7 +376,7 @@ export class ParticleManager {
   // game's code puts in control points ({ 1: [r, g, b] })
   setEffects(list) {
     const sorted = [...list].sort((a, b) => a.system.localeCompare(b.system));
-    const key = sorted.map((effect) => `${effect.system}@${(effect.models ?? []).join(",")}${effect.snapshots ? JSON.stringify(effect.snapshots) : ""}${effect.controlPoints ? JSON.stringify(effect.controlPoints) : ""}${effect.config ?? ""}${effect.points ? JSON.stringify(effect.points) : ""}`).join("|");
+    const key = sorted.map(effectKey).join("|");
     if (key === this.key) return;
     this.key = key;
     this.list = sorted;
@@ -377,18 +386,29 @@ export class ParticleManager {
     this.restart();
   }
 
+  // The effects of the list on the model: those already running on it carry on (a part put on or
+  // taken off does not start the rest again), those no longer listed go, the new ones start once
+  // the model's attachments are there
   async restart() {
     const request = ++this.request;
-    this.clear();
-    if (!this.model) return;
+    if (!this.model) {
+      this.clear();
+      return;
+    }
     const list = this.list ?? [];
-    const defs = await Promise.all(list.map((effect) => this.loadEffect(effect.system)));
-    await Promise.all(defs.map((def, index) => this.loadResources(def, list[index].snapshots)));
-    if (request !== this.request) return;
+    const running = new Set(this.effects.map((effect) => effect.key));
+    const fresh = list.filter((effect) => !running.has(effectKey(effect)));
+    const defs = await Promise.all(fresh.map((effect) => this.loadEffect(effect.system)));
+    await Promise.all([this.modelReady, ...defs.map((def, index) => this.loadResources(def, fresh[index].snapshots))]);
+    if (request !== this.request || !this.model) return;
+    const wanted = new Set(list.map(effectKey));
+    for (const effect of this.effects.filter((entry) => !wanted.has(entry.key))) effect.system.dispose();
+    this.effects = this.effects.filter((entry) => wanted.has(entry.key));
     for (const [index, def] of defs.entries()) {
       if (!def) continue;
-      const host = this.hostFor(def, list[index].models, list[index].snapshots, list[index].config, list[index].controlPoints, list[index].points);
-      this.effects.push({ system: new ParticleSystem(def, host), host });
+      const effect = fresh[index];
+      const host = this.hostFor(def, effect.models, effect.snapshots, effect.config, effect.controlPoints, effect.points);
+      this.effects.push({ system: new ParticleSystem(def, host), host, key: effectKey(effect) });
     }
     if (unsupported.size) {
       console.info("[particles] not drawn yet:", Object.fromEntries(unsupported));

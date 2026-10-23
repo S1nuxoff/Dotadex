@@ -1,7 +1,8 @@
 // How the stage may be handled, kept on this device. On a hero's page the camera is fixed as in
 // the game and a drag turns the hero; freeCamera lets it orbit, zoom and pan everywhere. fog: models
 // change behind the site's drifting fog instead of crossfading as the game's hero page does.
-const DEFAULTS = { freeCamera: false, particles: true, fog: false };
+// musicPack: the music pack equipped on its page (a folder of sounds/music), for the menu music.
+const DEFAULTS = { freeCamera: false, particles: true, fog: false, musicPack: "valve_dota_001" };
 
 function load() {
   try {

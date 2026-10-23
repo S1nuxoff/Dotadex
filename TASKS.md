@@ -114,7 +114,13 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
   - Body: sections at 0.5 opacity, the one at the top of the scroll at 1 with its blue radial glow and title; subtitles 24 thin capitals; .FilledBackground boxes, lit with a blue left edge in the active subsection; DOTASettingsCheckbox, DOTASettingsSlider (percentage), DropDown and its menu, ButtonPrimary "Reset to defaults" on Audio.
   - The site's settings under the game's sections and names: Game / Camera (Free Camera), Video / Rendering (Particles, Fog Between Heroes), Audio / Volume (Master Volume, Music, Game Sounds) and Language (Text). Valve's notice at the end of the body.
   - Tracker data export DATA_VERSION 18: settings_rock_texture, soft_top_bottom_vscroll, x_close_filled, icon_courier_dead_settings, arrow_dropdown; exported and uploaded 2026-10-23 (the navigation list takes its mask only once the picture has loaded).
-  - Not ported: the radiance thin weight (subtitles drawn regular), ButtonPrimary's background_play_button picture at 0.3, tooltips (the hints are the browser's titles). Read as plain CSS, not checked against a game shot: DropDown's `background-position: right 38px 35%`, the border brushes (taken as gradients of the border colour's alpha).
+  - Not ported: the radiance thin weight (subtitles drawn regular), ButtonPrimary's background_play_button picture at 0.
+
+- [ ] **U-15 (#51) Opening treasures as in the game.** Asked 2026-10-23: open the game's treasures on the site for free, as the game does, and see what drops in 3D. Plan:
+  - Opening as in the game: the treasure in its own scene (the scenes dataset has the chest scenes, `treasureScene` in catalog.js), the opening's animation and sounds ported from the game's Panorama layouts and client.dll.
+  - Odds: what the game's files give first (tiers, rare and very rare drops, the Immortal treasures' rising chance); where they say nothing, published statistics; else made-up plausible values. The site says the odds are approximate (Valve does not publish them for most treasures).
+  - The viewer's collection: what dropped kept in the browser; a dropped item opens in 3D, on its hero.
+  - No money: free, no purchases, trading or cash-out; a simulator only.3, tooltips (the hints are the browser's titles). Read as plain CSS, not checked against a game shot: DropDown's `background-position: right 38px 35%`, the border brushes (taken as gradients of the border colour's alpha).
 
 ## Later: abilities as in a match
 

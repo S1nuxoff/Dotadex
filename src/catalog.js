@@ -123,6 +123,25 @@ export function sortItems(items, sort) {
   return sorted;
 }
 
+// Items whose models are shown one at a time, with a switch between them: a courier's ground and
+// flying forms, a creep item's melee, ranged and mega creeps, an Ancient's monsters
+export function modelsOneAtATime(item) {
+  return item.kind === "courier" || item.category === "creeps" || item.category === "ancient";
+}
+
+// The names of such an item's models, by what their files' names add to what they share:
+// creep_dc_radiant_melee_mega -> Melee Mega; a courier's by its form
+export function modelLabels(item) {
+  const models = itemModels(item);
+  if (item.kind === "courier") {
+    return models.map((model) => (/flying/.test(model) ? "Flying" : "Ground"));
+  }
+  const names = models.map((model) => model.split("/").pop().replace(/\.glb$/, "").split("_"));
+  let shared = 0;
+  while (names.length > 1 && names.every((words) => words.length > shared + 1 && words[shared] === names[0][shared])) shared++;
+  return names.map((words) => words.slice(shared).map((word) => word[0].toUpperCase() + word.slice(1)).join(" "));
+}
+
 // The models an item shows in a style; a style without its own models keeps the item's
 export function itemModels(item, style = 0) {
   const chosen = item.styles?.[style];
@@ -237,6 +256,10 @@ export function outfitFor(catalog, route) {
   }
   const item = catalog.itemsById[route.id];
   const style = route.style ?? 0;
+  // A terrain shows its preview map
+  if (item.scene && catalog.scenesById[item.scene]) {
+    return { scene: item.scene, hero: null, slots: {}, focus: item.id, style };
+  }
   if (item.hero && catalog.heroesById[item.hero] && !route.alone && wornOnHero(item.slot)) {
     return { hero: item.hero, slots: { [item.slot]: { id: item.id, style } }, focus: item.id, style, persona: personaOf(item.slot) };
   }
@@ -263,8 +286,8 @@ export function outfitUrls(catalog, outfit) {
   if (!outfit.hero) {
     const item = catalog.itemsById[outfit.focus];
     const urls = itemUrls(catalog, item, outfit.style);
-    // A courier's models are its ground and flying forms, shown one at a time
-    if (item.kind === "courier" && urls.length > 1) {
+    // A courier's ground and flying forms, a creep item's creeps: shown one at a time
+    if (modelsOneAtATime(item) && urls.length > 1) {
       return [urls[(outfit.variant ?? 0) % urls.length]];
     }
     return urls;
@@ -339,8 +362,8 @@ export function outfitParticles(catalog, outfit) {
     const item = catalog.itemsById[outfit.focus];
     let models = itemUrls(catalog, item, outfit.style).map((url) => url.split("#")[0]);
     let systems = item?.particles?.add ?? [];
-    // A courier shows one form at a time, with that form's own effects
-    if (item?.kind === "courier" && models.length > 1) {
+    // A courier shows one form at a time, with that form's own effects (as a creep item its creeps)
+    if (item && modelsOneAtATime(item) && models.length > 1) {
       models = [models[(outfit.variant ?? 0) % models.length]];
       const flying = /flying/.test(models[0]);
       systems = [...systems, ...((flying ? item.particles?.flying : item.particles?.ground) ?? [])];

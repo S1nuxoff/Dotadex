@@ -16,7 +16,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { Stage, T_POSE } from "../viewer/stage.js";
-import { HERO_COLOR, formatPrice, heroPortrait, itemModels, rarity, slotName, wornOnHero } from "../catalog.js";
+import { HERO_COLOR, formatPrice, heroPortrait, itemModels, modelLabels, modelsOneAtATime, rarity, slotName, wornOnHero } from "../catalog.js";
 import { GAME_BUTTON, GamePills, IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
 import { playSound, prepareSound, soundsBase } from "./Voice.jsx";
 import { loadSpeech } from "../viewer/face.js";
@@ -349,11 +349,20 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
   const color = item ? rarity(item).color : HERO_COLOR;
   const urlsKey = urls.join("|");
 
+  // A taunt picked plays once the hero stands idle (after its spawn), as the loadout previews it
+  const tauntRef = useRef(null);
   useEffect(() => {
     const stage = new Stage(canvasRef.current);
     // The spawn animation hands over to idle on its own
-    stage.onAnimation = (name) => setCurrent(name);
+    stage.onAnimation = (name) => {
+      setCurrent(name);
+      if (tauntRef.current && name === stage.idleName && stage.playTaunt()) {
+        tauntRef.current = null;
+      }
+    };
     stageRef.current = stage;
+    // The dev server's headless checks read the stage (what plays, what is loaded)
+    if (import.meta.env.DEV) window.__stage = stage;
     return () => stage.dispose();
   }, []);
 
@@ -365,8 +374,13 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
   const activitiesKey = activities.map((entry) => entry.join(":")).join("|");
   useEffect(() => {
     stageRef.current.setActivityModifiers(activities);
+    // A taunt shown: now if the hero stands idle, else when it comes to
+    tauntRef.current = item?.slot === "taunt" ? item.id : null;
+    if (tauntRef.current && stageRef.current.idling && stageRef.current.playTaunt()) {
+      tauntRef.current = null;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activitiesKey]);
+  }, [activitiesKey, item?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -734,12 +748,12 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
           />
         )}
 
-        {item?.kind === "courier" && !outfit.hero && item.models.length > 1 && (
+        {item && modelsOneAtATime(item) && !outfit.hero && !outfit.scene && item.models.length > 1 && (
           <Toggle
-            label="Courier form"
+            label={item.kind === "courier" ? "Courier form" : "Model"}
             value={(outfit.variant ?? 0) % item.models.length}
             onChange={onVariant}
-            options={item.models.map((model, index) => ({ value: index, label: /flying/.test(model) ? "Flying" : "Ground" }))}
+            options={modelLabels(item).map((label, index) => ({ value: index, label }))}
           />
         )}
 

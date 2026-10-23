@@ -5,6 +5,7 @@ import { ARMORY_CATEGORIES, ARMORY_GROUPS, SCENE_CATEGORIES, categoryIcon } from
 import { useDismiss, useUiLayout } from "./ui.jsx";
 import ItemDetails from "./ItemDetails.jsx";
 import { EmoticonsContent } from "./Emoticons.jsx";
+import ChatWheelLines from "./ChatWheelLines.jsx";
 
 // The game's Armory (dashboard_page_collection, dashboard_tabs_collection, collection_shared,
 // ui_econ_item_animated): the tabs under the top bar; a 300 wide column of heroes or categories on
@@ -23,6 +24,7 @@ const TABS = [
 const GROUPS_OF = {
   world: ARMORY_GROUPS.filter(([tab]) => tab === "world"),
   interface: ARMORY_GROUPS.filter(([tab]) => tab === "interface"),
+  treasury: ARMORY_GROUPS.filter(([tab]) => tab === "treasury"),
 };
 const firstCategory = (tab) => GROUPS_OF[tab][0][2][0][0];
 
@@ -305,7 +307,7 @@ function CategoryRow({ base, category, count, active, onClick }) {
         style={{ maskImage: `url(${icon})`, WebkitMaskImage: `url(${icon})`, maskSize: "contain", WebkitMaskSize: "contain", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat" }}
       />
       <span className="ml-[12px] truncate text-[19px] leading-none font-semibold tracking-[1.5px] uppercase">
-        {category.label} <span className="font-normal opacity-50">({count.toLocaleString("en")})</span>
+        {category.label} {count !== null && <span className="font-normal opacity-50">({count.toLocaleString("en")})</span>}
       </span>
     </button>
   );
@@ -330,11 +332,12 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
   const [categories, setCategories] = useState(() => ({
     world: routeCategory?.tab === "world" ? routeCategory.id : firstCategory("world"),
     interface: audioCategory ?? (routeCategory?.tab === "interface" ? routeCategory.id : firstCategory("interface")),
+    treasury: routeCategory?.tab === "treasury" ? routeCategory.id : "treasures",
   }));
   const [status, setStatus] = useState({ store: true, unavailable: true });
   const [treasure, setTreasure] = useState(route.type === "treasure" ? route.id : null);
   // The item shown over the list, which has nothing to stand in the scene
-  const hasScene = (item) => SCENE_CATEGORIES.has(item.category) && item.models.length > 0;
+  const hasScene = (item) => SCENE_CATEGORIES.has(item.category) && (item.models.length > 0 || Boolean(item.scene && catalog.scenesById[item.scene]));
   const [details, setDetails] = useState(() => {
     if (audioCategory) {
       // The pack's item: an announcer by its folder, a music pack by its events' name, which holds
@@ -381,7 +384,9 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
   let controls = null;
   // The status toggles' counts, of the list before they filter it
   let statusCounts = null;
-  const category = tab === "world" || tab === "interface" ? ARMORY_CATEGORIES[categories[tab]] : null;
+  // The chosen category of World, Interface or Treasury (whose Treasures are the chests)
+  const chosen = GROUPS_OF[tab] ? ARMORY_CATEGORIES[categories[tab]] : null;
+  const category = chosen?.id === "treasures" ? null : chosen;
   const sortControl = (
     <Labeled label="Sort by:">
       <DropDown value={sortBy} options={SORT_BY} onChange={setSortBy} label="Sort by" />
@@ -443,7 +448,8 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
     title = category.label;
     size = category.id === "stickers" || category.id === "capsules" ? TILE.sticker : TILE.global;
     const found = (byCategory[category.id] ?? []).filter((item) => matches(item.name));
-    statusCounts = Object.fromEntries(STATUS.map(([id, , test]) => [id, found.filter(test).length]));
+    // The chat wheel's lines are no items: no status to filter by (CollectionTab_ChatWheel)
+    statusCounts = category.id === "chat_wheel" ? null : Object.fromEntries(STATUS.map(([id, , test]) => [id, found.filter(test).length]));
     const shown = sortItems(
       found.filter((item) => STATUS.some(([id, , test]) => status[id] && test(item))),
       sortBy
@@ -566,7 +572,7 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
           ))}
         </ul>
       </>
-    ) : category ? (
+    ) : chosen ? (
       // #CollectionTabGroups: each group's name (LabelSmall, a faint line above all but the first)
       // over its categories
       <div className="min-h-0 flex-1 overflow-y-auto pt-[8px] pb-[144px] scrollbar-thin">
@@ -585,11 +591,12 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
                   <CategoryRow
                     base={base}
                     category={ARMORY_CATEGORIES[id]}
-                    count={byCategory[id]?.length ?? 0}
+                    count={id === "treasures" ? catalog.treasures.length : id === "chat_wheel" ? null : byCategory[id]?.length ?? 0}
                     active={categories[tab] === id}
                     onClick={() => {
                       setCategories((current) => ({ ...current, [tab]: id }));
                       setQuery("");
+                      id === "treasures" && setTreasure(null);
                     }}
                   />
                 </li>
@@ -598,14 +605,6 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
           </section>
         ))}
       </div>
-    ) : tab === "treasury" ? (
-      <ul className="pt-[8px]">
-        <li>
-          <button onClick={() => setTreasure(null)} data-sound="ui_generic_button_click" className={`${row(!treasure)} px-[12px] py-[8px]`}>
-            <span className="text-[19px] leading-none font-semibold tracking-[1.5px] uppercase">Treasures</span>
-          </button>
-        </li>
-      </ul>
     ) : null;
 
   // The panel is 848 wide beside the scene (1054 on 21:9); 1470 for a category the scene does not
@@ -657,11 +656,17 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
                     <StatusToggle key={id} label={label} count={statusCounts[id]} on={status[id]} onChange={(on) => setStatus((current) => ({ ...current, [id]: on }))} />
                   ))}
                 <SearchBox value={query} onChange={setQuery} placeholder="Filter by keyword" className={`w-[360px] ${statusCounts ? "ml-auto" : ""}`} />
-                <span className={`text-[16px] text-[#8b989e] ${statusCounts ? "ml-[16px]" : "ml-auto"}`}>{total.toLocaleString("en")}</span>
+                {category?.id !== "chat_wheel" && <span className={`text-[16px] text-[#8b989e] ${statusCounts ? "ml-[16px]" : "ml-auto"}`}>{total.toLocaleString("en")}</span>}
               </div>
               {category?.id === "emoticons" && <EmoticonsContent modelsBase={base} />}
               <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto pt-[12px] pr-[8px] pb-[12px] pl-[12px] shadow-[inset_0_1px_0_rgb(238_245_255/0.02)] scrollbar-thin">
-                {total ? rendered : <p className="py-[32px] text-center text-[18px] text-[#8b989e]/50">Nothing to display</p>}
+                {category?.id === "chat_wheel" ? (
+                  <ChatWheelLines modelsBase={base} query={query} />
+                ) : total ? (
+                  rendered
+                ) : (
+                  <p className="py-[32px] text-center text-[18px] text-[#8b989e]/50">Nothing to display</p>
+                )}
                 {shown < total && <div ref={sentinel} className="h-px" />}
               </div>
               <span aria-hidden className="pointer-events-none absolute inset-0 border border-white/[0.03]" />

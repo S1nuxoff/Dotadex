@@ -66,6 +66,16 @@ export const ARMORY_GROUPS = [
       ["other", "Other", "other"],
     ],
   ],
+  // The Treasury's rows (0x185b96090): its chests are the catalog's treasures, the rest are items
+  [
+    "treasury",
+    "Treasury",
+    [
+      ["treasures", "Treasures", "treasure"],
+      ["keys", "Keys", "key"],
+      ["charms", "Charms", "charm"],
+    ],
+  ],
 ];
 
 // The slot an item is in, its own or its prefab's
@@ -81,11 +91,26 @@ const TREASURY = new Set(["treasure_chest", "retired_treasure_chest", "key"]);
 // The game's flags of an item's kind, kept out of Other (the definition's 0x21f bits 0x01-0x70)
 const OWN_KINDS = new Set(["sticker_capsule", "sticker", "socket_gem", "emoticon_tool"]);
 
-// The World or Interface category of an items_game item and the row of the list it is in, or null:
-// { category, row? }
-export function armoryCategory(item, prefabs) {
+// The Treasury's Charms (0x18263c140): these tools, and the item 16291
+const CHARM_TOOLS = new Set(["tournament_passport", "wrapped_gift", "victory_prediction"]);
+
+// The World, Interface or Treasury category of an items_game item and the row of the list it is
+// in, or null: { category, row? }
+export function armoryCategory(item, prefabs, id) {
   const prefab = item.prefab;
   const slot = slotOf(item, prefabs);
+  const tool = item.tool?.type;
+  // The Treasury's Keys (tool decoder_ring) and Charms
+  if (tool === "decoder_ring") {
+    return { category: "keys" };
+  }
+  if (CHARM_TOOLS.has(tool) || id === "16291") {
+    return { category: "charms" };
+  }
+  // Emoticons: the game's emoticon flag, set for the emoticon packs and the tools unlocking them
+  if (tool === "emoticon_unlock") {
+    return { category: "emoticons" };
+  }
   const byPrefab = {
     courier: "couriers",
     ward: "wards",
@@ -127,7 +152,7 @@ export function armoryCategory(item, prefabs) {
     return { category: bySlot[slot] };
   }
   // Battle passes: tool type compendium (also event_points of one event, left out)
-  if (item.tool?.type === "compendium") {
+  if (tool === "compendium") {
     return { category: "event" };
   }
   const heroes = heroesOf(item);

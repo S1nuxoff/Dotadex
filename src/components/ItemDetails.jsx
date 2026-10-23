@@ -103,6 +103,31 @@ function useArmoryPicture(modelsBase, item) {
   return picture && `${modelsBase}${picture}`;
 }
 
+// A cursor pack's cursors (data/cursors.json: { pack: { cursor: [hot x, hot y] } })
+let cursorData = null;
+function useCursors(modelsBase, pack) {
+  const [cursors, setCursors] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    setCursors(null);
+    if (!pack) return;
+    cursorData ??= fetchData(`${modelsBase}data/cursors.json`)
+      .then((res) => (res.ok ? res.json() : {}))
+      .catch(() => ({}));
+    cursorData.then((data) => !cancelled && setCursors(data[pack] ?? {}));
+    return () => {
+      cancelled = true;
+    };
+  }, [modelsBase, pack]);
+  return cursors;
+}
+
+// The cursors' names as the game's cursor.res has them: cursor_spell_enemy -> Spell enemy
+const cursorName = (name) => {
+  const words = name.replace(/^cursor_/, "").replace(/_/g, " ");
+  return words[0].toUpperCase() + words.slice(1);
+};
+
 export default function ItemDetails({ catalog, item, onClose }) {
   const look = rarity(item);
   const category = ARMORY_CATEGORIES[item.category];
@@ -112,6 +137,10 @@ export default function ItemDetails({ catalog, item, onClose }) {
   const picture = useArmoryPicture(catalog.modelsBase, item);
   const emoticons = useEmoticons(catalog.modelsBase);
   const unlocked = item.emoticons && emoticons ? emoticonRange(emoticons, item.emoticons) : [];
+  const cursors = useCursors(catalog.modelsBase, item.cursor);
+  const cursorUrl = (name) => `${catalog.modelsBase}images/cursors/${item.cursor}/${name}.png`;
+  // The pack's default cursor over the whole card, to try it
+  const cursorStyle = cursors?.cursor_default ? { cursor: `url(${cursorUrl("cursor_default")}) ${cursors.cursor_default[0]} ${cursors.cursor_default[1]}, auto` } : undefined;
   useEffect(() => {
     const onKey = (event) => event.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -124,6 +153,7 @@ export default function ItemDetails({ catalog, item, onClose }) {
         role="dialog"
         aria-label={item.name}
         onClick={(event) => event.stopPropagation()}
+        style={cursorStyle}
         className="relative flex max-h-[86%] w-[880px] flex-col overflow-hidden bg-[radial-gradient(140%_100%_at_0%_0%,#202833f4,#06080e)] shadow-[0_28px_120px_-8px_rgb(0_0_0/0.8)]"
       >
         <span aria-hidden className="h-[4px] shrink-0" style={{ background: look.color }} />
@@ -158,6 +188,17 @@ export default function ItemDetails({ catalog, item, onClose }) {
             ×
           </button>
         </div>
+        {cursors && Object.keys(cursors).length > 0 && (
+          // Each cursor of the pack, shown as itself when the pointer is over it
+          <ul className="grid min-h-0 grid-cols-4 gap-[6px] overflow-y-auto border-t border-white/[0.04] px-[20px] py-[12px] scrollbar-thin">
+            {Object.entries(cursors).map(([name, [x, y]]) => (
+              <li key={name} className="flex items-center gap-[10px] bg-black/30 px-[10px] py-[6px] hover:bg-white/[0.06]" style={{ cursor: `url(${cursorUrl(name)}) ${x} ${y}, auto` }}>
+                <img src={cursorUrl(name)} alt="" className="size-[32px] shrink-0 [image-rendering:pixelated]" />
+                <span className="truncate text-[15px] text-[#b0bcc2]">{cursorName(name)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {unlocked.length > 0 && (
           <div className="flex flex-wrap border-t border-white/[0.04] px-[20px] py-[12px]">
             {unlocked.map((emoticon) => (

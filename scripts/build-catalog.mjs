@@ -78,14 +78,20 @@ function inStore(item) {
 
 // An item's place in the Armory's World or Interface tab, and what its preview plays: a music
 // pack's events (<pack>.music.*), an announcer's sound folder
-function armoryFields(item) {
-  const place = armoryCategory(item, itemsGame.prefabs);
+function armoryFields(item, id) {
+  const place = armoryCategory(item, itemsGame.prefabs, id);
   if (!place) return null;
   const fields = { category: place.category };
   if (place.row) fields.row = place.row;
   for (const visual of Object.values(item.visuals ?? {})) {
     if (visual?.type === "sound" && typeof visual.modifier === "string" && visual.modifier.endsWith(".music.")) {
       fields.music = visual.modifier.slice(0, -".music.".length);
+    } else if (visual?.type === "portrait_background_map" && typeof visual.asset === "string" && String(visual.style ?? "0") === "0") {
+      // A terrain's preview map (maps/terrain_previews/<name>.vmap), a scene of the scenes dataset
+      fields.scene = visual.asset.toLowerCase().replace(/^maps\//, "").replace(/\.vmap$/, "");
+    } else if (visual?.type === "cursor_pack" && typeof visual.asset === "string") {
+      // resource/cursor/valve/<pack>
+      fields.cursor = visual.asset.toLowerCase().split("/").pop();
     } else if (visual?.type === "announcer" && typeof visual.asset === "string") {
       fields.announcer = visual.asset.replace(/^npc_dota_hero_/, "");
     }
@@ -255,7 +261,7 @@ for (const [id, entry] of Object.entries(index.items)) {
   if (inStore(item)) {
     record.store = 1;
   }
-  Object.assign(record, hero ? null : armoryFields(item));
+  Object.assign(record, hero ? null : armoryFields(item, id));
 
   items.push(record);
   idByName.set(entry.name, id);
@@ -268,7 +274,7 @@ for (const [id, item] of Object.entries(gameItems)) {
   if (index.items[id] || id === "default" || item.hidden === "1" || !item.image_inventory) {
     continue;
   }
-  const fields = armoryFields(item);
+  const fields = armoryFields(item, id);
   if (!fields) {
     continue;
   }
@@ -289,7 +295,9 @@ for (const [id, item] of Object.entries(gameItems)) {
 // hero_base slot, worn like any other item, so their sets are complete
 for (const [id, item] of Object.entries(gameItems)) {
   const heroKeys = heroKeysOf(item);
-  if (index.items[id] || item.prefab !== "wearable" || item.item_slot !== "hero_base" || heroKeys.length !== 1 || !item.image_inventory) {
+  // And the taunts (an activity modifier on ACT_DOTA_TAUNT), in the hero's taunt slot
+  const taunt = item.prefab === "taunt";
+  if (index.items[id] || !((item.prefab === "wearable" && item.item_slot === "hero_base") || taunt) || heroKeys.length !== 1 || !item.image_inventory) {
     continue;
   }
   const name = localize(item.item_name) ?? item.name;
@@ -300,7 +308,7 @@ for (const [id, item] of Object.entries(gameItems)) {
     rarity: item.item_rarity ?? "common",
     models: [],
     hero: heroIdOf(heroKeys[0]),
-    slot: "hero_base",
+    slot: taunt ? "taunt" : "hero_base",
     icon: item.image_inventory,
   };
   if (item.creation_date) record.date = item.creation_date;

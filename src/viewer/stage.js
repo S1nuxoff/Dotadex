@@ -3114,6 +3114,20 @@ export class Stage {
     return true;
   }
 
+  // Plays the hero's taunt once (ACT_DOTA_TAUNT, the sequence the worn taunt's modifier picks, as
+  // the loadout previews a taunt): false when the model has none
+  playTaunt() {
+    const names = Object.keys(this.actions ?? {});
+    const modifiers = (this.activityModifiers ?? []).filter(([act]) => act === "ALL" || act === "ACT_DOTA_TAUNT").map(([, mod]) => mod);
+    const name = sequenceFor(this.clipSequences, names, "ACT_DOTA_TAUNT", modifiers);
+    return name ? this.playOnce(name) : false;
+  }
+
+  // Whether the model stands in its idle pose (no spawn or one-off animation playing)
+  get idling() {
+    return Boolean(this.current && this.idleName && this.current === this.actions?.[this.idleName]);
+  }
+
   // The first animation whose name matches one of the patterns, in their order
   findAnimation(patterns) {
     const names = Object.keys(this.actions).filter((name) => !/loadout|portrait|@/i.test(name));

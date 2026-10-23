@@ -128,7 +128,63 @@ const cursorName = (name) => {
   return words[0].toUpperCase() + words.slice(1);
 };
 
-export default function ItemDetails({ catalog, item, onClose }) {
+// The Modifiers section's names of an item's visuals' types (dashboard_page_store_item_details's
+// ListedModifier rows, DOTA_tooltip_econ_item_modifier_*)
+const MODIFIERS = {
+  activity: "Animation",
+  announcer: "Announcer",
+  hud_skin: "HUD",
+  ability_name: "Ability Name",
+  loading_screen: "Loading Screen",
+  cursor_pack: "Cursor Pack",
+  portrait_game: "Portrait",
+  particle_create: "Ambient Effects",
+  custom_kill_effect: "Kill Effects",
+  particle: "Custom Effects",
+  particle_clientside: "Custom Effects",
+  model: "Model",
+  entity_clientside_model: "Model",
+  additional_wearable: "Wearable",
+  pet: "Pet",
+  weather: "Weather",
+  weather_effect: "Weather",
+  sound: "Sound",
+  sound_clientside: "Sound",
+  soundscape: "Soundscape",
+  speech: "Voice",
+  icon_replacement: "Icon",
+  mvp_map_override: "MVP Background",
+};
+
+// A Section of the list (#00000058, a black edge, 12 in) under its LabelLarge title
+function Section({ title, children }) {
+  return (
+    <section className="mb-[8px] w-full border border-black/60 bg-black/[0.35] p-[12px]">
+      {title && <h3 className="mb-[8px] text-[19px] leading-[24px] font-semibold tracking-[1.5px] text-[#dae2e5] uppercase">{title}</h3>}
+      {children}
+    </section>
+  );
+}
+
+// An item's icon in a list (DOTAEconItem at 60%), opening it
+function SmallItem({ item, onOpen }) {
+  return (
+    <button
+      onClick={() => onOpen(item)}
+      title={item.name}
+      className="mr-[10px] mb-[6px] block h-[58px] w-[88px] overflow-hidden bg-gradient-to-b from-[#424142] from-50% to-[#9d9d9d] hover:brightness-150"
+      style={{ boxShadow: `inset 0 -3px 0 ${rarity(item).color}` }}
+    >
+      <img src={itemIcon(item)} alt="" className="size-full object-cover" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />
+    </button>
+  );
+}
+
+// The item details page as the game's store shows an item (dashboard_page_store_item_details): the
+// item's preview on the left (60%), the BodyBox on the right (776 wide, 71 below the page's top,
+// 96 from the right, 120 above the bottom): the title bar, the rarity stripe, the banner with the
+// rarity, treasure, date and slot, then the sections; the rarity and name under the preview
+export default function ItemDetails({ catalog, item, onClose, onOpen }) {
   const look = rarity(item);
   const category = ARMORY_CATEGORIES[item.category];
   const row = category?.rows?.find(([id]) => id === item.row)?.[1];
@@ -139,84 +195,147 @@ export default function ItemDetails({ catalog, item, onClose }) {
   const unlocked = item.emoticons && emoticons ? emoticonRange(emoticons, item.emoticons) : [];
   const cursors = useCursors(catalog.modelsBase, item.cursor);
   const cursorUrl = (name) => `${catalog.modelsBase}images/cursors/${item.cursor}/${name}.png`;
-  // The pack's default cursor over the whole card, to try it
+  // The pack's default cursor over the whole page, to try it
   const cursorStyle = cursors?.cursor_default ? { cursor: `url(${cursorUrl("cursor_default")}) ${cursors.cursor_default[0]} ${cursors.cursor_default[1]}, auto` } : undefined;
   useEffect(() => {
     const onKey = (event) => event.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  // The treasure it drops from, the bundles it comes in, the items a bundle holds
+  const treasure = catalog.treasures.find((chest) => chest.tiers.some((tier) => tier.includes(item.id)));
+  const bundles = catalog.items.filter((entry) => entry.contents?.includes(item.id));
+  const contents = (item.contents ?? []).map((id) => catalog.itemsById[id]).filter(Boolean);
+  const modifiers = [...new Set((item.modifiers ?? []).map((type) => MODIFIERS[type]).filter(Boolean))];
 
   return (
-    <div className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-label={item.name}
-        onClick={(event) => event.stopPropagation()}
-        style={cursorStyle}
-        className="relative flex max-h-[86%] w-[880px] flex-col overflow-hidden bg-[radial-gradient(140%_100%_at_0%_0%,#202833f4,#06080e)] shadow-[0_28px_120px_-8px_rgb(0_0_0/0.8)]"
-      >
-        <span aria-hidden className="h-[4px] shrink-0" style={{ background: look.color }} />
-        {/* A loading screen's own picture, as wide as the card */}
-        {picture && <img src={picture} alt="" className="aspect-video w-full shrink-0 bg-black object-cover" />}
-        <div className="flex gap-[24px] p-[24px]">
-          <img
-            src={itemIcon(item)}
-            hidden={Boolean(picture)}
-            alt=""
-            className="h-[220px] w-[330px] shrink-0 bg-gradient-to-b from-[#424142] from-50% to-[#9d9d9d] object-cover"
-            onError={(event) => (event.currentTarget.style.visibility = "hidden")}
-          />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <h2 className="font-display text-[26px] leading-[1.2] font-bold tracking-[1.5px] text-white uppercase">{item.name}</h2>
-            <p className="mt-[8px] text-[16px] tracking-[1px] uppercase">
-              <span style={{ color: look.color }}>{look.name}</span>
-              <span className="text-[#8b989e]"> · {row ?? category?.label ?? "Item"}</span>
-            </p>
-            {item.date && <p className="mt-[6px] text-[16px] text-[#8b989e]">Released {item.date}</p>}
-            <p className="mt-[6px] text-[16px] text-[#8b989e]">
-              {item.store ? "Purchasable in the store" : "Unavailable in the store"}
-              {item.price !== undefined && ` · Market ${formatPrice(item.price)}`}
-            </p>
-            {item.music && folder && (
-              <div className="mt-auto pt-[16px]">
-                <EquipMusic modelsBase={catalog.modelsBase} folder={folder} />
-              </div>
-            )}
-          </div>
-          <button onClick={onClose} aria-label="Close" className="absolute top-[14px] right-[16px] text-[26px] leading-none text-white/40 hover:text-white">
+    <div role="dialog" aria-label={item.name} className="pointer-events-auto absolute inset-0 z-30 flex bg-[#0d0e12]" style={cursorStyle}>
+      {/* .ModelContainer: the item's own picture where the game stands its model */}
+      <div className="relative flex w-[60%] flex-col items-center justify-center pb-[120px]">
+        <img
+          src={picture ?? itemIcon(item)}
+          alt=""
+          className={
+            picture
+              ? "w-[92%] shadow-[0_0_40px_rgb(0_0_0/0.8)]"
+              : "h-[420px] w-[630px] bg-gradient-to-b from-[#424142] from-50% to-[#9d9d9d] object-cover shadow-[0_0_40px_rgb(0_0_0/0.8)]"
+          }
+          onError={(event) => (event.currentTarget.style.visibility = "hidden")}
+        />
+        {/* .PrimaryControls' .ItemInfo: the rarity (18) and the name (24) at the bottom, right */}
+        <div className="absolute right-[20px] bottom-[124px] flex flex-col items-end tracking-[1px] uppercase">
+          <span className="mr-[7px] text-[18px] font-medium" style={{ color: look.color }}>
+            {look.name}
+          </span>
+          <span className="mr-[6px] text-[24px] font-medium text-white/70">{item.name}</span>
+          {item.music && folder && (
+            <span className="mt-[10px]">
+              <EquipMusic modelsBase={catalog.modelsBase} folder={folder} />
+            </span>
+          )}
+        </div>
+      </div>
+      {/* .BodyBox */}
+      <div className="mt-[71px] mr-[96px] mb-[120px] flex w-[776px] shrink-0 flex-col border-2 border-black bg-gradient-to-b from-[#2d2e30] to-[#202529] shadow-[0_0_12px_#000000aa]">
+        <div className="relative flex items-center bg-[linear-gradient(110deg,#2b2e2fee,#2b2e2f)]">
+          <img src={itemIcon(item)} alt="" className="h-[58px] w-[88px] shrink-0 object-cover" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />
+          <h2 className="ml-[12px] w-[525px] truncate text-[32px] leading-[1.3] font-bold text-white">{item.name}</h2>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            data-sound="ui_generic_button_click"
+            className="absolute top-0 right-0 grid size-[40px] place-items-center bg-black/70 text-[26px] leading-none text-white/70 hover:bg-black hover:text-white"
+          >
             ×
           </button>
         </div>
-        {cursors && Object.keys(cursors).length > 0 && (
-          // Each cursor of the pack, shown as itself when the pointer is over it
-          <ul className="grid min-h-0 grid-cols-4 gap-[6px] overflow-y-auto border-t border-white/[0.04] px-[20px] py-[12px] scrollbar-thin">
-            {Object.entries(cursors).map(([name, [x, y]]) => (
-              <li key={name} className="flex items-center gap-[10px] bg-black/30 px-[10px] py-[6px] hover:bg-white/[0.06]" style={{ cursor: `url(${cursorUrl(name)}) ${x} ${y}, auto` }}>
-                <img src={cursorUrl(name)} alt="" className="size-[32px] shrink-0 [image-rendering:pixelated]" />
-                <span className="truncate text-[15px] text-[#b0bcc2]">{cursorName(name)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {unlocked.length > 0 && (
-          <div className="flex flex-wrap border-t border-white/[0.04] px-[20px] py-[12px]">
-            {unlocked.map((emoticon) => (
-              <Emoticon key={emoticon.id} modelsBase={catalog.modelsBase} emoticon={emoticon} size={64} />
-            ))}
-          </div>
-        )}
-        {sounds && (
-          <div className="min-h-0 flex-1 overflow-y-auto border-t border-white/[0.04] px-[24px] py-[16px] scrollbar-thin">
-            {files === null ? (
-              <p className="text-[16px] text-[#8b989e]">Loading the sounds</p>
-            ) : files.length ? (
-              <SoundList base={soundsBase(catalog.modelsBase)} files={files} />
-            ) : (
-              <p className="text-[16px] text-[#8b989e]">No sounds of this pack in the dataset</p>
+        <span aria-hidden className="h-[12px] shrink-0" style={{ background: look.color }} />
+        {/* #Banner: 100 high, the rarity, the treasure, the date and the slot */}
+        <div className="flex h-[100px] shrink-0 border-y border-black">
+          <div className="mt-[6px] ml-[16px] flex flex-col text-[16px] leading-[22px] text-[#b0bcc2]">
+            <span>
+              Rarity: <span style={{ color: look.color }}>{look.name}</span>
+            </span>
+            {treasure && (
+              <button onClick={() => onOpen({ $treasure: treasure })} className="text-left hover:brightness-[4]">
+                Included in: {treasure.name}
+              </button>
             )}
+            {item.date && <span>Released: {item.date}</span>}
+            <span>Slot: {row ?? category?.label ?? "Item"}</span>
           </div>
-        )}
+          <div className="mt-[6px] mr-[16px] ml-auto flex flex-col items-end text-[16px] leading-[22px] text-[#8b989e]">
+            <span>{item.store ? "Purchasable" : "Unavailable"}</span>
+            {item.price !== undefined && <span>Market: {formatPrice(item.price)}</span>}
+          </div>
+        </div>
+        {/* .SectionList */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-[8px] pb-0 scrollbar-thin">
+          {contents.length > 0 && (
+            <Section title="Included in this Bundle">
+              <div className="flex flex-wrap">
+                {contents.map((entry) => (
+                  <SmallItem key={entry.id} item={entry} onOpen={onOpen} />
+                ))}
+              </div>
+            </Section>
+          )}
+          {bundles.length > 0 && (
+            <Section title="Purchasing Options">
+              <div className="flex flex-wrap">
+                {bundles.map((entry) => (
+                  <SmallItem key={entry.id} item={entry} onOpen={onOpen} />
+                ))}
+              </div>
+            </Section>
+          )}
+          {unlocked.length > 0 && (
+            <Section title="Emoticons">
+              <div className="flex flex-wrap">
+                {unlocked.map((emoticon) => (
+                  <Emoticon key={emoticon.id} modelsBase={catalog.modelsBase} emoticon={emoticon} size={64} />
+                ))}
+              </div>
+            </Section>
+          )}
+          {cursors && Object.keys(cursors).length > 0 && (
+            <Section title="Cursors">
+              {/* Each cursor of the pack, shown as itself when the pointer is over it */}
+              <ul className="grid grid-cols-3 gap-[6px]">
+                {Object.entries(cursors).map(([name, [x, y]]) => (
+                  <li key={name} className="flex items-center gap-[10px] bg-black/30 px-[10px] py-[6px] hover:bg-white/[0.06]" style={{ cursor: `url(${cursorUrl(name)}) ${x} ${y}, auto` }}>
+                    <img src={cursorUrl(name)} alt="" className="size-[32px] shrink-0 [image-rendering:pixelated]" />
+                    <span className="truncate text-[15px] text-[#b0bcc2]">{cursorName(name)}</span>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+          {sounds && (
+            <Section title={item.music ? "Tracks" : "Lines"}>
+              {files === null ? (
+                <p className="text-[16px] text-[#8b989e]">Loading the sounds</p>
+              ) : files.length ? (
+                <SoundList base={soundsBase(catalog.modelsBase)} files={files} />
+              ) : (
+                <p className="text-[16px] text-[#8b989e]">No sounds of this pack in the dataset</p>
+              )}
+            </Section>
+          )}
+          {modifiers.length > 0 && (
+            <Section title="Modifiers">
+              <ul className="flex flex-wrap">
+                {modifiers.map((name) => (
+                  <li key={name} className="my-[3px] ml-[6px] w-[180px] text-[16px] text-[#b0bcc2]">
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+        </div>
+        {/* .ItemEditFooter */}
+        <div className="h-[64px] shrink-0 border-t border-white/[0.01] bg-[#1d2023] shadow-[0_-1px_8px_rgb(0_0_0/0.6)]" />
       </div>
     </div>
   );

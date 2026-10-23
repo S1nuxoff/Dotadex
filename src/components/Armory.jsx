@@ -674,7 +674,24 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
           </div>
           </div>
         </div>
-        {detailsItem && <ItemDetails catalog={catalog} item={detailsItem} onClose={() => setDetails(null)} />}
+        {detailsItem && (
+          <ItemDetails
+            catalog={catalog}
+            item={detailsItem}
+            onClose={() => setDetails(null)}
+            // A bundle's item, the bundle an item comes in, the treasure it drops from
+            onOpen={(entry) => {
+              if (entry.$treasure) {
+                setDetails(null);
+                setTab("treasury");
+                setCategories((current) => ({ ...current, treasury: "treasures" }));
+                setTreasure(entry.$treasure.id);
+              } else {
+                openItem(entry);
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );

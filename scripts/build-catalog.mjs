@@ -96,6 +96,11 @@ function armoryFields(item, id) {
       fields.announcer = visual.asset.replace(/^npc_dota_hero_/, "");
     }
   }
+  // What the item changes, the item details page's Modifiers (its visuals' types)
+  const modifiers = [...new Set(Object.values(item.visuals ?? {}).map((visual) => visual?.type).filter((type) => typeof type === "string"))];
+  if (modifiers.length) fields.modifiers = modifiers;
+  // A bundle's contents by name, made ids once every item is known
+  if (item.bundle && typeof item.bundle === "object") fields.contents = Object.keys(item.bundle);
   // An emoticon pack unlocks a range of emoticons (scripts/emoticons.txt ids)
   const usage = item.tool?.type === "emoticon_unlock" ? item.tool.usage : null;
   if (usage?.emoticon_id_start) {
@@ -343,6 +348,10 @@ for (const [id, item] of Object.entries(gameItems)) {
 }
 
 const itemById = new Map(items.map((item) => [item.id, item]));
+// A bundle's contents as the ids of those in the catalog
+for (const item of items) {
+  if (item.contents) item.contents = item.contents.map((name) => idByName.get(name)).filter(Boolean);
+}
 
 // Sets of a hero's items, worn together. A set's rarity is its store bundle's (the game's card
 // takes the bundle item's: Hell's Legion is Immortal though most of its items are Mythical)

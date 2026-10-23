@@ -643,7 +643,8 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
       />
 
       {progress !== null && (
-        <div className="absolute inset-x-0 top-0 h-[2px] bg-line/60" role="progressbar" aria-valuenow={Math.round(progress * 100)}>
+        // In the Armory the top is under its tabs: the bar runs along the bottom of the scene
+        <div className={`absolute inset-x-0 bg-line/60 ${armory ? "bottom-0 h-[3px]" : "top-0 h-[2px]"}`} role="progressbar" aria-valuenow={Math.round(progress * 100)}>
           <div className="h-full transition-[width] duration-200" style={{ width: `${Math.max(progress, 0.04) * 100}%`, background: color }} />
         </div>
       )}

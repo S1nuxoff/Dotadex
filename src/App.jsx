@@ -12,7 +12,8 @@ import { List, X } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
 import Scenes from "./components/Scenes.jsx";
 import Viewer from "./components/Viewer.jsx";
-import Wardrobe, { EquippedSummary, OutfitPicker } from "./components/Wardrobe.jsx";
+import Wardrobe, { EquippedSummary } from "./components/Wardrobe.jsx";
+import { OutfitPicker } from "./components/CosmeticPicker.jsx";
 import HeroInfo from "./components/HeroInfo.jsx";
 import Voice from "./components/Voice.jsx";
 import { AudioPage, ShopPage, TreasurePage } from "./components/InfoPages.jsx";
@@ -366,11 +367,13 @@ export default function App() {
     open({ type: "hero", id: outfit.hero, slots, persona: outfit.persona });
   };
   // A persona's set switches to the persona, a plain set back from it
-  const equipSet = (set) => {
+  // style: the set's style, taken by those of its items that have it
+  const equipSet = (set, style = 0) => {
     const persona = personaOf(set.items.map((id) => catalog.itemsById[id]).find(Boolean)?.slot);
     const slots = persona === outfit.persona ? { ...outfit.slots } : {};
     for (const id of set.items) {
-      slots[catalog.itemsById[id].slot] = { id, style: 0 };
+      const item = catalog.itemsById[id];
+      slots[item.slot] = { id, style: style < (item.styles?.length ?? 1) ? style : 0 };
     }
     open({ type: "hero", id: outfit.hero, slots, persona });
   };
@@ -537,7 +540,7 @@ export default function App() {
               outfit={outfit}
               onEquip={equip}
               onEquipSet={equipSet}
-              onReset={() => open({ type: "hero", id: outfit.hero, slots: {}, persona: outfit.persona })}
+              onOutfit={(slots) => open({ type: "hero", id: outfit.hero, slots, persona: outfit.persona })}
               onClose={() => setWardrobe(false)}
             />
           }

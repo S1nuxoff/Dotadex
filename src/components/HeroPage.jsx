@@ -755,7 +755,7 @@ function Stats({ info }) {
 
 // DOTAPersonaSelector: the hero's own look ("Classic") and each persona by its cosmetic group's
 // name, with their icons, in the game's pill tab group; only for heroes with personas
-function PersonaSelector({ base, heroKey, info, texts, persona, onPersona }) {
+function PersonaSelector({ base, heroKey, info, texts, persona, onPersona, className = "-ml-[8px] mb-[20px] self-start" }) {
   const personas = Object.entries(info?.Persona ?? {}).sort(([a], [b]) => a - b);
   if (!personas.length) {
     return null;
@@ -769,7 +769,7 @@ function PersonaSelector({ base, heroKey, info, texts, persona, onPersona }) {
     ]),
   ];
   return (
-    <div className="-ml-[8px] mb-[20px] flex self-start rounded-full border border-black/20 bg-black/70 py-[2px]">
+    <div className={`${className} flex rounded-full border border-black/20 bg-black/70 py-[2px]`}>
       {options.map(([value, label, icon]) => (
         <button
           key={value}
@@ -1131,6 +1131,21 @@ export default function HeroPage({
         </div>
         {/* #HeroCustomize: the picker, over the page while CHANGE OUTFIT is open */}
         {pickerShown && <div className="absolute inset-0">{wardrobe}</div>}
+        {/* #PersonaSelector over the hero while customizing: in #HeroSceneBody, 72 below its top
+            (60 below the screen's, the scene 40 up), in the middle of the scene moved 500 left */}
+        {tab === "loadout" && (
+          <div className="hero-persona pointer-events-auto absolute top-[31px] left-[calc(50%-500px)] -translate-x-1/2">
+            <PersonaSelector
+              base={catalog.modelsBase}
+              heroKey={`npc_dota_hero_${shown.id}`}
+              info={info}
+              texts={data?.texts ?? {}}
+              persona={shownPersona}
+              onPersona={onPersona}
+              className=""
+            />
+          </div>
+        )}
       </div>
     </div>
   );

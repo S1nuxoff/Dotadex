@@ -421,6 +421,22 @@ export async function loadCatalog() {
   return res.json();
 }
 
+// Approximate market prices: the lowest offer on the trading platforms (DMarket, Skinport) by
+// the item's market name, read live from the price tracker, which updates them every 20 minutes
+const PRICES_URL = "https://raw.githubusercontent.com/S1nuxoff/dota2-price-tacker/main/static/prices/latest.json";
+
+export async function loadPrices() {
+  const res = await fetch(`${PRICES_URL}?t=${Date.now()}`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`The prices did not load (HTTP ${res.status}).`);
+  }
+  const prices = {};
+  for (const [name, entry] of Object.entries(await res.json())) {
+    if (entry.price > 0) prices[name] = Math.round(entry.price * 100) / 100;
+  }
+  return prices;
+}
+
 // Paths of the models exported so far, read live from the dataset
 export async function loadExported(modelsBase) {
   // exported.json is just the list; older datasets only have the whole index
@@ -440,8 +456,8 @@ export async function loadExported(modelsBase) {
 }
 
 // The part of the catalog that can be shown: heroes whose model is exported, wearing
-// the default items that are, and items whose default models are
-export function withExported(catalog, exported) {
+// the default items that are, and items whose default models are; with their prices once loaded
+export function withExported(catalog, exported, prices = {}) {
   // ?preview=all on the dev server treats everything as exported, to try the lists
   const all = import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "all";
   const ready = (models) => all || models.every((model) => exported.has(model));
@@ -459,7 +475,8 @@ export function withExported(catalog, exported) {
       item.styles ? { ...item, styles: item.styles.map((style) => (ready(style.models) ? style : { ...style, missing: true })) } : item
     )
     // Swaps whose model is not exported yet are left out
-    .map((item) => (item.swaps ? { ...item, swaps: item.swaps.filter(([, to]) => ready([to])) } : item));
+    .map((item) => (item.swaps ? { ...item, swaps: item.swaps.filter(([, to]) => ready([to])) } : item))
+    .map((item) => (prices[item.name] ? { ...item, price: prices[item.name] } : item));
 
   const itemsById = Object.fromEntries(items.map((item) => [item.id, item]));
   const itemsByHero = {};

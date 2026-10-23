@@ -6,7 +6,6 @@ import { MODELS_BASE } from "./dataset.mjs";
 import { WEATHER_SCENE, WEATHER_SYSTEMS, armoryCategory } from "../src/armory.js";
 
 const FILES = "https://raw.githubusercontent.com/S1nuxoff/dota2-file-tracker/main/static";
-const PRICES_URL = "https://raw.githubusercontent.com/S1nuxoff/dota2-price-tacker/main/static/prices/latest.json";
 const OUT = "public/catalog.json";
 
 // Internal hero names that differ from the ones players know
@@ -53,21 +52,15 @@ const heroIdOf = (key) => key.replace("npc_dota_hero_", "");
 const heroKeysOf = (item) => (item.used_by_heroes && typeof item.used_by_heroes === "object" ? Object.keys(item.used_by_heroes) : []);
 
 // INDEX_FILE: a local index.json, to try the site with a full catalog before an export
-const [index, itemsGame, english, prices] = await Promise.all([
+const [index, itemsGame, english] = await Promise.all([
   process.env.INDEX_FILE ? JSON.parse(fs.readFileSync(process.env.INDEX_FILE, "utf8")) : getJson(`${MODELS_BASE}index.json`),
   // ITEMS_GAME_FILE: a local items_game.json (one written by the file tracker's parser, before it is published)
   (process.env.ITEMS_GAME_FILE ? Promise.resolve(JSON.parse(fs.readFileSync(process.env.ITEMS_GAME_FILE, "utf8"))) : getJson(`${FILES}/items_game.json`)).then((data) => data.items_game),
   getJson(`${FILES}/items_english.json`, { lang: { Tokens: {} } }).then((data) => data.lang.Tokens),
-  getJson(PRICES_URL, {}),
 ]);
 const gameItems = itemsGame.items;
 const localize = (token) => (token?.startsWith("#") ? english[token.slice(1)] : null);
 
-// An approximate market price: the lowest offer on the trading platforms (DMarket, Skinport)
-function priceOf(name) {
-  const value = prices[name]?.price;
-  return value ? Math.round(value * 100) / 100 : undefined;
-}
 
 // Whether the store sells an item now: it has a store price, is not kept out of the store and
 // has not expired (the Armory's Purchasable / Unavailable filters)
@@ -274,10 +267,6 @@ for (const [id, entry] of Object.entries(index.items)) {
   if (heroSkins) {
     record.heroSkins = heroSkins;
   }
-  const price = priceOf(entry.name);
-  if (price) {
-    record.price = price;
-  }
   if (inStore(item)) {
     record.store = 1;
   }
@@ -303,8 +292,6 @@ for (const [id, item] of Object.entries(gameItems)) {
   if (item.creation_date) record.date = item.creation_date;
   const particles = particlesOf(item);
   if (particles) record.particles = particles;
-  const price = priceOf(item.name);
-  if (price) record.price = price;
   if (inStore(item)) record.store = 1;
   items.push(record);
   idByName.set(item.name, id);
@@ -338,8 +325,6 @@ for (const [id, item] of Object.entries(gameItems)) {
   if (activities) record.activities = activities;
   const heroSkins = heroSkinsOf(item);
   if (heroSkins) record.heroSkins = heroSkins;
-  const price = priceOf(item.name);
-  if (price) record.price = price;
   if (inStore(item)) record.store = 1;
   items.push(record);
   idByName.set(item.name, id);

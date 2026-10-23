@@ -24,6 +24,7 @@ import {
   listOf,
   loadCatalog,
   loadExported,
+  loadPrices,
   outfitFor,
   outfitParticles,
   outfitUnitModels,
@@ -39,6 +40,8 @@ import {
 
 // How often to look for models exported since the page opened
 const REFRESH_MS = 3 * 60 * 1000;
+// And for new prices (the price tracker runs every 20 minutes)
+const PRICES_REFRESH_MS = 10 * 60 * 1000;
 
 function tabFor(catalog, route) {
   if (!route || route.type === "hero") {
@@ -175,6 +178,7 @@ function Sheet({ open, onClose, label, side, children }) {
 export default function App() {
   const [base, setBase] = useState(null);
   const [exported, setExported] = useState(null);
+  const [prices, setPrices] = useState({});
   const [error, setError] = useState(null);
   const [route, setRoute] = useState(null);
   const [tab, setTab] = useState("heroes");
@@ -196,7 +200,15 @@ export default function App() {
   const uiScale = useUiScale();
   const [language, setLanguage] = useLanguage();
 
-  const catalog = useMemo(() => base && exported && withExported(base, exported), [base, exported]);
+  const catalog = useMemo(() => base && exported && withExported(base, exported, prices), [base, exported, prices]);
+
+  // Market prices come from the price tracker apart from the catalog, without holding the page
+  useEffect(() => {
+    const update = () => loadPrices().then(setPrices, () => {});
+    update();
+    const timer = setInterval(update, PRICES_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     // The list of exported models and the page scenes (the pedestal waits on them) are asked for

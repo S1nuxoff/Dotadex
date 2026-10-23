@@ -122,6 +122,42 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
   - The viewer's collection: what dropped kept in the browser; a dropped item opens in 3D, on its hero.
   - No money: free, no purchases, trading or cash-out; a simulator only.3, tooltips (the hints are the browser's titles). Read as plain CSS, not checked against a game shot: DropDown's `background-position: right 38px 35%`, the border brushes (taken as gradients of the border colour's alpha).
 
+## Data: the whole game in datasets (plan, not started)
+
+Agreed 2026-10-23: every game file the site can use lives on Hugging Face, one dataset per kind, exported whole (not only what the site needs today), by one tracker that checks Steam once per game update. GitHub keeps code and the prices only; the site repo keeps no game files.
+
+Today (2026-10-23), for reference:
+- Four trackers log into Steam on their own: dota2-file-tracker (items_game + 30 localizations, to GitHub), dota2-image-tracker (~20k panorama pictures as PNG, to GitHub), dota2-model-tracker (models, sounds, particles, scenes, game data, to 3 datasets), dota2-price-tacker (not the game: DMarket/Skinport).
+- The model tracker exports selectively: models worn by heroes and items, pictures in `IMAGE_FOLDERS`, data `data.js` parses; every new site feature needs the list extended and `DATA_VERSION` raised.
+- The site reads: HF dota2-models (models, data, particles, ~8.8k pictures, videos), dota2-sounds, dota2-scenes (found by replacing "dota2-models" in the URL), GitHub image tracker (cosmetic icons, `itemIcon`), GitHub file tracker (items_game at build), GitHub price tracker, Steam's CDN (hero portraits in the sidebar, Wardrobe and Viewer), and its own `public/` (12 stage models, ~40 UI pictures, fonts).
+- The game: 388k files, 70 GB in `pak01_dir.vpk` (+0.9 GB of map packages): textures 130k (57 GB: materials 31, panorama 20, models 5.6), sounds 105k (6.9 GB), particles 83k, materials 29k, models 18.7k, scripts and localization ~4.3k text files. Today on HF: dota2-models 36.5 GB, dota2-scenes 21.7 GB, dota2-sounds 6.9 GB.
+- Hugging Face (docs, 2026-10-23): free public storage is "best effort"; per repo under 100k files and under 10k entries per folder recommended; a dataset card is expected for large datasets.
+
+Target datasets (names to confirm):
+
+| Dataset | Holds | From the game |
+|---|---|---|
+| dota2-data | every script and localization as JSON (items_game, npc_*, all languages, kv3 data), and in `dotadex/` the files made for the site (index, exported, the parsed data/*.json) | `scripts/`, `resource/`, kv3 files |
+| dota2-images | every panorama picture (and the few videos) | `panorama/images/`, `panorama/videos/` |
+| dota2-models | every model as glb + glb.gz, with its materials, skins, cube maps | `models/`, their materials |
+| dota2-particles | every particle system (bundles), their textures, schema | `particles/` |
+| dota2-sounds | every sound and soundevents (105k files: over 100k, so split in two datasets or packed, see D-05) | `sounds/`, `soundevents/` |
+| dota2-maps | every map package and the scenes (today's dota2-scenes) | `maps/` |
+
+Steps, in this order:
+
+- [ ] **D-01 One list of data sources on the site.** `src/datasets.js` names every dataset and the price file once; nothing finds a dataset by replacing a name in a URL (Voice.jsx, App.jsx, catalog.js `scenesBase`). No data moves; every later step changes one line there.
+- [ ] **D-02 DATA.md: the map of the data.** In the tracker repo: which dataset holds what, which script writes it, which part of the site reads it, what each large JSON is. Kept current with every step below.
+- [ ] **D-03 dota2-data.** Export every script and localization file as JSON, items_game and the 30 languages included; move the site-made files (index.json, exported.json, data/*.json) under `dotadex/`. build-catalog reads items_game from it; then dota2-file-tracker is archived.
+- [ ] **D-04 dota2-images.** Every panorama picture (47k textures; check how many are distinct pictures and folders over 10k entries), the format the site uses today (PNG; WebP where already). The site's `itemIcon`, hero portraits (instead of Steam's CDN), the pictures in `public/ui` from it; `IMAGE_FOLDERS` removed; then dota2-image-tracker is archived.
+- [ ] **D-05 dota2-sounds whole.** All 105k sounds: split by folder into two datasets (voice lines / the rest) or pack small files, to stay under 100k files each.
+- [ ] **D-06 dota2-models whole.** Every model (units, creeps, buildings, props, not only heroes and items); the stage models from `public/stage` from it.
+- [ ] **D-07 dota2-particles.** The particle files moved out of dota2-models into their own dataset.
+- [ ] **D-08 dota2-maps.** dota2-scenes renamed, and every map package exported (129 of ~640 so far).
+- [ ] **D-09 One tracker.** dota2-model-tracker renamed (dota2-game-tracker or similar): one Steam login and one manifest check per run, all exporters after it, each by its own state; README with the diagram.
+- [ ] **D-10 Storage.** Measure each dataset after D-03..D-08; write the dataset cards; if the total is far above today's 65 GB, decide with the user (PRO account, or leave out what nobody will use, e.g. map textures).
+- [ ] **D-11 Clean up.** Remove from dota2-models what moved; the site repo's `public/` keeps only Dotadex's own files (fonts, logo).
+
 ## Later: abilities as in a match
 
 - [ ] **A-01 (#39) Data sources for abilities.** Which effects an ability makes, with which CPs and when, is mostly in the game's code. From data: animation events in models (`AE_CL_CREATE_PARTICLE_EFFECT`, `AE_CL_PLAYSOUND`), preview configurations in `.vpcf`, abilities' precache lists, `asset_modifier` swaps, cast animations and timings (`AbilityCastPoint`). Decide whether a small hand-written table for well-known abilities is acceptable (against the everything-from-the-dataset rule).

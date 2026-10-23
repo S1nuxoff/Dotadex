@@ -464,7 +464,7 @@ export default function App() {
       controlsRight={scenes}
       loadout={(route.type === "hero" && section.id === "heroes") || armory}
       armory={armory}
-      frameShift={armory ? (-600 * uiScale) / document.documentElement.clientWidth : route.type === "hero" && section.id === "heroes" && wardrobe ? 0.26 : 0}
+      frameShift={armory ? (-600 * uiScale) / document.documentElement.clientWidth : 0}
       portrait={portraits[portraitKey] ?? null}
       // The game's hero page opens on this camera (its panel starts on the set preview slot)
       portraitShot={armory ? "default" : "econ_set_preview"}

@@ -358,6 +358,91 @@ label:has(> input:focus) {
   }
 }
 
+/* CHANGE OUTFIT on a hero's page, as the game's (dashboard_page_hero_new_v2.css,
+   .EnableHeroCustomize; HeroCustomiseSlideDuration 0.5s). As in Panorama, the timing of the state
+   a part goes to is the one it goes there with. Lengths are the game's 1080-high layout's; the
+   scene is not in the zoomed layer, so it scales them itself */
+.hero-page .hero-scene {
+  transition: transform 0.5s cubic-bezier(0, 1, 0, 1);
+}
+.hero-page[data-customize] .hero-scene {
+  transform: translate(calc(-500px * var(--ui-scale)), calc(-40px * var(--ui-scale)));
+}
+/* #LeftColumn, #RightColumn, #HeroName */
+.hero-page .hero-column {
+  transition-property: transform, opacity;
+  transition-duration: 0.15s;
+  transition-timing-function: ease-in;
+}
+.hero-page[data-customize] .hero-column {
+  opacity: 0;
+  transform: translateX(-60px);
+  transition-duration: 0.4s;
+  transition-delay: 0.2s;
+  transition-timing-function: cubic-bezier(0, 1, 0, 1);
+  pointer-events: none;
+}
+/* #MiddleColumn, the bottom middle of the page, where the model's controls are here (they stand at
+   0.8, so 16 moved down is 20 of theirs) */
+.hero-page .hero-middle {
+  transition-property: transform, opacity;
+  transition-duration: 0.15s;
+  transition-timing-function: cubic-bezier(0.8, 0, 1, 0.2);
+}
+.hero-page[data-customize] .hero-middle {
+  opacity: 0;
+  transform: translateY(20px);
+  transition-duration: 0.3s;
+  transition-delay: 0.4s;
+  transition-timing-function: cubic-bezier(0, 0.9, 0, 0.9);
+  pointer-events: none;
+}
+/* .HeroPageNavigation */
+.hero-page .hero-nav {
+  transition: opacity 0.2s;
+}
+.hero-page[data-customize] .hero-nav {
+  opacity: 0;
+  pointer-events: none;
+}
+/* .EquippedBackgroundShard */
+.hero-page .hero-shard {
+  transition: opacity 0.1s;
+}
+.hero-page[data-customize] .hero-shard {
+  opacity: 0;
+  transition: opacity 0.2s 0.4s;
+}
+/* #HeroCustomize: in quickly (0.2 s, ease-in), out slowly after a pause (0.2 s, then 0.5 s) */
+.hero-page .hero-customize {
+  opacity: 0;
+  transform: translateX(120px) scale(1.1);
+  transition: transform 0.5s cubic-bezier(0, 1, 0, 1) 0.2s, opacity 0.5s cubic-bezier(0, 1, 0, 1) 0.2s;
+  pointer-events: none;
+}
+.hero-page[data-customize] .hero-customize {
+  opacity: 1;
+  transform: none;
+  transition: transform 0.2s ease-in, opacity 0.2s ease-in;
+  pointer-events: auto;
+}
+@starting-style {
+  .hero-page[data-customize] .hero-customize {
+    opacity: 0;
+    transform: translateX(120px) scale(1.1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-page .hero-scene,
+  .hero-page .hero-column,
+  .hero-page .hero-middle,
+  .hero-page .hero-nav,
+  .hero-page .hero-shard,
+  .hero-page .hero-customize {
+    transition: none !important;
+  }
+}
+
 /* Images that fade in as they arrive (data-loaded, set in main.jsx), not appear at once */
 /* :where keeps it under an image's own classes once loaded */
 :where(.fade-images) img {

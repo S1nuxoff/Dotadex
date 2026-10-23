@@ -6,6 +6,7 @@ import HeroInfo from "./HeroInfo.jsx";
 import Voice from "./Voice.jsx";
 import ChatWheel from "./ChatWheel.jsx";
 import { fetchData } from "../fetchData.js";
+import { playUiSound } from "../uiSounds.js";
 
 // Which sound and voice lines go with each ability (abilitysounds.json), loaded once
 let abilitySounds = null;
@@ -173,8 +174,12 @@ function saturate(data, amount) {
   }
 }
 
+// The picture's opacity and place on the page, and while CHANGE OUTFIT is open
+// (.EnableHeroCustomize #HeroLoadoutBackgroundImage: 0.05, moved 60 left)
+const BACKDROP_PICTURE = { opacity: 0.3, shift: 0 };
+const BACKDROP_PICTURE_CUSTOMIZE = { opacity: 0.05, shift: -60 };
 // The backdrop for a screen of w × h pixels, drawn into canvas
-function drawBackdrop(canvas, w, h, look, picture, mask) {
+function drawBackdrop(canvas, w, h, look, picture, mask, { opacity, shift } = BACKDROP_PICTURE) {
   const rw = Math.min(BACKDROP_WIDTH, w);
   const rh = Math.max(1, Math.round((h * rw) / w));
   // one pixel of the game's 1080-high layout, in this picture's pixels
@@ -200,7 +205,7 @@ function drawBackdrop(canvas, w, h, look, picture, mask) {
     // #HeroLoadoutBackgroundImage: as high as the screen, at most 1920 wide, centred; the picture
     // contained in it, the mask stretched over it
     const ew = Math.min(rw, 1920 * unit);
-    const ex = (rw - ew) / 2;
+    const ex = (rw - ew) / 2 + shift * unit;
     const fit = Math.min(ew / picture.width, rh / picture.height);
     const pw = picture.width * fit;
     const ph = picture.height * fit;
@@ -221,7 +226,7 @@ function drawBackdrop(canvas, w, h, look, picture, mask) {
     const wash = look.wash ? hexColor(look.wash) : null;
     const tint = wash ? wash.rgb.map((c) => 1 - wash.alpha + c * wash.alpha) : [1, 1, 1];
     for (let i = 0; i < rw * rh; i++) {
-      const a = 0.3 * cover[i];
+      const a = opacity * cover[i];
       for (let k = 0; k < 3; k++) {
         out[i * 3 + k] = out[i * 3 + k] * (1 - a) + layer[i * 3 + k] * tint[k] * a;
       }
@@ -253,8 +258,10 @@ function drawBackdrop(canvas, w, h, look, picture, mask) {
   context.putImageData(image, 0, 0);
 }
 
-export function Backdrop({ base, heroId }) {
+export function Backdrop({ base, heroId, customize = false }) {
   const canvasRef = useRef(null);
+  // The same with the picture as CHANGE OUTFIT has it, faded in over the page's while it is open
+  const customizeRef = useRef(null);
   // The colors alone over the picture as it comes, fading out
   const previousRef = useRef(null);
   const drawnKey = useRef(null);
@@ -315,11 +322,17 @@ export function Backdrop({ base, heroId }) {
       );
     }
     drawnKey.current = state;
-    try {
-      drawBackdrop(canvasRef.current, screen[0], screen[1], look, ready ? images.picture : null, ready ? images.mask : null);
-    } catch {
-      // a picture the browser will not let the page read: the gradient alone
-      drawBackdrop(canvasRef.current, screen[0], screen[1], look, null, null);
+    for (const [canvas, picture] of [
+      [canvasRef.current, BACKDROP_PICTURE],
+      [customizeRef.current, BACKDROP_PICTURE_CUSTOMIZE],
+    ]) {
+      if (!canvas) continue;
+      try {
+        drawBackdrop(canvas, screen[0], screen[1], look, ready ? images.picture : null, ready ? images.mask : null, picture);
+      } catch {
+        // a picture the browser will not let the page read: the gradient alone
+        drawBackdrop(canvas, screen[0], screen[1], look, null, null, picture);
+      }
     }
   }, [all, look, images, key, screen, heroId]);
   return (
@@ -329,6 +342,14 @@ export function Backdrop({ base, heroId }) {
         ref={canvasRef}
         className="absolute inset-x-0 bottom-0 h-[100vh] w-full"
         style={{ transform: "scale(1.04)" }}
+      />
+      {/* The picture's opacity takes 1 s, its move 0.5 s, both cubic-bezier(0, 1, 0, 1): nearly
+          all of it in the first moments, so the two drawings are crossfaded over the second */}
+      <canvas
+        ref={customizeRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[100vh] w-full transition-opacity duration-1000 ease-[cubic-bezier(0,1,0,1)]"
+        style={{ transform: "scale(1.04)", opacity: customize ? 1 : 0 }}
       />
       <canvas
         ref={previousRef}
@@ -940,6 +961,30 @@ export default function HeroPage({
     return () => window.removeEventListener("keydown", onKey);
   }, [wardrobeOpen, onCloseWardrobe, tab]);
 
+  // CHANGE OUTFIT as the game's page does it (dashboard_page_hero_new_v2.css, .EnableHeroCustomize):
+  // the scene, the columns and the backdrop's picture move aside in CSS transitions both ways,
+  // the picker comes in over them. It stays on the page until its way out (0.2 s late, 0.5 s
+  // long) is over
+  const customize = wardrobeOpen && tab === "loadout";
+  const [pickerShown, setPickerShown] = useState(customize);
+  const wasCustomize = useRef(customize);
+  useEffect(() => {
+    if (customize === wasCustomize.current) {
+      return;
+    }
+    wasCustomize.current = customize;
+    // .HeroCustomizeEnter / .HeroCustomizeExit #HeroCustomize: ui_loadout_slide_in (map_open at
+    // 0.4, pitch 0.8) / ui_loadout_slide_out (shortwhoosh at 0.4)
+    if (customize) playUiSound("loadout-slide-in", 0.4, 0.8);
+    else playUiSound("loadout-slide-out", 0.4);
+    if (customize) {
+      setPickerShown(true);
+      return;
+    }
+    const timer = setTimeout(() => setPickerShown(false), 700);
+    return () => clearTimeout(timer);
+  }, [customize]);
+
   const togglePreview = () => {
     if (preview) {
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -968,11 +1013,13 @@ export default function HeroPage({
     <div
       ref={page}
       data-preview={preview || undefined}
-      className="fade-images relative min-h-0 flex-1 overflow-hidden"
+      data-customize={customize || undefined}
+      className="hero-page fade-images relative min-h-0 flex-1 overflow-hidden"
+      style={{ "--ui-scale": scale }}
     >
-      <Backdrop base={catalog.modelsBase} heroId={backdropHero} />
-      {/* The model fills the page under the columns */}
-      <div className="absolute inset-0">{viewer}</div>
+      <Backdrop base={catalog.modelsBase} heroId={backdropHero} customize={customize} />
+      {/* The model fills the page under the columns (#HeroSceneGroup) */}
+      <div className="hero-scene absolute inset-0">{viewer}</div>
       {/* Back from the preview; the loadout's own button sits in the left column */}
       {preview && (
         <button
@@ -990,112 +1037,107 @@ export default function HeroPage({
         className={`pointer-events-none absolute inset-0 flex flex-col ${preview ? "hidden" : ""}`}
         style={{ zoom: scale }}
       >
-        {wardrobeOpen && tab === "loadout" ? (
-          // CHANGE OUTFIT takes the page; the model steps to the left meanwhile
-          <div className="enter-right relative min-h-0 flex-1">{wardrobe}</div>
-        ) : (
-          <>
-            {/* .EquippedBackgroundShard: 800 by 300 from the page's middle, skewed -16° and moved
-                750 right, 196 down from the screen's top (the NoTier place: no hero level here;
-                700 right on 16:10); white edge and fill fading out, all at 5% */}
-            {tab === "loadout" && (
-              <div
-                aria-hidden
-                className="absolute top-[-61px] left-[calc(50%-400px)] h-[300px] w-[800px] border border-solid opacity-5"
-                style={{
-                  transform: `skewX(-16deg) translateX(${aspect === "16x10" ? 700 : 750}px) translateY(196px)`,
-                  // The game's gradients run from the top left corner to 16% 60% (fill) and 10% 60% (edge)
-                  background: "linear-gradient(144.6deg, #ffffff27, #ffffff00 221px)",
-                  borderImage: "linear-gradient(156deg, #ffffff, #ffffff00 197px) 1",
-                }}
-              />
-            )}
-            {/* The model's controls (animation, playback, outfit, download): a row at the bottom,
-                in the middle, at 80% */}
-            <div
-              id="hero-model-controls"
-              className="enter-up pointer-events-auto absolute bottom-[21px] left-1/2 z-10 flex origin-bottom -translate-x-1/2 scale-[0.8] items-center gap-[8px] empty:hidden"
-              style={{ "--enter-delay": "0.2s" }}
-            />
-            <div className="enter-down pointer-events-auto">
-              <HeroNav
-                hero={hero}
-                base={catalog.modelsBase}
-                tab={tab}
-                onTab={setTab}
-                previous={previous}
-                next={next}
-                onOpen={onOpen}
+        {/* .EquippedBackgroundShard: 800 by 300 from the page's middle, skewed -16° and moved
+            750 right, 196 down from the screen's top (the NoTier place: no hero level here;
+            700 right on 16:10); white edge and fill fading out, all at 5% */}
+        {tab === "loadout" && (
+          <div
+            aria-hidden
+            className="hero-shard absolute top-[-61px] left-[calc(50%-400px)] h-[300px] w-[800px] border border-solid opacity-5"
+            style={{
+              transform: `skewX(-16deg) translateX(${aspect === "16x10" ? 700 : 750}px) translateY(196px)`,
+              // The game's gradients run from the top left corner to 16% 60% (fill) and 10% 60% (edge)
+              background: "linear-gradient(144.6deg, #ffffff27, #ffffff00 221px)",
+              borderImage: "linear-gradient(156deg, #ffffff, #ffffff00 197px) 1",
+            }}
+          />
+        )}
+        {/* The model's controls (animation, playback, outfit, download): a row at the bottom,
+            in the middle, at 80% */}
+        <div
+          id="hero-model-controls"
+          className="hero-middle enter-up pointer-events-auto absolute bottom-[21px] left-1/2 z-10 flex origin-bottom -translate-x-1/2 scale-[0.8] items-center gap-[8px] empty:hidden"
+          style={{ "--enter-delay": "0.2s" }}
+        />
+        <div className="hero-nav enter-down pointer-events-auto">
+          <HeroNav
+            hero={hero}
+            base={catalog.modelsBase}
+            tab={tab}
+            onTab={setTab}
+            previous={previous}
+            next={next}
+            onOpen={onOpen}
+          />
+        </div>
+        <div className="relative min-h-0 flex-1">
+          {/* #HeroPageContent: 1920 wide at most, in the middle. The columns start 212 below
+              the screen's top (here the top bar's 61 and these tabs' 52 are above), 90 in
+              from its sides (60 on 16:10, none on 21:9) */}
+          <div
+            className="absolute inset-0 mx-auto max-w-[1920px]"
+            style={{ "--side": `${SIDE[aspect] ?? 90}px` }}
+          >
+            {/* The columns come in from the sides, again for each hero, once it is in view */}
+            <div key={`summary-${shown.id}`} className="hero-column enter-left pointer-events-auto absolute top-[99px] left-(--side) w-[540px]" style={{ "--enter-delay": "0.08s" }}>
+              <HeroSummary
+                catalog={catalog}
+                hero={shown}
+                info={info}
+                data={data}
+                onAbout={() =>
+                  setTab(tab === "about" ? "loadout" : "about")
+                }
+                onCast={cast}
+                onPreview={togglePreview}
               />
             </div>
-            <div className="relative min-h-0 flex-1">
-              {/* #HeroPageContent: 1920 wide at most, in the middle. The columns start 212 below
-                  the screen's top (here the top bar's 61 and these tabs' 52 are above), 90 in
-                  from its sides (60 on 16:10, none on 21:9) */}
-              <div
-                className="absolute inset-0 mx-auto max-w-[1920px]"
-                style={{ "--side": `${SIDE[aspect] ?? 90}px` }}
-              >
-                {/* The columns come in from the sides, again for each hero, once it is in view */}
-                <div key={`summary-${shown.id}`} className="enter-left pointer-events-auto absolute top-[99px] left-(--side) w-[540px]" style={{ "--enter-delay": "0.08s" }}>
-                  <HeroSummary
-                    catalog={catalog}
-                    hero={shown}
-                    info={info}
-                    data={data}
-                    onAbout={() =>
-                      setTab(tab === "about" ? "loadout" : "about")
-                    }
-                    onCast={cast}
-                    onPreview={togglePreview}
+            {tab === "loadout" && (
+              <div key={`loadout-${shown.id}`} className="hero-column enter-right pointer-events-auto absolute top-[111px] right-(--side) flex w-[422px] flex-col" style={{ "--enter-delay": "0.14s" }}>
+                <PersonaSelector
+                  base={catalog.modelsBase}
+                  heroKey={`npc_dota_hero_${shown.id}`}
+                  info={info}
+                  texts={data?.texts ?? {}}
+                  persona={shownPersona}
+                  onPersona={onPersona}
+                />
+                {shownSummary}
+              </div>
+            )}
+          </div>
+          {tab !== "loadout" ? (
+            <div key={tab} className="enter-right pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
+              <div className="h-full overflow-y-auto bg-black/55 p-[24px] pr-[48px] scrollbar-thin">
+                {tab === "voice" && (
+                  <Voice
+                    modelsBase={catalog.modelsBase}
+                    heroKey={`npc_dota_hero_${shown.id}`}
                   />
-                </div>
-                {tab === "loadout" && (
-                  <div key={`loadout-${shown.id}`} className="enter-right pointer-events-auto absolute top-[111px] right-(--side) flex w-[422px] flex-col" style={{ "--enter-delay": "0.14s" }}>
-                    <PersonaSelector
-                      base={catalog.modelsBase}
-                      heroKey={`npc_dota_hero_${shown.id}`}
-                      info={info}
-                      texts={data?.texts ?? {}}
-                      persona={shownPersona}
-                      onPersona={onPersona}
-                    />
-                    {shownSummary}
-                  </div>
+                )}
+                {tab === "stats" && <Stats info={info} />}
+                {tab === "about" && (
+                  <HeroInfo
+                    base={catalog.modelsBase}
+                    heroKey={`npc_dota_hero_${shown.id}`}
+                    language={language}
+                  />
                 )}
               </div>
-              {tab !== "loadout" ? (
-                <div key={tab} className="enter-right pointer-events-auto absolute top-[90px] right-[90px] bottom-[40px] w-[620px] shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
-                  <div className="h-full overflow-y-auto bg-black/55 p-[24px] pr-[48px] scrollbar-thin">
-                    {tab === "voice" && (
-                      <Voice
-                        modelsBase={catalog.modelsBase}
-                        heroKey={`npc_dota_hero_${shown.id}`}
-                      />
-                    )}
-                    {tab === "stats" && <Stats info={info} />}
-                    {tab === "about" && (
-                      <HeroInfo
-                        base={catalog.modelsBase}
-                        heroKey={`npc_dota_hero_${shown.id}`}
-                        language={language}
-                      />
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setTab("loadout")}
-                    data-sound="back"
-                    aria-label="Back to the loadout"
-                    title="Back to the loadout"
-                    className="absolute top-[10px] right-[10px] grid size-[32px] place-items-center rounded-[2px] bg-gradient-to-b from-[#3b434e] to-[#262c34] text-[#e6ebef] shadow-[0_2px_8px_rgb(0_0_0/0.5)] hover:brightness-150"
-                  >
-                    <X className="size-[20px]" strokeWidth={2.5} />
-                  </button>
-                </div>
-              ) : null}
+              <button
+                onClick={() => setTab("loadout")}
+                data-sound="back"
+                aria-label="Back to the loadout"
+                title="Back to the loadout"
+                className="absolute top-[10px] right-[10px] grid size-[32px] place-items-center rounded-[2px] bg-gradient-to-b from-[#3b434e] to-[#262c34] text-[#e6ebef] shadow-[0_2px_8px_rgb(0_0_0/0.5)] hover:brightness-150"
+              >
+                <X className="size-[20px]" strokeWidth={2.5} />
+              </button>
             </div>
-          </>
-        )}
+          ) : null}
+        </div>
+        {/* #HeroCustomize: the picker, over the page while CHANGE OUTFIT is open */}
+        {pickerShown && <div className="absolute inset-0">{wardrobe}</div>}
       </div>
     </div>
   );

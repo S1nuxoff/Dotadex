@@ -14,6 +14,9 @@ const FILES = {
   // The fog between models: a rush as it closes, a sweep as it parts
   "veil-in": ["sounds/ui/menu/shortwhoosh.wav"],
   "veil-out": ["sounds/ui/menu/switch_view.wav"],
+  // CHANGE OUTFIT opening and closing (ui_loadout_slide_in / _out)
+  "loadout-slide-in": ["sounds/ui/menu/map_open.wav"],
+  "loadout-slide-out": ["sounds/ui/menu/shortwhoosh.wav"],
   unequip: ["sounds/ui/inventory/inv_unequip.wav"],
   equip: ["sounds/ui/inventory/common_equip.wav"],
   "equip-blade": ["sounds/ui/inventory/metalblade_equip_01.wav", "sounds/ui/inventory/metalblade_equip_02.wav"],
@@ -37,12 +40,12 @@ let base = "";
 
 // Through Web Audio, decoded ahead of time, so they play the instant they are called for;
 // playLoaded follows the "Voice and sounds" volume
-export function playUiSound(name, volume = 1) {
+export function playUiSound(name, volume = 1, rate = 1) {
   const files = FILES[name];
   if (!files || !base) {
     return;
   }
-  playLoaded(base + files[Math.floor(Math.random() * files.length)], { volume });
+  playLoaded(base + files[Math.floor(Math.random() * files.length)], { volume, rate });
 }
 
 export function installUiSounds(soundsBase) {

@@ -30,9 +30,6 @@ const FADE_MS = 250;
 // A part put on or taken off on the same body dithers in or out over this long, as the game's
 // loadout does (dota_wearable_dither_duration, 0.2)
 const DITHER_MS = 200;
-// The picture glides sideways over this long when a panel opens beside the hero (CHANGE OUTFIT),
-// instead of jumping
-const SHIFT_MS = 450;
 // The summon a unit stands as on a hero's page: client.dll (0x183168be0) takes a unit by the name
 // its own holds (npc_dota_venomancer_plague_ward_4 is npc_dota_venomancer_plague_ward), and both
 // Beastmaster boars as npc_dota_beastmaster_boar
@@ -58,6 +55,17 @@ const sourceToScene = ([x, y, z]) => new THREE.Vector3(y, z, x).multiplyScalar(S
 // only the slope bias is left. The lights' shadow.bias is therefore 0. Without the slope bias a
 // surface facing the light shadows itself in stripes
 const shadowDepthMaterial = new THREE.MeshDepthMaterial({ polygonOffset: true, polygonOffsetFactor: 4.5, polygonOffsetUnits: 0 });
+
+// An element's place in the window as laid out, before any CSS transform moves it
+function layoutPlace(element) {
+  let left = 0;
+  let top = 0;
+  for (let node = element; node; node = node.offsetParent) {
+    left += node.offsetLeft;
+    top += node.offsetTop;
+  }
+  return { left, top };
+}
 
 // The shadow caster for a material: an alpha-tested one (hair cards, fringes) is cut by its color's
 // alpha as in its own pass, else it casts its whole quads; a blended one (F_TRANSLUCENT,
@@ -1778,26 +1786,9 @@ export class Stage {
   }
 
   // Moves the picture sideways by a share of the view's width, keeping the model framed:
-  // on a hero's page the model stands in the left half, under no text. Smooth glides there from
-  // where the picture is now (frame() moves it)
-  setFrameShift(shift, smooth = false) {
-    const from = this.frameShift ?? 0;
-    if (!smooth || reducedMotion.matches || from === shift) {
-      this.shiftGlide = null;
-      this.frameShift = shift;
-      this.applyShift();
-      return;
-    }
-    this.shiftGlide = { from, to: shift, start: performance.now() };
-  }
-
-  glideShift() {
-    const glide = this.shiftGlide;
-    const t = Math.min((performance.now() - glide.start) / SHIFT_MS, 1);
-    // Ease in and out, as a camera starts and settles
-    const eased = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
-    this.frameShift = glide.from + (glide.to - glide.from) * eased;
-    if (t >= 1) this.shiftGlide = null;
+  // on a hero's page the model stands in the left half, under no text
+  setFrameShift(shift) {
+    this.frameShift = shift;
     this.applyShift();
   }
 
@@ -1811,7 +1802,8 @@ export class Stage {
     // stands where it stands in the game (measured on game screenshots of Sniper: not the
     // stylesheet's 1020-high #HeroSceneBody, whose hero would be 0.94 times as large)
     const whole = Boolean(this.portraitCamera());
-    const { left, top } = whole ? this.canvas.parentElement.getBoundingClientRect() : { left: 0, top: 0 };
+    // (where the page lays it out: CHANGE OUTFIT moves the scene aside in CSS, picture and all)
+    const { left, top } = whole ? layoutPlace(this.canvas.parentElement) : { left: 0, top: 0 };
     const width = whole ? Math.max(window.innerWidth, clientWidth) : clientWidth;
     const height = whole ? Math.max(window.innerHeight, clientHeight) : clientHeight;
     this.camera.aspect = width / height;
@@ -2465,7 +2457,6 @@ export class Stage {
     let at = perf.now();
     this.timer.update();
     const delta = Math.min(this.timer.getDelta(), 0.1);
-    if (this.shiftGlide) this.glideShift();
     // The cloth's bones back as the animation left them, before it moves them again
     for (const cloth of this.cloths ?? []) {
       cloth.restore();

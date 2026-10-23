@@ -464,7 +464,9 @@ export default function App() {
       language={language}
       hideTitle={(route.type === "hero" && section.id === "heroes") || armory || scenes}
       controlsRight={scenes}
-      loadout={(route.type === "hero" && section.id === "heroes") || armory}
+      // A map in the Armory (a terrain's preview, a weather's) is seen whole, as
+      // .CollectionTab_Terrain #CollectionSceneBody is 100% wide: not through the hero's mask
+      loadout={(route.type === "hero" && section.id === "heroes") || (armory && !outfit?.scene)}
       armory={armory}
       frameShift={armory ? (-600 * uiScale) / document.documentElement.clientWidth : 0}
       portrait={portraits[portraitKey] ?? null}

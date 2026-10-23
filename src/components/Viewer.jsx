@@ -431,8 +431,11 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
   useEffect(() => {
     stageRef.current.setSpeed(speed);
   }, [speed]);
+  // The first shift is where the view opens; later ones (CHANGE OUTFIT opening) glide there
+  const shiftSet = useRef(false);
   useEffect(() => {
-    stageRef.current.setFrameShift(frameShift);
+    stageRef.current.setFrameShift(frameShift, shiftSet.current);
+    shiftSet.current = true;
   }, [frameShift]);
   const mask = useSceneMask(catalog.modelsBase, armory);
   // The hero page's row of buttons, once it is on the page

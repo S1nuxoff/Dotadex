@@ -992,7 +992,7 @@ export default function HeroPage({
       >
         {wardrobeOpen && tab === "loadout" ? (
           // CHANGE OUTFIT takes the page; the model steps to the left meanwhile
-          <div className="relative min-h-0 flex-1">{wardrobe}</div>
+          <div className="enter-right relative min-h-0 flex-1">{wardrobe}</div>
         ) : (
           <>
             {/* .EquippedBackgroundShard: 800 by 300 from the page's middle, skewed -16° and moved

@@ -30,6 +30,9 @@ const FADE_MS = 250;
 // A part put on or taken off on the same body dithers in or out over this long, as the game's
 // loadout does (dota_wearable_dither_duration, 0.2)
 const DITHER_MS = 200;
+// The picture glides sideways over this long when a panel opens beside the hero (CHANGE OUTFIT),
+// instead of jumping
+const SHIFT_MS = 450;
 // The summon a unit stands as on a hero's page: client.dll (0x183168be0) takes a unit by the name
 // its own holds (npc_dota_venomancer_plague_ward_4 is npc_dota_venomancer_plague_ward), and both
 // Beastmaster boars as npc_dota_beastmaster_boar
@@ -1775,9 +1778,26 @@ export class Stage {
   }
 
   // Moves the picture sideways by a share of the view's width, keeping the model framed:
-  // on a hero's page the model stands in the left half, under no text
-  setFrameShift(shift) {
-    this.frameShift = shift;
+  // on a hero's page the model stands in the left half, under no text. Smooth glides there from
+  // where the picture is now (frame() moves it)
+  setFrameShift(shift, smooth = false) {
+    const from = this.frameShift ?? 0;
+    if (!smooth || reducedMotion.matches || from === shift) {
+      this.shiftGlide = null;
+      this.frameShift = shift;
+      this.applyShift();
+      return;
+    }
+    this.shiftGlide = { from, to: shift, start: performance.now() };
+  }
+
+  glideShift() {
+    const glide = this.shiftGlide;
+    const t = Math.min((performance.now() - glide.start) / SHIFT_MS, 1);
+    // Ease in and out, as a camera starts and settles
+    const eased = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+    this.frameShift = glide.from + (glide.to - glide.from) * eased;
+    if (t >= 1) this.shiftGlide = null;
     this.applyShift();
   }
 
@@ -2445,6 +2465,7 @@ export class Stage {
     let at = perf.now();
     this.timer.update();
     const delta = Math.min(this.timer.getDelta(), 0.1);
+    if (this.shiftGlide) this.glideShift();
     // The cloth's bones back as the animation left them, before it moves them again
     for (const cloth of this.cloths ?? []) {
       cloth.restore();

@@ -163,10 +163,20 @@ Steps, in this order:
 A second site where anyone can browse, search and download any file of the game the datasets hold: pictures, videos, sounds, models (glb with textures and animations), scripts and texts. It links straight to the datasets; no storage of its own.
 
 - [x] **F-01 A list of every file per dataset.** Tracker `files-list.js`: `files.json` (+ `.gz`) at each dataset's root, `[[path, size], ...]`, made again when the dataset changes (workflow step).
-- [ ] **F-02 Names people know.** Map game paths to names from the localizations in dota2-data (heroes, items, abilities, cosmetics), made by the tracker.
+- [x] **F-02 Names people know.** Tracker `names.js`: `names.json` in dota2-images (20,862 pictures) and dota2-models (12,258 models), `{ path: [name, kind] }`, kinds hero, cosmetic, ability, item, unit, from the game's English texts; after every game update. Sounds not named yet.
 - [ ] **F-03 Model previews.** Small pictures of each model for the catalog, rendered by the tracker.
 - [ ] **F-04 The site.** Browse by dataset and folder, search by name and path, preview, download. Non-commercial, crediting Valve.
 - Note: Hugging Face is storage, not a CDN; if downloads grow large, put a cache (Cloudflare) in front.
+
+## Later: a public Dota 2 API (idea, 2026-10-24)
+
+Like ByMykel's CSGO-API (static JSON files of every skin, sticker and case in every language, made again after each update, free for anyone's bots and sites), for Dota 2, and more: every entry can point to its 3D model, sounds and videos besides its pictures, and to market prices.
+
+- [ ] **A-01 Schema.** Decide the files and their fields, kept stable and documented (unlike `dotadex/`, which follows the site's needs): heroes (with facets, talents, lore, roles, stats), abilities, items (shop and neutral), cosmetics (hero, slot, rarity, set, styles, how to get), sets, treasures with their drops, couriers, wards, emoticons, loading screens, music packs, announcers, voice lines (with their sound files). Every entry: id, name, description, picture, and where there is one the model (glb), sounds, video.
+- [ ] **A-02 Exporter.** A tracker step writes `api/<language>/<file>.json` for every language of the game (and `.json.gz`), from the files already in dota2-data and the other datasets; only after a game update.
+- [ ] **A-03 Where it lives.** Hugging Face (dota2-data `api/` or its own dataset) and/or GitHub Pages for a short URL; links in it point at the datasets.
+- [ ] **A-04 Prices.** Join the price tracker's latest prices into cosmetics (a separate small file, as prices change every 20 minutes).
+- [ ] **A-05 README and examples.** What each file holds, its fields, example requests; credit to Valve, non-commercial.
 
 ## Later: abilities as in a match
 

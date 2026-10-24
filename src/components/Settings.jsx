@@ -6,6 +6,7 @@ import { playUiSound } from "../uiSounds.js";
 import { getViewSettings, onViewSettings, setViewSettings } from "../viewSettings.js";
 import { useDismiss, useUiLayout, VALVE_NOTICE } from "./ui.jsx";
 import "./Settings.css";
+import { panoramaFile, panoramaImage } from "../datasets.js";
 
 // The game's settings window (popup_settings_reborn.xml / .css): the navigation on the left with
 // its search, the sections below each other on the right. Sizes are the game's layout pixels,
@@ -110,7 +111,7 @@ function Searched({ text, query }) {
 
 // An interface icon (control_icons/24px), drawn by the colour the class gives it
 function Icon({ base, name, className }) {
-  const url = `url(${base}images/control_icons/24px/${name}.svg) center / contain no-repeat`;
+  const url = `url(${panoramaFile(`control_icons/24px/${name}.svg`)}) center / contain no-repeat`;
   return <span aria-hidden className={`block ${className}`} style={{ mask: url, WebkitMask: url }} />;
 }
 
@@ -250,12 +251,12 @@ function Navigation({ base, query, onQuery, active, activeSub, onSection, onSubs
   useEffect(() => {
     const image = new Image();
     image.onload = () => setScrollMask(`url(${image.src})`);
-    image.src = `${base}images/masks/soft_top_bottom_vscroll_psd.png`;
+    image.src = panoramaImage("masks/soft_top_bottom_vscroll_psd");
     return () => (image.onload = null);
   }, [base]);
   return (
     <nav aria-label="Settings sections" className={`gs-nav ${none ? "gs-nav-none" : ""}`}>
-      <div aria-hidden className="gs-nav-rock" style={{ backgroundImage: `url(${base}images/settings/settings_rock_texture_png.png)` }} />
+      <div aria-hidden className="gs-nav-rock" style={{ backgroundImage: `url(${panoramaImage("settings/settings_rock_texture_png")})` }} />
       <div className="gs-search">
         <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Search" aria-label="Search the settings" spellCheck={false} />
         <Icon base={base} name="search" className="gs-search-icon" />
@@ -263,7 +264,7 @@ function Navigation({ base, query, onQuery, active, activeSub, onSection, onSubs
           aria-label="Clear the search"
           onClick={() => onQuery("")}
           className={`gs-search-clear ${searching ? "gs-search-clear-shown" : ""}`}
-          style={{ backgroundImage: `url(${base}images/control_icons/x_close_filled_png.png)` }}
+          style={{ backgroundImage: `url(${panoramaImage("control_icons/x_close_filled_png")})` }}
         />
       </div>
       <div className="gs-nav-buttons" style={scrollMask ? { "--scroll-mask": scrollMask } : undefined}>
@@ -307,7 +308,7 @@ function Navigation({ base, query, onQuery, active, activeSub, onSection, onSubs
         })}
       </div>
       <div className="gs-none" aria-live="polite">
-        <span aria-hidden className="gs-none-image" style={{ backgroundImage: `url(${base}images/hud/icon_courier_dead_settings_png.png)` }} />
+        <span aria-hidden className="gs-none-image" style={{ backgroundImage: `url(${panoramaImage("hud/icon_courier_dead_settings_png")})` }} />
         <span className="gs-none-text">{none ? NO_RESULTS[message] : ""}</span>
       </div>
       <div aria-hidden className="gs-nav-shadow" />
@@ -400,7 +401,7 @@ function SettingsWindow({ base, language, onLanguage, onClose, visible }) {
       role="dialog"
       aria-modal="true"
       aria-label="Settings"
-      style={{ "--arrow": `url(${base}images/control_icons/arrow_dropdown_png.png)` }}
+      style={{ "--arrow": `url(${panoramaImage("control_icons/arrow_dropdown_png")})` }}
     >
       <ButtonPrimary light onClick={onClose} aria-label="Close the settings" data-sound="ui_settings_out_multi" className="gs-close">
         <Icon base={base} name="x_close" className="gs-button-image" />

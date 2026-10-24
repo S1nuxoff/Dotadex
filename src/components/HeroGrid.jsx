@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { imageUrl, useGameData } from "../gamedata.js";
-import { STEAM_REACT_BASE } from "../datasets.js";
+import { VIDEOS_BASE, panoramaImage } from "../datasets.js";
 import { useDismiss, useUiScale, VALVE_NOTICE } from "./ui.jsx";
 
 // The game's hero grid as the dashboard has it now: four columns of tall portraits by primary
@@ -8,13 +8,14 @@ import { useDismiss, useUiScale, VALVE_NOTICE } from "./ui.jsx";
 // sort and filters along the bottom. Sizes are the game's own, from hero_grid_new.css, in its
 // units: the grid is 1204 wide and drawn at 115% of a 1920 wide screen.
 const GROUPS = [
-  ["DOTA_ATTRIBUTE_STRENGTH", "Strength", "hero_strength", "strength"],
-  ["DOTA_ATTRIBUTE_AGILITY", "Agility", "hero_agility", "agility"],
-  ["DOTA_ATTRIBUTE_INTELLECT", "Intelligence", "hero_intelligence", "intelligence"],
-  ["DOTA_ATTRIBUTE_ALL", "All", "hero_universal", "universal"],
+  ["DOTA_ATTRIBUTE_STRENGTH", "Strength", "strength", "strength"],
+  ["DOTA_ATTRIBUTE_AGILITY", "Agility", "agility", "agility"],
+  ["DOTA_ATTRIBUTE_INTELLECT", "Intelligence", "intelligence", "intelligence"],
+  ["DOTA_ATTRIBUTE_ALL", "All", "all", "universal"],
 ];
 const GROUP_NAMES = { Strength: "Strength", Agility: "Agility", Intelligence: "Intelligence", All: "Universal" };
-export const ATTRIBUTE_ICON = (icon) => `${STEAM_REACT_BASE}icons/${icon}.png`;
+// The game's attribute icons (primary_attribute_icons)
+export const ATTRIBUTE_ICON = (attribute) => panoramaImage(`primary_attribute_icons/primary_attribute_icon_${attribute}_psd`);
 
 export function attributeIcon(primary) {
   return ATTRIBUTE_ICON((GROUPS.find(([key]) => key === primary) ?? GROUPS[3])[2]);
@@ -341,7 +342,7 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
         }))
       : [{ key: "all", name: "Heroes", heroes, perRow: 23 }];
 
-  const videoOf = (entry) => `${catalog.modelsBase}videos/heroes/npc_dota_hero_${entry.hero.id}.webm`;
+  const videoOf = (entry) => `${VIDEOS_BASE}panorama/videos/heroes/npc_dota_hero_${entry.hero.id}.webm`;
   // The card itself and those around it in its column, a row being 6 heroes, 4 for Universal
   const preloadAround = (list, index, perRow) => {
     const own = loadVideo(videoOf(list[index]), "high");
@@ -361,7 +362,7 @@ export default function HeroGrid({ catalog, onOpen, onPrefetch }) {
       delay={enterDelay(index, perRow, categoryIndex)}
       hero={entry.hero}
       name={entry.name}
-      portrait={portraitStyle(atlas, entry.hero.id, imageUrl(catalog.modelsBase, `heroes/selection/npc_dota_hero_${entry.hero.id}`))}
+      portrait={portraitStyle(atlas, entry.hero.id, imageUrl(`heroes/selection/npc_dota_hero_${entry.hero.id}`))}
       facts={factsOf(entry)}
       video={videoOf(entry)}
       onHover={() => preloadAround(list, index, perRow)}

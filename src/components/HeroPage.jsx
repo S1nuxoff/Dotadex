@@ -7,7 +7,7 @@ import Voice from "./Voice.jsx";
 import ChatWheel from "./ChatWheel.jsx";
 import { fetchData } from "../fetchData.js";
 import { playUiSound } from "../uiSounds.js";
-import { DOTADEX_BASE } from "../datasets.js";
+import { DOTADEX_BASE, panoramaFile, panoramaImage } from "../datasets.js";
 
 // Which sound and voice lines go with each ability (abilitysounds.json), loaded once
 let abilitySounds = null;
@@ -75,7 +75,7 @@ const ATTRIBUTES = {
 // The columns' distance from the content's sides by the screen's shape
 const SIDE = { "16x10": 60, "21x9": 0 };
 
-const image = (base, path) => `${base}images/${path}.png`;
+const image = (path) => panoramaImage(path);
 const mask = (url) => ({
   mask: `url(${url}) center / contain no-repeat`,
   WebkitMask: `url(${url}) center / contain no-repeat`,
@@ -451,7 +451,7 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
         className="group mr-[8px] mb-[8px] size-[52px]"
       >
         <img
-          src={abilityIcon(base, name, known[name])}
+          src={abilityIcon(name, known[name])}
           alt=""
           className={`size-full object-cover shadow-[0_4px_8px_#000] transition group-hover:brightness-125 group-active:scale-95 ${round ? "rounded-full border-2 border-[#5c6470]" : ""}`}
           onError={(event) => (event.currentTarget.style.visibility = "hidden")}
@@ -481,7 +481,7 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
               key={level}
               className="mr-[2px] size-[20px] bg-[length:90%] bg-center bg-no-repeat brightness-[0.87]"
               style={{
-                backgroundImage: `url(${image(base, `hero_complexity_${level <= complexity ? "full" : "empty"}_png`)})`,
+                backgroundImage: `url(${image(`hero_complexity_${level <= complexity ? "full" : "empty"}_png`)})`,
               }}
             />
           ))}
@@ -508,7 +508,7 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
                 title={role}
                 className="-mr-[2px] size-[30px] bg-[#8b989e] hover:bg-[#b0bcc2]"
                 style={mask(
-                  image(base, `control_icons/filter_${role.toLowerCase()}_png`),
+                  image(`control_icons/filter_${role.toLowerCase()}_png`),
                 )}
               />
             ))}
@@ -551,7 +551,7 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
           {/* The game's control_icons/24px/full_screen, 20 square, washed LightestGrey */}
           <span
             className="mx-[4px] size-[20px] bg-[#dae2e5] drop-shadow-[0_1px_4px_rgb(0_0_0/0.3)]"
-            style={mask(`${base}images/control_icons/24px/full_screen.svg`)}
+            style={mask(panoramaFile("control_icons/24px/full_screen.svg"))}
           />
         </DarkButton>
       </div>
@@ -666,7 +666,7 @@ function StatsSummary({ base, info }) {
             >
               {/* The picture itself, washed LightestGrey (#dae2e5 multiplies it, about 0.88) */}
               <img
-                src={image(base, `hud/reborn/${icon}`)}
+                src={image(`hud/reborn/${icon}`)}
                 alt=""
                 className="size-[20px] object-contain brightness-[0.88]"
               />
@@ -786,7 +786,7 @@ function PersonaSelector({ base, heroKey, info, texts, persona, onPersona, class
           {/* Radiance's capitals sit 1.4 above the middle of a 20 line; moved down onto it */}
           <span className="translate-y-[1.5px]">{label}</span>
           <img
-            src={image(base, `heroes/icons/${icon}_png`)}
+            src={image(`heroes/icons/${icon}_png`)}
             alt=""
             className="-my-[2px] ml-[8px] size-[24px]"
             onError={(event) => (event.currentTarget.style.display = "none")}
@@ -820,7 +820,7 @@ function HeroNav({ hero, base, tab, onTab, previous, next, onOpen }) {
       <div className="w-[300px]">{side(previous, false)}</div>
       <div className="flex flex-1 items-center justify-center">
         <img
-          src={image(base, `heroes/icons/npc_dota_hero_${hero.id}_png`)}
+          src={image(`heroes/icons/npc_dota_hero_${hero.id}_png`)}
           alt=""
           className="mt-[2px] mr-[12px] size-[28px]"
           onError={(event) => (event.currentTarget.style.display = "none")}

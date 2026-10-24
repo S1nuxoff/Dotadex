@@ -14,7 +14,7 @@ import {
   sortItems,
 } from "../catalog.js";
 import { ItemCard, Select } from "./ui.jsx";
-import { STEAM_REACT_BASE } from "../datasets.js";
+import { STEAM_REACT_BASE, panoramaFile } from "../datasets.js";
 
 function SlotRow({ slot, item, isDefault, onOpen }) {
   const icon = item && itemIcon(item);
@@ -538,8 +538,8 @@ export function EquippedSummary({ catalog, outfit, onChange }) {
         aria-hidden
         className="absolute top-[2px] -left-[32px] size-[24px] bg-[#dae2e5]"
         style={{
-          mask: `url(${catalog.modelsBase}images/control_icons/24px/armory.svg) center / contain no-repeat`,
-          WebkitMask: `url(${catalog.modelsBase}images/control_icons/24px/armory.svg) center / contain no-repeat`,
+          mask: `url(${panoramaFile("control_icons/24px/armory.svg")}) center / contain no-repeat`,
+          WebkitMask: `url(${panoramaFile("control_icons/24px/armory.svg")}) center / contain no-repeat`,
         }}
       />
       <h2 className="mb-[4px] text-[19px] leading-[24px] font-semibold tracking-[1.5px] text-[#dae2e5] uppercase">Equipped</h2>

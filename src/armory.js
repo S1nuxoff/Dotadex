@@ -4,6 +4,8 @@
 // flags of the parsed item definition; here the same is read off the items_game entry they come
 // from (its prefab, slot, bundle contents, tool type).
 
+import { panoramaFile } from "./datasets.js";
+
 // [tab, group, [category id, label, icon, rows of the list]]; a category with rows lists its items
 // under them (Creeps: Radiant / Dire / Siege), the icons are control_icons/24px/<icon>.svg unless named in full (the game spells Roshan's roashan.svg)
 export const ARMORY_GROUPS = [
@@ -194,8 +196,8 @@ export const ARMORY_CATEGORIES = Object.fromEntries(
   ARMORY_GROUPS.flatMap(([tab, group, list]) => list.map(([id, label, icon, rows]) => [id, { id, label, icon, rows, tab, group }]))
 );
 
-// A category's icon in the dataset (control_icons/24px)
-export function categoryIcon(modelsBase, category) {
+// A category's icon from the game's pictures (control_icons/24px)
+export function categoryIcon(category) {
   const file = category.icon.includes(".") ? category.icon : `${category.icon}.svg`;
-  return `${modelsBase}images/control_icons/24px/${file}`;
+  return panoramaFile(`control_icons/24px/${file}`);
 }

@@ -7,6 +7,8 @@ const GITHUB_OWNER = "S1nuxoff";
 // The Hugging Face datasets the tracker exports the game to
 export const DATASETS = {
   data: "dota2-data",
+  images: "dota2-images",
+  videos: "dota2-videos",
   models: "dota2-models",
   sounds: "dota2-sounds",
   scenes: "dota2-scenes",
@@ -21,17 +23,23 @@ export const datasetBase = (name) => `${datasetPage(name)}/resolve/main/`;
 export const DATA_BASE = datasetBase(DATASETS.data);
 // The files the tracker makes for Dotadex out of them: index.json, exported.json, data/...
 export const DOTADEX_BASE = `${DATA_BASE}dotadex/`;
+// Every picture and video of the game's interface, as the game keeps it, at its game path
+export const IMAGES_BASE = datasetBase(DATASETS.images);
+export const VIDEOS_BASE = datasetBase(DATASETS.videos);
 export const MODELS_BASE = datasetBase(DATASETS.models);
 export const SOUNDS_BASE = datasetBase(DATASETS.sounds);
 export const SCENES_BASE = datasetBase(DATASETS.scenes);
 
 const githubRaw = (repo) => `https://raw.githubusercontent.com/${GITHUB_OWNER}/${repo}/main/static/`;
 
-// Cosmetic item icons; to move to a dataset (D-04)
-export const IMAGE_TRACKER_BASE = githubRaw("dota2-image-tracker");
-
 // Market prices, updated every 20 minutes (not from the game, so they stay on GitHub)
 export const PRICES_URL = `${githubRaw("dota2-price-tacker")}prices/latest.json`;
 
-// Valve's web pictures: hero portraits and crops, attribute icons; to move to a dataset (D-04)
+// A picture of the game's interface by its name under panorama/images, without the extension
+// ("heroes/icons/npc_dota_hero_axe_png"): the PNG the game keeps, or a JPEG for one made from a
+// JPEG (its name ends in _jpg). A vector one (.svg) is named with its extension: panoramaFile.
+export const panoramaImage = (name) => `${IMAGES_BASE}panorama/images/${name}.${name.endsWith("_jpg") ? "jpg" : "png"}`;
+export const panoramaFile = (file) => `${IMAGES_BASE}panorama/images/${file}`;
+
+// Valve's web pictures the game has no copy of: the heroes' square crops (the Wardrobe)
 export const STEAM_REACT_BASE = "https://cdn.steamstatic.com/apps/dota2/images/dota_react/";

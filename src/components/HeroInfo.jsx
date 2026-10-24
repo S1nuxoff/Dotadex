@@ -33,7 +33,7 @@ function Ability({ base, name, ability, texts }) {
     <li className="rounded-lg border border-line bg-stage/40">
       <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-start gap-3 p-2.5 text-left">
         <img
-          src={abilityIcon(base, name, ability)}
+          src={abilityIcon(name, ability)}
           alt=""
           loading="lazy"
           className="size-11 shrink-0 rounded"

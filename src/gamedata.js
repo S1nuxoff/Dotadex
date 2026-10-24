@@ -2,7 +2,7 @@
 // and the texts in the chosen language (English fills what a language lacks).
 import { useEffect, useState } from "react";
 import { fetchData } from "./fetchData.js";
-import { DOTADEX_BASE } from "./datasets.js";
+import { DOTADEX_BASE, panoramaImage } from "./datasets.js";
 
 export const LANGUAGES = [
   ["english", "English"],
@@ -89,17 +89,17 @@ export function useGameData(base, files, language = "english") {
   return state;
 }
 
-export function imageUrl(base, path) {
-  return `${base}images/${path}_png.png`;
+export function imageUrl(path) {
+  return panoramaImage(`${path}_png`);
 }
 
-export function abilityIcon(base, name, ability) {
-  return imageUrl(base, `spellicons/${ability?.AbilityTextureName ?? name}`);
+export function abilityIcon(name, ability) {
+  return imageUrl(`spellicons/${ability?.AbilityTextureName ?? name}`);
 }
 
-export function shopItemIcon(base, name, item) {
+export function shopItemIcon(name, item) {
   const texture = item?.AbilityTextureName?.replace(/^item_/, "") ?? name.replace(/^item_/, "");
-  return imageUrl(base, `items/${texture}`);
+  return imageUrl(`items/${texture}`);
 }
 
 // "150 220 290 360" -> "150 / 220 / 290 / 360"

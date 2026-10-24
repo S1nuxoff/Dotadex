@@ -6,6 +6,7 @@ import { useDismiss, useUiLayout } from "./ui.jsx";
 import ItemDetails from "./ItemDetails.jsx";
 import { EmoticonsContent } from "./Emoticons.jsx";
 import ChatWheelLines from "./ChatWheelLines.jsx";
+import { panoramaImage } from "../datasets.js";
 
 // The game's Armory (dashboard_page_collection, dashboard_tabs_collection, collection_shared,
 // ui_econ_item_animated): the tabs under the top bar; a 300 wide column of heroes or categories on
@@ -55,7 +56,7 @@ const TILE = {
   all: [148, 199],
 };
 
-const heroIcon = (base, id) => `${base}images/heroes/icons/npc_dota_hero_${id}_png.png`;
+const heroIcon = (id) => panoramaImage(`heroes/icons/npc_dota_hero_${id}_png`);
 
 // The tabs under the top bar (.SecondaryTabSet: 429 in from the left, 20 high capitals 3 apart)
 export function SecondaryTabs({ tabs = TABS, tab, onTab }) {
@@ -292,7 +293,7 @@ function StatusToggle({ label, count, on, onChange }) {
 // A category's row in the column (CategorySelectionPanel): its icon washed LighterGrey (white
 // when chosen), the name in LabelLarge, the count at half opacity
 function CategoryRow({ base, category, count, active, onClick }) {
-  const icon = categoryIcon(base, category);
+  const icon = categoryIcon(category);
   return (
     <button
       onClick={onClick}
@@ -564,7 +565,7 @@ export default function Armory({ catalog, route, outfit, viewer, backdrop, onOpe
           {heroList.map((entry) => (
             <li key={entry.id}>
               <button onClick={() => onOpen({ type: "hero", id: entry.id, slots: {} })} data-sound="ui_generic_button_click" className={`${row(entry.id === heroId)} p-[6px]`}>
-                <img src={heroIcon(base, entry.id)} alt="" className="size-[28px]" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />
+                <img src={heroIcon(entry.id)} alt="" className="size-[28px]" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />
                 <span className="-mt-px ml-[12px] h-[24px] truncate text-[19px] leading-[24px] font-semibold tracking-[1.5px] uppercase">
                   {entry.name}{" "}
                   <span className="font-normal text-[#8b989e]">({(catalog.itemsByHero[entry.id] ?? []).filter((item) => !item.default).length})</span>

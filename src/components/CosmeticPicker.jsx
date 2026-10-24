@@ -4,7 +4,7 @@ import { fetchData } from "../fetchData.js";
 import { useGameData } from "../gamedata.js";
 import { useUiLayout } from "./ui.jsx";
 import { startCardEdges } from "../viewer/cardEdges.js";
-import { DOTADEX_BASE } from "../datasets.js";
+import { DOTADEX_BASE, panoramaFile, panoramaImage } from "../datasets.js";
 
 // CUSTOMIZE on a hero's page as the game draws it: #HeroCustomize with its DOTACosmeticPicker
 // (ui_cosmetic_picker, hero_slot_item_picker_loadout, ui_econ_item_animated, collection_shared)
@@ -196,7 +196,7 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
             {/* #SceneContainer, faded at the bottom through set_thumbnail_mask */}
             <span
               className="absolute inset-0 transition-transform duration-400 ease-[cubic-bezier(0,1,0,1)] group-hover:scale-[1.07]"
-              style={mask(`${base}images/masks/set_thumbnail_mask_psd.png`)}
+              style={mask(panoramaImage("masks/set_thumbnail_mask_psd"))}
             >
               {image && <img src={image} alt="" loading="lazy" className="size-full" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />}
             </span>
@@ -268,7 +268,7 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
           ) : treasure && !owned ? (
             // DOTAPurchaseButton.Direct.InTreasure
             <span className="mt-[8px] flex h-[34px] w-full items-center justify-center rounded-[3px] border border-white/[0.08] bg-gradient-to-b from-[#3784a6] to-[#215373] px-[8px] shadow-[0_3px_6px_-1px_rgb(0_0_0/0.4)]">
-              <img src={`${base}images/icon_treasure_button_png.png`} alt="" className="mr-[2px] size-[20px]" onError={(event) => (event.currentTarget.style.display = "none")} />
+              <img src={panoramaImage("icon_treasure_button_png")} alt="" className="mr-[2px] size-[20px]" onError={(event) => (event.currentTarget.style.display = "none")} />
               <span className="text-[16px] leading-[20px] tracking-[1px] text-white uppercase [text-shadow:0_1px_4px_rgb(0_0_0/0.6)]">In Treasure</span>
             </span>
           ) : (
@@ -290,7 +290,7 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
         <span
           aria-hidden
           className={`absolute top-0 right-0 size-[28px] bg-contain bg-[position:right_top] bg-no-repeat transition-transform duration-200 ${equipped ? "" : "translate-x-[20px] -translate-y-[20px] opacity-0"}`}
-          style={{ backgroundImage: `url(${base}images/status_icons/econtooltip_equipped_psd.png)` }}
+          style={{ backgroundImage: `url(${panoramaImage("status_icons/econtooltip_equipped_psd")})` }}
         />
       </button>
       {/* #EquippedBorder: 4 (5 below) for the equipped, 1 (2 below) for the previewed */}
@@ -387,7 +387,7 @@ function OverlayScroll({ width = 8, className = "", children }) {
 
 export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquipSet, onOutfit, onClose }) {
   const base = catalog.modelsBase;
-  const icons = `${base}images/control_icons/24px/`;
+  const icons = panoramaFile("control_icons/24px/");
   const hero = catalog.heroesById[outfit.hero];
   const persona = outfit.persona ?? 0;
   const { aspect } = useUiLayout();

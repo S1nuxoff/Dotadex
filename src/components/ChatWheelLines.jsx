@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { fetchData } from "../fetchData.js";
 import { playSound } from "./Voice.jsx";
-import { DOTADEX_BASE, SOUNDS_BASE } from "../datasets.js";
+import { DOTADEX_BASE, SOUNDS_BASE, panoramaImage } from "../datasets.js";
 
 // The Armory's Chat Wheel (ChatWheelEntry, collection_shared's 160 x 174 tiles): the chat wheel's
 // lines by their categories (data/chat-wheel.json), each with its play button when it has a sound,
@@ -29,7 +29,7 @@ const nameOf = (name, line) => line.label ?? line.message ?? name.replace(/_/g, 
 
 function Line({ modelsBase, name, line, playing, onPlay }) {
   const label = nameOf(name, line);
-  const spray = line.image && `${modelsBase}images/${line.image.replace(/\.(png|psd|tga)$/i, "")}_${line.image.match(/\.(\w+)$/)?.[1]?.toLowerCase() ?? "png"}.png`;
+  const spray = line.image && panoramaImage(`${line.image.replace(/\.(png|psd|tga)$/i, "")}_${line.image.match(/\.(\w+)$/)?.[1]?.toLowerCase() ?? "png"}`);
   return (
     <li className="p-[6px]" style={{ width: 160, height: 174 }}>
       {/* .ChatWheelEntryContainer: the dark gradient, the line's play button and label */}

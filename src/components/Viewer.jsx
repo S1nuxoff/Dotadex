@@ -19,7 +19,7 @@ import { Stage, T_POSE } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, modelLabels, modelsOneAtATime, rarity, slotName, wornOnHero } from "../catalog.js";
 import { GAME_BUTTON, GamePills, IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
 import { playSound, prepareSound } from "./Voice.jsx";
-import { DOTADEX_BASE, SOUNDS_BASE } from "../datasets.js";
+import { DOTADEX_BASE, SOUNDS_BASE, panoramaImage } from "../datasets.js";
 import { loadSpeech } from "../viewer/face.js";
 import { ATTRIBUTES, abilityIcon, useGameData } from "../gamedata.js";
 import { unlockSound } from "../viewer/soundPlayer.js";
@@ -213,7 +213,7 @@ function HeroSummary({ catalog, heroId, language }) {
           return (
             <figure key={name} className="w-[72px]" title={title}>
               <img
-                src={abilityIcon(catalog.modelsBase, name, known[name])}
+                src={abilityIcon(name, known[name])}
                 alt=""
                 className="mx-auto size-12 rounded-sm border border-line/80 object-cover"
                 onError={(event) => (event.currentTarget.style.visibility = "hidden")}
@@ -260,7 +260,7 @@ function useHeroLine(catalog, heroId, language) {
 // The mask the game sees a hero page's scene through; used only once it has loaded, as a mask
 // that fails to load would hide the whole scene
 function useSceneMask(base, armory) {
-  const src = `${base}images/masks/${armory ? "hero_model_preview_mask_psd" : "hero_model_preview_mask_loadout_psd"}.png`;
+  const src = panoramaImage(`masks/${armory ? "hero_model_preview_mask_psd" : "hero_model_preview_mask_loadout_psd"}`);
   const [ready, setReady] = useState(null);
   useEffect(() => {
     const image = new Image();

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { abilityValue, shopItemIcon, useGameData } from "../gamedata.js";
 import { useUiLayout } from "./ui.jsx";
+import { panoramaImage } from "../datasets.js";
 
 // The game's Items page (Learn > Items: dashboard_page_game_items, made by client.dll from
 // ui_game_item_table, ui_game_neutral_item_table, ability_details and shop_item_combines): the
@@ -36,7 +37,7 @@ const TIER_COLORS = ["#BEBEBE", "#92E47E", "#7F93FC", "#D57BFF", "#FFE195"];
 const COLUMN_TITLE = "mb-[2px] text-center text-[18px] font-semibold tracking-[2px] text-[#748B8B] uppercase [text-shadow:1px_1px_4px_#00000044]";
 const SECTION_NAME = "mb-[2px] text-[14px] tracking-[1px] text-[#748B8B] uppercase";
 
-const panorama = (base, path) => `${base}images/${path}.png`;
+const panorama = (path) => panoramaImage(path);
 
 // Panorama's wash-color: the picture's shape filled with one color
 function Washed({ src, color, className }) {
@@ -157,9 +158,9 @@ function ShopTile({ base, name, item, width, selected, search, secret, onPick, o
       } ${search && !highlighted ? "brightness-[0.1] saturate-[0.1]" : "brightness-[0.93] saturate-[0.9] hover:brightness-150 hover:saturate-100 active:brightness-200"}`}
       style={{ width, height: width * 0.727 }}
     >
-      <img src={shopItemIcon(base, name, item)} alt="" className="size-full object-cover" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />
+      <img src={shopItemIcon(name, item)} alt="" className="size-full object-cover" onError={(event) => (event.currentTarget.style.visibility = "hidden")} />
       {/* .SecretShopItem:not(.MainShopItem) #SecretShop */}
-      {secret && <img src={panorama(base, "hud/secret_psd")} alt="" className="absolute right-px bottom-[2px] size-[13px]" />}
+      {secret && <img src={panorama("hud/secret_psd")} alt="" className="absolute right-px bottom-[2px] size-[13px]" />}
     </button>
   );
 }
@@ -204,7 +205,7 @@ function ItemTable({ base, items, shops, mainShop, selected, search, onPick, onH
             <div
               aria-hidden
               className="pointer-events-none absolute right-px bottom-px -z-10 h-[50%] w-[280px] bg-cover"
-              style={{ backgroundImage: `url(${panorama(base, "textures/secret_shop_psd")})` }}
+              style={{ backgroundImage: `url(${panorama("textures/secret_shop_psd")})` }}
             />
           )}
         </div>
@@ -244,7 +245,7 @@ function NeutralTable({ base, items, tiers, selected, search, onPick, onHover })
         <span className={SECTION_NAME}>Tier {number}</span>
         <span className="flex-1" />
         <span className="flex items-center" title="Game time at which items of this tier are available to drop.">
-          <Washed src={panorama(base, "status_icons/clock_psd")} color="#333" className="mr-[4px] mb-px size-[10px]" />
+          <Washed src={panorama("status_icons/clock_psd")} color="#333" className="mr-[4px] mb-px size-[10px]" />
           <span className="pr-[6px] text-[16px] tracking-[1px] text-[#666] uppercase">{tierTime(entry.start_time)}</span>
         </span>
       </div>
@@ -310,7 +311,7 @@ function Combines({ base, items, name, upgrades, components, onPick }) {
       return { key: `${entry.name}-${entry.x}-${entry.y}`, x: x1, y: y1, length: Math.hypot(x2 - x1, y2 - y1), angle: (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI };
     });
   return (
-    <div className="relative h-[200px] w-full shrink-0 overflow-hidden border-2 border-black bg-cover" style={{ backgroundImage: `url(${panorama(base, "hud/reborn/bg_item_breakdown_recessed_psd")})` }}>
+    <div className="relative h-[200px] w-full shrink-0 overflow-hidden border-2 border-black bg-cover" style={{ backgroundImage: `url(${panorama("hud/reborn/bg_item_breakdown_recessed_psd")})` }}>
       {/* #ConnectorsContainer */}
       {connectors.map((line) => (
         <span
@@ -332,7 +333,7 @@ function Combines({ base, items, name, upgrades, components, onPick }) {
             style={{ left: entry.x, top: entry.y, width: WIDTH, height: HEIGHT }}
           >
             <img
-              src={recipe ? shopItemIcon(base, "item_recipe") : shopItemIcon(base, entry.name, items[entry.name])}
+              src={recipe ? shopItemIcon("item_recipe") : shopItemIcon(entry.name, items[entry.name])}
               alt=""
               className="size-full object-cover"
               onError={(event) => (event.currentTarget.style.visibility = "hidden")}
@@ -438,12 +439,12 @@ function AbilityDetails({ base, items, texts, name, neutralTier, shopsOf, extra,
   return (
       <div
         className={`flex min-h-0 flex-col bg-no-repeat p-[8px] ${page ? "mr-[-8px] ml-[2px]" : ""}`}
-        style={{ backgroundImage: `url(${panorama(base, "hud/ability_tooltip_psd")})`, backgroundPosition: "0 -44px" }}
+        style={{ backgroundImage: `url(${panorama("hud/ability_tooltip_psd")})`, backgroundPosition: "0 -44px" }}
       >
         {/* #Header: the picture, the name, the cost or the neutral tier, the shops' icons */}
         <div className="flex">
           <img
-            src={shopItemIcon(base, name, item)}
+            src={shopItemIcon(name, item)}
             alt=""
             className="mt-[4px] mr-[8px] mb-[6px] ml-[4px] h-[48px] w-[66px] shrink-0 object-cover shadow-[0_0_4px_black]"
             onError={(event) => (event.currentTarget.style.visibility = "hidden")}
@@ -452,7 +453,7 @@ function AbilityDetails({ base, items, texts, name, neutralTier, shopsOf, extra,
             <h2 className="mt-[2px] truncate pl-[4px] text-[18px] font-semibold tracking-[0.5px] text-[#e1e1e1] uppercase [text-shadow:2px_2px_0_#00000090]">{title}</h2>
             <div className="-mt-[4px] flex w-full items-center">
               {shops.map(([id, icon]) => (
-                <Washed key={id} src={panorama(base, `control_icons/${icon}`)} color="#748090" className="mr-[-2px] size-[30px] shrink-0" />
+                <Washed key={id} src={panorama(`control_icons/${icon}`)} color="#748090" className="mr-[-2px] size-[30px] shrink-0" />
               ))}
               <div className="flex flex-col">
                 {neutralTier && (
@@ -465,7 +466,7 @@ function AbilityDetails({ base, items, texts, name, neutralTier, shopsOf, extra,
                 )}
                 {cost > 0 && (
                   <span className="flex items-center">
-                    <span aria-hidden className="mr-[5px] ml-[4px] size-[23px] bg-[length:100%]" style={{ backgroundImage: `url(${panorama(base, "hud/icon_gold_psd")})` }} />
+                    <span aria-hidden className="mr-[5px] ml-[4px] size-[23px] bg-[length:100%]" style={{ backgroundImage: `url(${panorama("hud/icon_gold_psd")})` }} />
                     <span className="mt-[3px] text-[16px] font-bold text-[#FFCC33] tabular-nums [text-shadow:2px_2px_0_#00000088]">{cost.toLocaleString("en")}</span>
                   </span>
                 )}
@@ -504,7 +505,7 @@ function AbilityDetails({ base, items, texts, name, neutralTier, shopsOf, extra,
                   <span
                     key={icon}
                     className="ml-[10px] bg-[length:20px] bg-[0%_50%] bg-no-repeat pt-[2px] pl-[25px] text-[16px] font-semibold text-[#e1e1e1] [text-shadow:2px_2px_0_#00000088]"
-                    style={{ backgroundImage: `url(${panorama(base, `status_icons/${icon}`)})` }}
+                    style={{ backgroundImage: `url(${panorama(`status_icons/${icon}`)})` }}
                   >
                     {value}
                   </span>
@@ -523,7 +524,7 @@ function AbilityDetails({ base, items, texts, name, neutralTier, shopsOf, extra,
                 return (
                   <Fragment key={index}>
                     {part.header && (
-                      <div className={`${label} h-[28px] bg-no-repeat pt-[4px] [background-position:top]`} style={{ backgroundImage: `url(${panorama(base, `hud/${look.header}`)})` }}>
+                      <div className={`${label} h-[28px] bg-no-repeat pt-[4px] [background-position:top]`} style={{ backgroundImage: `url(${panorama(`hud/${look.header}`)})` }}>
                         <span className={`font-semibold ${look.h1}`}>{part.header}</span>
                       </div>
                     )}
@@ -548,7 +549,7 @@ function AbilityDetails({ base, items, texts, name, neutralTier, shopsOf, extra,
         {!page && notes.length > 0 && !extra && (
           <div className="m-[4px] mt-[8px] flex items-center justify-end border-t border-white/[0.02] pt-[6px]">
             <span className="mb-[2px] text-[14px] text-[#808080]">More Details</span>
-            <img src={panorama(base, "control_icons/alt_key_png")} alt="Alt" className="ml-[4px] w-[28px]" />
+            <img src={panorama("control_icons/alt_key_png")} alt="Alt" className="ml-[4px] w-[28px]" />
           </div>
         )}
       </div>
@@ -569,7 +570,7 @@ function ItemDetails({ base, items, texts, name, neutralTier, shopsOf, onPick, u
       <div className="flex w-full flex-col">
         {shops.map(([id, icon, label]) => (
           <div key={id} className="flex">
-            <Washed src={panorama(base, `control_icons/${icon}`)} color="#ccc" className="size-[30px] shrink-0" />
+            <Washed src={panorama(`control_icons/${icon}`)} color="#ccc" className="size-[30px] shrink-0" />
             <span className="mt-[4px] ml-[3px] self-center text-[18px] text-[#ccc]">{label}</span>
           </div>
         ))}
@@ -592,7 +593,7 @@ function ItemTooltip({ base, items, texts, hover, neutralTier, shopsOf, extra })
       style={{
         left: right ? hover.right + GAP : hover.left - GAP - WIDTH,
         top: Math.max(hover.middle, 0),
-        backgroundImage: `url(${panorama(base, "hud/reborn/bg_tooltip_psd")})`,
+        backgroundImage: `url(${panorama("hud/reborn/bg_tooltip_psd")})`,
       }}
     >
       <AbilityDetails base={base} items={items} texts={texts} name={hover.name} neutralTier={neutralTier} shopsOf={shopsOf} extra={extra} />
@@ -752,7 +753,7 @@ export default function ItemsPage({ catalog, id, language, onOpen }) {
               <h3 className={COLUMN_TITLE}>Item Details</h3>
               <div
                 className="flex h-[749px] w-full flex-col border border-[#141919] bg-[#10171D] bg-no-repeat [background-position:left_top]"
-                style={{ backgroundImage: `url(${panorama(base, "hud/reborn/bg_tooltip_no_bevel_psd")})` }}
+                style={{ backgroundImage: `url(${panorama("hud/reborn/bg_tooltip_no_bevel_psd")})` }}
               >
                 {selected && texts && (
                   <ItemDetails

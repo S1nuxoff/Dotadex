@@ -1,6 +1,6 @@
 import { fetchData } from "./fetchData.js";
 import { ARMORY_CATEGORIES } from "./armory.js";
-import { DOTADEX_BASE, IMAGE_TRACKER_BASE, PRICES_URL, SCENES_BASE, STEAM_REACT_BASE } from "./datasets.js";
+import { DOTADEX_BASE, PRICES_URL, SCENES_BASE, panoramaImage } from "./datasets.js";
 // Rarity colors as the game shows them, in the game's order
 // value: the rarity's "value" in items_game (rarities), the order the game sorts by
 export const RARITIES = {
@@ -95,15 +95,13 @@ function slotRank(slot) {
   return rank < 0 ? SLOT_ORDER.length : rank;
 }
 
-// The image tracker keeps the game's file names, which are lowercase
+// The game keeps its file names in lowercase
 export function itemIcon(item) {
-  return item.icon
-    ? `${IMAGE_TRACKER_BASE}panorama/images/${item.icon.toLowerCase()}_png.png`
-    : null;
+  return item.icon ? panoramaImage(`${item.icon.toLowerCase()}_png`) : null;
 }
 
 export function heroPortrait(hero) {
-  return `${STEAM_REACT_BASE}heroes/${hero.id}.png`;
+  return panoramaImage(`heroes/npc_dota_hero_${hero.id}_png`);
 }
 
 export function formatPrice(price) {
@@ -611,7 +609,7 @@ export function pageMeta(type, entry, catalog) {
     return {
       title,
       description: `${name} from Dota 2 in 3D: the hero's model, animations, voice lines and every cosmetic item and set, with the game's own shading.`,
-      image: `${catalog.modelsBase}images/heroes/selection/npc_dota_hero_${entry.id}_png.png`,
+      image: panoramaImage(`heroes/selection/npc_dota_hero_${entry.id}_png`),
     };
   }
   // An Armory item with nothing in 3D: a loading screen, a music pack, a sticker...
@@ -641,7 +639,7 @@ export function pageMeta(type, entry, catalog) {
     return {
       title,
       description: `${name}: a Dota 2 shop item${entry.cost ? ` for ${entry.cost} gold` : ""}. Its stats, abilities and recipe.`,
-      image: entry.texture ? `${catalog.modelsBase}images/items/${entry.texture}_png.png` : null,
+      image: entry.texture ? panoramaImage(`items/${entry.texture}_png`) : null,
     };
   }
   if (type === "treasure") {

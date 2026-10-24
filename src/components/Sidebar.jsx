@@ -15,7 +15,7 @@ import {
 } from "../catalog.js";
 import { Select } from "./ui.jsx";
 import { LANGUAGES } from "../gamedata.js";
-import { DATASETS, datasetPage } from "../datasets.js";
+import { DATASETS, datasetPage, panoramaImage } from "../datasets.js";
 
 const ANY = "";
 
@@ -40,7 +40,7 @@ function rowsFor(catalog, tab, filters) {
       name: item.name,
       detail: item.neutral ? "Neutral item" : item.cost ? `${item.cost} gold` : "Item",
       color: "#c9a45c",
-      image: `${catalog.modelsBase}images/items/${item.texture}_png.png`,
+      image: panoramaImage(`items/${item.texture}_png`),
       wide: true,
     }));
   }

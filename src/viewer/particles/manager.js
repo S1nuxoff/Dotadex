@@ -50,10 +50,6 @@ function texturesIn(value, found = new Set()) {
   return found;
 }
 
-// Where a file the particles name lives: its particles/ files in the particles dataset, the models
-// they draw (and those models' sequences and attachments) in the models dataset (base)
-const fileBase = (key, base) => (key.startsWith("particles/") ? PARTICLES_BASE : base);
-
 // The models that have a file of attachments, as a Set (null while the dataset has no list)
 function loadAttachedModels(base) {
   return fetchData(`${PARTICLES_BASE}particles/attached-models.json`)
@@ -126,7 +122,7 @@ export class ParticleManager {
   loadSystem(path) {
     const key = path.toLowerCase().replace(/\.vpcf$/, "");
     if (!systemCache.has(key)) {
-      systemCache.set(key, this.withSchema(fetchJson(`${fileBase(key, this.base)}${key}.json`)));
+      systemCache.set(key, this.withSchema(fetchJson(`${PARTICLES_BASE}${key}.json`)));
     }
     return systemCache.get(key);
   }
@@ -191,7 +187,7 @@ export class ParticleManager {
     if (!snapshotCache.has(key)) {
       snapshotCache.set(
         key,
-        fetchJson(`${fileBase(key, this.base)}${key}.json`).then((data) => {
+        fetchJson(`${PARTICLES_BASE}${key}.json`).then((data) => {
           snapshots.set(key, data);
           return data;
         })

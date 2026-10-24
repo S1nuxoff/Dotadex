@@ -83,7 +83,7 @@ flowchart LR
     T --> DA[("dota2-data<br/><sub>scripts, texts, files made for the site</sub>")]
     T --> IM[("dota2-images<br/>dota2-videos")]
     T --> MO[("dota2-models<br/><sub>models, materials, particles</sub>")]
-    T --> SO[("dota2-sounds<br/>dota2-scenes")]
+    T --> SO[("dota2-sounds<br/>dota2-maps")]
     DA --> C["catalog.json"]
     C --> S["Dotadex"]
     DA --> S
@@ -100,7 +100,7 @@ flowchart LR
   the game keeps them), [dota2-models](https://huggingface.co/datasets/Sqls1/dota2-models) (models with
   their materials, textures, animations and particle systems),
   [dota2-sounds](https://huggingface.co/datasets/Sqls1/dota2-sounds) and
-  [dota2-scenes](https://huggingface.co/datasets/Sqls1/dota2-scenes). Its `DATA.md` maps every file.
+  [dota2-maps](https://huggingface.co/datasets/Sqls1/dota2-maps). Its `DATA.md` maps every file.
 - Market prices come from [dota2-price-tacker](https://github.com/S1nuxoff/dota2-price-tacker).
 - The site is rebuilt on every push and every six hours, so new heroes and items show up on their own.
 

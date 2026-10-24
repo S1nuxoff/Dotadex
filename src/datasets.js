@@ -12,7 +12,7 @@ export const DATASETS = {
   models: "dota2-models",
   particles: "dota2-particles",
   sounds: "dota2-sounds",
-  scenes: "dota2-scenes",
+  maps: "dota2-maps",
 };
 
 // A dataset's id (owner/name), its page, and the base its files are read from
@@ -31,7 +31,8 @@ export const MODELS_BASE = datasetBase(DATASETS.models);
 // Every particle system the heroes' and items' effects use, their textures, the engine's schema
 export const PARTICLES_BASE = datasetBase(DATASETS.particles);
 export const SOUNDS_BASE = datasetBase(DATASETS.sounds);
-export const SCENES_BASE = datasetBase(DATASETS.scenes);
+// Every map and scene of the game as glb (scenes.json lists them with their lights and cameras)
+export const SCENES_BASE = datasetBase(DATASETS.maps);
 
 const githubRaw = (repo) => `https://raw.githubusercontent.com/${GITHUB_OWNER}/${repo}/main/static/`;
 

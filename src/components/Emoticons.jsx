@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchData } from "../fetchData.js";
-import { DOTADEX_BASE } from "../datasets.js";
+import { DOTADEX_BASE, dataImage } from "../datasets.js";
 
 // The game's emoticons (scripts/emoticons.txt, data/emoticons.json in the dataset): each picture
 // is a strip of square frames, played at its ms_per_frame
@@ -24,7 +24,7 @@ export function useEmoticons(modelsBase) {
 // One emoticon (DOTAEmoticon): its frames counted from the strip's width, shown one after another;
 // its picture loads once it comes into view (the Armory lists some two thousand)
 export function Emoticon({ modelsBase, emoticon, size = 32 }) {
-  const url = `${modelsBase}${emoticon.image}`;
+  const url = dataImage(emoticon.image);
   const [frames, setFrames] = useState(0);
   const ref = useRef(null);
   useEffect(() => {

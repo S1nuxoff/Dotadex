@@ -101,7 +101,7 @@ function useArmoryPicture(modelsBase, item) {
       cancelled = true;
     };
   }, [modelsBase, item]);
-  return picture && `${modelsBase}${picture}`;
+  return picture && `${DOTADEX_BASE}${picture}`;
 }
 
 // A cursor pack's cursors (data/cursors.json: { pack: { cursor: [hot x, hot y] } })
@@ -195,7 +195,7 @@ export default function ItemDetails({ catalog, item, onClose, onOpen }) {
   const emoticons = useEmoticons(catalog.modelsBase);
   const unlocked = item.emoticons && emoticons ? emoticonRange(emoticons, item.emoticons) : [];
   const cursors = useCursors(catalog.modelsBase, item.cursor);
-  const cursorUrl = (name) => `${catalog.modelsBase}images/cursors/${item.cursor}/${name}.png`;
+  const cursorUrl = (name) => `${DOTADEX_BASE}images/cursors/${item.cursor}/${name}.png`;
   // The pack's default cursor over the whole page, to try it
   const cursorStyle = cursors?.cursor_default ? { cursor: `url(${cursorUrl("cursor_default")}) ${cursors.cursor_default[0]} ${cursors.cursor_default[1]}, auto` } : undefined;
   useEffect(() => {

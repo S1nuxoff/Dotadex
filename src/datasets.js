@@ -40,6 +40,8 @@ export const PRICES_URL = `${githubRaw("dota2-price-tacker")}prices/latest.json`
 // JPEG (its name ends in _jpg). A vector one (.svg) is named with its extension: panoramaFile.
 export const panoramaImage = (name) => `${IMAGES_BASE}panorama/images/${name}.${name.endsWith("_jpg") ? "jpg" : "png"}`;
 export const panoramaFile = (file) => `${IMAGES_BASE}panorama/images/${file}`;
+// A game picture a data file names as images/<its path under panorama/images> (emoticons, masks)
+export const dataImage = (image) => `${IMAGES_BASE}panorama/${image}`;
 
 // Valve's web pictures the game has no copy of: the heroes' square crops (the Wardrobe)
 export const STEAM_REACT_BASE = "https://cdn.steamstatic.com/apps/dota2/images/dota_react/";

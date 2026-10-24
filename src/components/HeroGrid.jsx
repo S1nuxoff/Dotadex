@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { imageUrl, useGameData } from "../gamedata.js";
-import { VIDEOS_BASE, panoramaImage } from "../datasets.js";
+import { DOTADEX_BASE, VIDEOS_BASE, panoramaImage } from "../datasets.js";
 import { useDismiss, useUiScale, VALVE_NOTICE } from "./ui.jsx";
 
 // The game's hero grid as the dashboard has it now: four columns of tall portraits by primary
@@ -164,9 +164,9 @@ function useAtlas(base) {
   // undefined while it loads, null when the dataset has none
   const [atlas, setAtlas] = useState(undefined);
   useEffect(() => {
-    atlasRequest ??= fetch(`${base}images/heroes/selection_atlas.json`)
+    atlasRequest ??= fetch(`${DOTADEX_BASE}images/heroes/selection_atlas.json`)
       .then((res) => (res.ok ? res.json() : null))
-      .then((sheet) => sheet && { ...sheet, url: `${base}images/heroes/selection_atlas.webp` })
+      .then((sheet) => sheet && { ...sheet, url: `${DOTADEX_BASE}images/heroes/selection_atlas.webp` })
       .catch(() => null);
     atlasRequest.then(setAtlas);
   }, [base]);

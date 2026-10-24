@@ -7,7 +7,7 @@ import Voice from "./Voice.jsx";
 import ChatWheel from "./ChatWheel.jsx";
 import { fetchData } from "../fetchData.js";
 import { playUiSound } from "../uiSounds.js";
-import { DOTADEX_BASE, panoramaFile, panoramaImage } from "../datasets.js";
+import { DOTADEX_BASE, dataImage, panoramaFile, panoramaImage } from "../datasets.js";
 
 // Which sound and voice lines go with each ability (abilitysounds.json), loaded once
 let abilitySounds = null;
@@ -292,8 +292,8 @@ export function Backdrop({ base, heroId, customize = false }) {
     }
     let current = true;
     Promise.all([
-      look?.image ? loadImage(`${base}${look.image}`) : null,
-      look?.image && all.mask ? loadImage(`${base}${all.mask}`) : null,
+      look?.image ? loadImage(`${DOTADEX_BASE}${look.image}`) : null,
+      look?.image && all.mask ? loadImage(dataImage(all.mask)) : null,
     ]).then(([picture, mask]) => current && setImages({ key, picture, mask }));
     return () => {
       current = false;

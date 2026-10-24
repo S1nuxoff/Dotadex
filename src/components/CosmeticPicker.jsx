@@ -41,7 +41,7 @@ function useCardBackground(base, heroId) {
       live = false;
     };
   }, [base]);
-  return cards?.[heroId] ? `${base}${cards[heroId]}` : null;
+  return cards?.[heroId] ? `${DOTADEX_BASE}${cards[heroId]}` : null;
 }
 
 // The items each treasure holds, for "In Treasure"

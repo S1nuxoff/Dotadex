@@ -15,14 +15,14 @@ shown the way the game shows them.
 
 <br />
 
-<a href="https://s1nuxoff.github.io/Dotadex/hero/pudge"><img src="https://huggingface.co/datasets/Sqls1/dota2-models/resolve/main/images/heroes/selection/npc_dota_hero_pudge_png.png" width="84" alt="Pudge" /></a>
-<a href="https://s1nuxoff.github.io/Dotadex/hero/invoker"><img src="https://huggingface.co/datasets/Sqls1/dota2-models/resolve/main/images/heroes/selection/npc_dota_hero_invoker_png.png" width="84" alt="Invoker" /></a>
-<a href="https://s1nuxoff.github.io/Dotadex/hero/juggernaut"><img src="https://huggingface.co/datasets/Sqls1/dota2-models/resolve/main/images/heroes/selection/npc_dota_hero_juggernaut_png.png" width="84" alt="Juggernaut" /></a>
-<a href="https://s1nuxoff.github.io/Dotadex/hero/lina"><img src="https://huggingface.co/datasets/Sqls1/dota2-models/resolve/main/images/heroes/selection/npc_dota_hero_lina_png.png" width="84" alt="Lina" /></a>
-<a href="https://s1nuxoff.github.io/Dotadex/hero/crystal_maiden"><img src="https://huggingface.co/datasets/Sqls1/dota2-models/resolve/main/images/heroes/selection/npc_dota_hero_crystal_maiden_png.png" width="84" alt="Crystal Maiden" /></a>
-<a href="https://s1nuxoff.github.io/Dotadex/hero/nevermore"><img src="https://huggingface.co/datasets/Sqls1/dota2-models/resolve/main/images/heroes/selection/npc_dota_hero_nevermore_png.png" width="84" alt="Shadow Fiend" /></a>
-<a href="https://s1nuxoff.github.io/Dotadex/hero/phantom_assassin"><img src="https://huggingface.co/datasets/Sqls1/dota2-models/resolve/main/images/heroes/selection/npc_dota_hero_phantom_assassin_png.png" width="84" alt="Phantom Assassin" /></a>
-<a href="https://s1nuxoff.github.io/Dotadex/hero/axe"><img src="https://huggingface.co/datasets/Sqls1/dota2-models/resolve/main/images/heroes/selection/npc_dota_hero_axe_png.png" width="84" alt="Axe" /></a>
+<a href="https://s1nuxoff.github.io/Dotadex/hero/pudge"><img src="https://huggingface.co/datasets/Sqls1/dota2-images/resolve/main/panorama/images/heroes/selection/npc_dota_hero_pudge_png.png" width="84" alt="Pudge" /></a>
+<a href="https://s1nuxoff.github.io/Dotadex/hero/invoker"><img src="https://huggingface.co/datasets/Sqls1/dota2-images/resolve/main/panorama/images/heroes/selection/npc_dota_hero_invoker_png.png" width="84" alt="Invoker" /></a>
+<a href="https://s1nuxoff.github.io/Dotadex/hero/juggernaut"><img src="https://huggingface.co/datasets/Sqls1/dota2-images/resolve/main/panorama/images/heroes/selection/npc_dota_hero_juggernaut_png.png" width="84" alt="Juggernaut" /></a>
+<a href="https://s1nuxoff.github.io/Dotadex/hero/lina"><img src="https://huggingface.co/datasets/Sqls1/dota2-images/resolve/main/panorama/images/heroes/selection/npc_dota_hero_lina_png.png" width="84" alt="Lina" /></a>
+<a href="https://s1nuxoff.github.io/Dotadex/hero/crystal_maiden"><img src="https://huggingface.co/datasets/Sqls1/dota2-images/resolve/main/panorama/images/heroes/selection/npc_dota_hero_crystal_maiden_png.png" width="84" alt="Crystal Maiden" /></a>
+<a href="https://s1nuxoff.github.io/Dotadex/hero/nevermore"><img src="https://huggingface.co/datasets/Sqls1/dota2-images/resolve/main/panorama/images/heroes/selection/npc_dota_hero_nevermore_png.png" width="84" alt="Shadow Fiend" /></a>
+<a href="https://s1nuxoff.github.io/Dotadex/hero/phantom_assassin"><img src="https://huggingface.co/datasets/Sqls1/dota2-images/resolve/main/panorama/images/heroes/selection/npc_dota_hero_phantom_assassin_png.png" width="84" alt="Phantom Assassin" /></a>
+<a href="https://s1nuxoff.github.io/Dotadex/hero/axe"><img src="https://huggingface.co/datasets/Sqls1/dota2-images/resolve/main/panorama/images/heroes/selection/npc_dota_hero_axe_png.png" width="84" alt="Axe" /></a>
 
 <sub>127 heroes · 11,600+ cosmetics · 900+ treasures · 360+ scenes</sub>
 
@@ -79,23 +79,29 @@ trackers that follow every Dota 2 update.
 
 ```mermaid
 flowchart LR
-    G[("Dota 2<br/>game files")] --> F["dota2-file-tracker<br/><sub>items_game, scripts, texts</sub>"]
-    G --> I["dota2-image-tracker<br/><sub>icons and pictures</sub>"]
-    G --> M["dota2-model-tracker<br/><sub>models, materials, particles</sub>"]
-    M --> D[("dota2-models<br/>dataset")]
-    F --> C["catalog.json"]
-    D --> C
+    G[("Dota 2<br/>game files")] --> T["dota2-model-tracker<br/><sub>one export after every update</sub>"]
+    T --> DA[("dota2-data<br/><sub>scripts, texts, files made for the site</sub>")]
+    T --> IM[("dota2-images<br/>dota2-videos")]
+    T --> MO[("dota2-models<br/><sub>models, materials, particles</sub>")]
+    T --> SO[("dota2-sounds<br/>dota2-scenes")]
+    DA --> C["catalog.json"]
     C --> S["Dotadex"]
-    I --> S
-    D --> S
+    DA --> S
+    IM --> S
+    MO --> S
+    SO --> S
 ```
 
-- **[dota2-model-tracker](https://github.com/S1nuxoff/dota2-model-tracker)** exports every model with its
-  materials, textures, animations and particle systems to the
-  **[dota2-models](https://huggingface.co/datasets/Sqls1/dota2-models)** dataset.
-- **[dota2-file-tracker](https://github.com/S1nuxoff/dota2-file-tracker)** and
-  **[dota2-image-tracker](https://github.com/S1nuxoff/dota2-image-tracker)** keep the game's item data and
-  pictures.
+- **[dota2-model-tracker](https://github.com/S1nuxoff/dota2-model-tracker)** exports the game to Hugging Face
+  datasets after every update: [dota2-data](https://huggingface.co/datasets/Sqls1/dota2-data) (every script
+  and localization as JSON, and under `dotadex/` the files made for this site),
+  [dota2-images](https://huggingface.co/datasets/Sqls1/dota2-images) and
+  [dota2-videos](https://huggingface.co/datasets/Sqls1/dota2-videos) (the interface's pictures and videos as
+  the game keeps them), [dota2-models](https://huggingface.co/datasets/Sqls1/dota2-models) (models with
+  their materials, textures, animations and particle systems),
+  [dota2-sounds](https://huggingface.co/datasets/Sqls1/dota2-sounds) and
+  [dota2-scenes](https://huggingface.co/datasets/Sqls1/dota2-scenes). Its `DATA.md` maps every file.
+- Market prices come from [dota2-price-tacker](https://github.com/S1nuxoff/dota2-price-tacker).
 - The site is rebuilt on every push and every six hours, so new heroes and items show up on their own.
 
 ## Checked against the game, pixel by pixel

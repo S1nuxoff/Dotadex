@@ -15,6 +15,7 @@ import { ParticleManager } from "./particles/manager.js";
 import { frameLights, SCENE_DEPTH } from "./particles/render.js";
 import { toScene, UNIT } from "./particles/math.js";
 import { fetchData } from "../fetchData.js";
+import { PARTICLES_BASE } from "../datasets.js";
 
 export const EDGES_MAP = "maps/scenes/armory/ui_armory_edges.vmap";
 const EDGES_CAMERA = "shot_camera";
@@ -23,7 +24,7 @@ const EDGES_CAMERA = "shot_camera";
 let sceneData = null;
 function loadScene(base) {
   const json = (file) =>
-    fetchData(`${base}particles/${file}`)
+    fetchData(`${PARTICLES_BASE}particles/${file}`)
       .then((res) => (res.ok ? res.json() : {}))
       .catch(() => ({}));
   sceneData ??= Promise.all([json("map-effects.json"), json("map-cameras.json")]).then(([effects, cameras]) => ({

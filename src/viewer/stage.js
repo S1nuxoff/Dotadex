@@ -20,6 +20,7 @@ import { playLoaded, playWhenReady, preloadSound } from "./soundPlayer.js";
 import { playUiSound } from "../uiSounds.js";
 import { loadGlb, loadTimes, prefetchGlb } from "./glb.js";
 import * as perf from "./perf.js";
+import { PARTICLES_BASE } from "../datasets.js";
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -2852,7 +2853,7 @@ export class Stage {
       this.setMapEffects([]);
       return;
     }
-    mapEffects ??= fetch(`${base}particles/map-effects.json`)
+    mapEffects ??= fetch(`${PARTICLES_BASE}particles/map-effects.json`)
       .then((res) => (res.ok ? res.json() : {}))
       .catch(() => ({}));
     const map = this.portrait?.map;
@@ -2861,7 +2862,7 @@ export class Stage {
         this.setMapEffects(all[map] ?? []);
       }
     });
-    modelEffects ??= fetch(`${base}particles/model-effects.json`)
+    modelEffects ??= fetch(`${PARTICLES_BASE}particles/model-effects.json`)
       .then((res) => (res.ok ? res.json() : {}))
       .catch(() => ({}));
     modelEffects.then((all) => {

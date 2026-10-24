@@ -9,6 +9,7 @@ import { attachmentTransform, bonesOf, quaternionToSource, toSource, UNIT } from
 import { unsupported } from "./operators.js";
 import { loadSchema, withDefaults } from "./schema.js";
 import { sheetTextureOf } from "./render.js";
+import { PARTICLES_BASE } from "../../datasets.js";
 
 const systemCache = new Map();
 // Effects by path, each loaded once however many ask for it at the same time
@@ -49,9 +50,13 @@ function texturesIn(value, found = new Set()) {
   return found;
 }
 
+// Where a file the particles name lives: its particles/ files in the particles dataset, the models
+// they draw (and those models' sequences and attachments) in the models dataset (base)
+const fileBase = (key, base) => (key.startsWith("particles/") ? PARTICLES_BASE : base);
+
 // The models that have a file of attachments, as a Set (null while the dataset has no list)
 function loadAttachedModels(base) {
-  return fetchData(`${base}particles/attached-models.json`)
+  return fetchData(`${PARTICLES_BASE}particles/attached-models.json`)
     .then((res) => (res.ok ? res.json() : null))
     .then((list) => list && new Set(list))
     .catch(() => null);
@@ -121,7 +126,7 @@ export class ParticleManager {
   loadSystem(path) {
     const key = path.toLowerCase().replace(/\.vpcf$/, "");
     if (!systemCache.has(key)) {
-      systemCache.set(key, this.withSchema(fetchJson(`${this.base}${key}.json`)));
+      systemCache.set(key, this.withSchema(fetchJson(`${fileBase(key, this.base)}${key}.json`)));
     }
     return systemCache.get(key);
   }
@@ -137,7 +142,7 @@ export class ParticleManager {
         key,
         (async () => {
           if (!systemCache.has(key)) {
-            const bundle = await fetchJson(`${this.base}particles/bundles/${key.replace(/^particles\//, "")}.json`);
+            const bundle = await fetchJson(`${PARTICLES_BASE}particles/bundles/${key.replace(/^particles\//, "")}.json`);
             for (const [file, system] of Object.entries(bundle ?? {})) {
               const name = file.toLowerCase().replace(/\.vpcf$/, "");
               if (!systemCache.has(name)) systemCache.set(name, this.withSchema(system));
@@ -186,7 +191,7 @@ export class ParticleManager {
     if (!snapshotCache.has(key)) {
       snapshotCache.set(
         key,
-        fetchJson(`${this.base}${key}.json`).then((data) => {
+        fetchJson(`${fileBase(key, this.base)}${key}.json`).then((data) => {
           snapshots.set(key, data);
           return data;
         })
@@ -278,7 +283,7 @@ export class ParticleManager {
   loadTexture(path) {
     const key = path.toLowerCase().replace(/\.vtex$/, "");
     if (!textureCache.has(key)) {
-      const url = `${this.base}particles/textures/${key}`;
+      const url = `${PARTICLES_BASE}particles/textures/${key}`;
       textureCache.set(
         key,
         Promise.all([textureLoader.loadAsync(`${url}.png`).catch(() => null), fetchJson(`${url}.json`)]).then(([texture, sheet]) => {

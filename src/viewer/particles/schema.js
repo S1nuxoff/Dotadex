@@ -1,4 +1,5 @@
 import { fetchData } from "../../fetchData.js";
+import { PARTICLES_BASE } from "../../datasets.js";
 // The engine's particle classes (particles/schema.json in the dataset, from its SchemaSystem): the
 // defaults the game gives the fields a .vpcf leaves out. A file writes only what differs from
 // them, and the game reads it over a class built with its defaults, nested objects (inputs,
@@ -17,7 +18,7 @@ export const schemaStats = { filled: 0, older: 0, unknown: 0 };
 
 // Loaded once; resolves with null when the dataset has none (the operators' own fallbacks then)
 export function loadSchema(base) {
-  loading ??= fetchData(`${base}particles/schema.json`)
+  loading ??= fetchData(`${PARTICLES_BASE}particles/schema.json`)
     .then((res) => (res.ok ? res.json() : null))
     .catch(() => null)
     .then((json) => (schema = json));

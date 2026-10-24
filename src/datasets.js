@@ -10,6 +10,7 @@ export const DATASETS = {
   images: "dota2-images",
   videos: "dota2-videos",
   models: "dota2-models",
+  particles: "dota2-particles",
   sounds: "dota2-sounds",
   scenes: "dota2-scenes",
 };
@@ -27,6 +28,8 @@ export const DOTADEX_BASE = `${DATA_BASE}dotadex/`;
 export const IMAGES_BASE = datasetBase(DATASETS.images);
 export const VIDEOS_BASE = datasetBase(DATASETS.videos);
 export const MODELS_BASE = datasetBase(DATASETS.models);
+// Every particle system the heroes' and items' effects use, their textures, the engine's schema
+export const PARTICLES_BASE = datasetBase(DATASETS.particles);
 export const SOUNDS_BASE = datasetBase(DATASETS.sounds);
 export const SCENES_BASE = datasetBase(DATASETS.scenes);
 

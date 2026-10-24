@@ -13,8 +13,8 @@ import fs from "fs";
 import path from "path";
 import { DATASETS, datasetBase, datasetId } from "../src/datasets.js";
 
-const DATASET = datasetId(DATASETS.models);
-const BASE = datasetBase(DATASETS.models);
+const DATASET = datasetId(DATASETS.particles);
+const BASE = datasetBase(DATASETS.particles);
 const CACHE = path.resolve("node_modules/.cache/particle-bundles");
 const SOURCE = path.resolve("src/viewer/particles");
 const arg = (name, fallback) => {

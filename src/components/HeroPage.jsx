@@ -466,9 +466,7 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
       {/* Attribute, complexity, attack type and tags in one row */}
       <div className="mt-[4px] mb-[2px] flex items-center">
         <img
-          src={image(
-            base,
-            `primary_attribute_icons/primary_attribute_icon_${attribute}_psd`,
+          src={image(`primary_attribute_icons/primary_attribute_icon_${attribute}_psd`,
           )}
           alt=""
           title={attribute}
@@ -492,9 +490,7 @@ function HeroSummary({ catalog, hero, info, data, onAbout, onCast, onPreview }) 
             title={ranged ? "Ranged" : "Melee"}
             className="-mr-[2px] size-[30px] bg-[#8b989e] hover:bg-[#b0bcc2]"
             style={mask(
-              image(
-                base,
-                `control_icons/filter_${ranged ? "ranges" : "melee"}_png`,
+              image(`control_icons/filter_${ranged ? "ranges" : "melee"}_png`,
               ),
             )}
           />
@@ -644,9 +640,7 @@ function StatsSummary({ base, info }) {
             </p>
             <p className="flex items-center font-display text-[17px] leading-[1.2] font-bold tracking-[0.8px] text-[#dae2e5] uppercase">
               <img
-                src={image(
-                  base,
-                  `primary_attribute_icons/primary_attribute_icon_${icon}_psd`,
+                src={image(`primary_attribute_icons/primary_attribute_icon_${icon}_psd`,
                 )}
                 alt=""
                 className="mr-[8px] size-[20px]"

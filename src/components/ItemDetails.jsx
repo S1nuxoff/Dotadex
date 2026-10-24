@@ -6,7 +6,7 @@ import { loadUiSounds } from "../uiSounds.js";
 import { getViewSettings, onViewSettings, setViewSettings } from "../viewSettings.js";
 import { GAME_BUTTON } from "./ui.jsx";
 import { SoundList } from "./Voice.jsx";
-import { SOUNDS_BASE } from "../datasets.js";
+import { DOTADEX_BASE, SOUNDS_BASE } from "../datasets.js";
 import { menuMusicPack } from "./Music.jsx";
 import { Emoticon, emoticonRange, useEmoticons } from "./Emoticons.jsx";
 
@@ -17,7 +17,7 @@ import { Emoticon, emoticonRange, useEmoticons } from "./Emoticons.jsx";
 
 let library = null;
 function loadLibrary(modelsBase) {
-  library ??= fetchData(`${modelsBase}data/audio-library.json`)
+  library ??= fetchData(`${DOTADEX_BASE}data/audio-library.json`)
     .then((res) => (res.ok ? res.json() : {}))
     .catch(() => ({}));
   return library;
@@ -93,7 +93,7 @@ function useArmoryPicture(modelsBase, item) {
     if (item.category !== "loading_screens") {
       return;
     }
-    armoryData ??= fetchData(`${modelsBase}data/armory.json`)
+    armoryData ??= fetchData(`${DOTADEX_BASE}data/armory.json`)
       .then((res) => (res.ok ? res.json() : {}))
       .catch(() => ({}));
     armoryData.then((data) => !cancelled && setPicture(data.loadingScreens?.[item.id] ?? null));
@@ -112,7 +112,7 @@ function useCursors(modelsBase, pack) {
     let cancelled = false;
     setCursors(null);
     if (!pack) return;
-    cursorData ??= fetchData(`${modelsBase}data/cursors.json`)
+    cursorData ??= fetchData(`${DOTADEX_BASE}data/cursors.json`)
       .then((res) => (res.ok ? res.json() : {}))
       .catch(() => ({}));
     cursorData.then((data) => !cancelled && setCursors(data[pack] ?? {}));

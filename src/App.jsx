@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { prefetchModels } from "./viewer/stage.js";
 import { installUiSounds } from "./uiSounds.js";
-import { SOUNDS_BASE } from "./datasets.js";
+import { DOTADEX_BASE, SOUNDS_BASE } from "./datasets.js";
 import { fetchData } from "./fetchData.js";
 import TopNav, { SECTIONS, sectionOf } from "./components/TopNav.jsx";
 import HeroGrid from "./components/HeroGrid.jsx";
@@ -214,7 +214,7 @@ export default function App() {
   useEffect(() => {
     // The list of exported models and the page scenes (the pedestal waits on them) are asked for
     // with the catalog, from the dataset the site is built for, not after it
-    const portraitsFrom = (modelsBase) => fetchData(`${modelsBase}data/loadout_portraits.json`).then((res) => (res.ok ? res.json() : {}));
+    const portraitsFrom = (modelsBase) => fetchData(`${DOTADEX_BASE}data/loadout_portraits.json`).then((res) => (res.ok ? res.json() : {}));
     const early = { exported: loadExported(__MODELS_BASE__), portraits: portraitsFrom(__MODELS_BASE__) };
     early.exported.catch(() => {});
     early.portraits.catch(() => {});

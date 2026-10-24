@@ -19,7 +19,7 @@ import { Stage, T_POSE } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, modelLabels, modelsOneAtATime, rarity, slotName, wornOnHero } from "../catalog.js";
 import { GAME_BUTTON, GamePills, IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
 import { playSound, prepareSound } from "./Voice.jsx";
-import { SOUNDS_BASE } from "../datasets.js";
+import { DOTADEX_BASE, SOUNDS_BASE } from "../datasets.js";
 import { loadSpeech } from "../viewer/face.js";
 import { ATTRIBUTES, abilityIcon, useGameData } from "../gamedata.js";
 import { unlockSound } from "../viewer/soundPlayer.js";
@@ -31,7 +31,7 @@ let soundData = null;
 function loadSoundData(modelsBase) {
   soundData ??= Promise.all(
     ["animsounds.json", "animsound-events.json", "heroes.json"].map((file) =>
-      fetchData(`${modelsBase}data/${file}`).then((res) => (res.ok ? res.json() : {}))
+      fetchData(`${DOTADEX_BASE}data/${file}`).then((res) => (res.ok ? res.json() : {}))
     )
   ).then(([byModel, events, heroes]) => {
     const attack = {};
@@ -297,7 +297,7 @@ function useSceneMask(base, armory) {
 // [{ when: [[key, expression]], lines: [sound event] }]), loaded once
 let portraitSpeech = null;
 function loadPortraitSpeech(modelsBase) {
-  portraitSpeech ??= fetchData(`${modelsBase}data/portrait-speech.json`)
+  portraitSpeech ??= fetchData(`${DOTADEX_BASE}data/portrait-speech.json`)
     .then((res) => (res.ok ? res.json() : []))
     .catch(() => []);
   return portraitSpeech;
@@ -597,7 +597,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
       line.rules = rules;
       answer();
     });
-    fetch(`${catalog.modelsBase}data/voices/npc_dota_hero_${hero.id}.json`)
+    fetch(`${DOTADEX_BASE}data/voices/npc_dota_hero_${hero.id}.json`)
       .then((res) => (res.ok ? res.json() : []))
       .then((lines) => {
         line.voices = lines;

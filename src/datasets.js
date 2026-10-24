@@ -19,6 +19,8 @@ export const datasetBase = (name) => `${datasetPage(name)}/resolve/main/`;
 
 // The game's scripts and texts at their game paths, as JSON (items_game, localizations, npc_*)
 export const DATA_BASE = datasetBase(DATASETS.data);
+// The files the tracker makes for Dotadex out of them: index.json, exported.json, data/...
+export const DOTADEX_BASE = `${DATA_BASE}dotadex/`;
 export const MODELS_BASE = datasetBase(DATASETS.models);
 export const SOUNDS_BASE = datasetBase(DATASETS.sounds);
 export const SCENES_BASE = datasetBase(DATASETS.scenes);

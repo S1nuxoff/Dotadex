@@ -1,5 +1,6 @@
 import { playLoaded, preloadSound, setSoundMix } from "./viewer/soundPlayer.js";
 import { fetchData } from "./fetchData.js";
+import { DOTADEX_BASE } from "./datasets.js";
 
 // The game's menu sounds, as its interface plays them. Panorama's stylesheets give a panel a
 // sound event for a state (`sound: "<event>"`): most for :active (the press), some for :selected
@@ -44,7 +45,7 @@ const lastPlayed = {};
 
 // data/ui-sounds.json, once
 export function loadUiSounds(modelsBase) {
-  loading ??= fetchData(`${modelsBase}data/ui-sounds.json`)
+  loading ??= fetchData(`${DOTADEX_BASE}data/ui-sounds.json`)
     .then((res) => (res.ok ? res.json() : null))
     .catch(() => null)
     .then((value) => {

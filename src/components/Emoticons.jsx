@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchData } from "../fetchData.js";
+import { DOTADEX_BASE } from "../datasets.js";
 
 // The game's emoticons (scripts/emoticons.txt, data/emoticons.json in the dataset): each picture
 // is a strip of square frames, played at its ms_per_frame
@@ -9,7 +10,7 @@ export function useEmoticons(modelsBase) {
   const [emoticons, setEmoticons] = useState(null);
   useEffect(() => {
     let cancelled = false;
-    loading ??= fetchData(`${modelsBase}data/emoticons.json`)
+    loading ??= fetchData(`${DOTADEX_BASE}data/emoticons.json`)
       .then((res) => (res.ok ? res.json() : {}))
       .catch(() => ({}));
     loading.then((data) => !cancelled && setEmoticons(data));

@@ -4,6 +4,7 @@ import { fetchData } from "../fetchData.js";
 import { useGameData } from "../gamedata.js";
 import { useUiLayout } from "./ui.jsx";
 import { startCardEdges } from "../viewer/cardEdges.js";
+import { DOTADEX_BASE } from "../datasets.js";
 
 // CUSTOMIZE on a hero's page as the game draws it: #HeroCustomize with its DOTACosmeticPicker
 // (ui_cosmetic_picker, hero_slot_item_picker_loadout, ui_econ_item_animated, collection_shared)
@@ -31,7 +32,7 @@ let backgrounds = null;
 function useCardBackground(base, heroId) {
   const [cards, setCards] = useState(null);
   useEffect(() => {
-    backgrounds ??= fetchData(`${base}data/loadout_backgrounds.json`)
+    backgrounds ??= fetchData(`${DOTADEX_BASE}data/loadout_backgrounds.json`)
       .then((res) => (res.ok ? res.json() : null))
       .catch(() => null);
     let live = true;

@@ -7,11 +7,12 @@ import Voice from "./Voice.jsx";
 import ChatWheel from "./ChatWheel.jsx";
 import { fetchData } from "../fetchData.js";
 import { playUiSound } from "../uiSounds.js";
+import { DOTADEX_BASE } from "../datasets.js";
 
 // Which sound and voice lines go with each ability (abilitysounds.json), loaded once
 let abilitySounds = null;
 function loadAbilitySounds(modelsBase) {
-  abilitySounds ??= fetchData(`${modelsBase}data/abilitysounds.json`)
+  abilitySounds ??= fetchData(`${DOTADEX_BASE}data/abilitysounds.json`)
     .then((res) => (res.ok ? res.json() : {}))
     .catch(() => ({}));
   return abilitySounds;
@@ -83,7 +84,7 @@ const mask = (url) => ({
 // Which backdrop each hero has, loaded once
 let backgrounds = null;
 function loadBackgrounds(base) {
-  backgrounds ??= fetchData(`${base}data/loadout_backgrounds.json`)
+  backgrounds ??= fetchData(`${DOTADEX_BASE}data/loadout_backgrounds.json`)
     .then((res) => (res.ok ? res.json() : null))
     .catch(() => null);
   return backgrounds;

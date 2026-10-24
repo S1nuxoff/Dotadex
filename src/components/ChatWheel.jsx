@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { categoryOf } from "./Voice.jsx";
+import { DOTADEX_BASE } from "../datasets.js";
 
 // The game's chat wheel for a hero's voice lines: hold T (or press the button), point at a
 // sector, let go; the hero says a line of that kind, with a fitting animation where it has one
@@ -39,7 +40,7 @@ const voices = new Map();
 function useVoiceLines(modelsBase, heroId) {
   const [lines, setLines] = useState([]);
   useEffect(() => {
-    const url = `${modelsBase}data/voices/npc_dota_hero_${heroId}.json`;
+    const url = `${DOTADEX_BASE}data/voices/npc_dota_hero_${heroId}.json`;
     if (!voices.has(url)) {
       voices.set(url, fetch(url).then((res) => (res.ok ? res.json() : [])).catch(() => []));
     }

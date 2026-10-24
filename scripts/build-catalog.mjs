@@ -3,7 +3,7 @@
 // from the dataset's index.json in the browser, so new ones show up without a rebuild.
 import fs from "node:fs";
 import { MODELS_BASE } from "./dataset.mjs";
-import { DATA_BASE, SCENES_BASE } from "../src/datasets.js";
+import { DATA_BASE, DOTADEX_BASE, SCENES_BASE } from "../src/datasets.js";
 import { WEATHER_SCENE, WEATHER_SYSTEMS, armoryCategory } from "../src/armory.js";
 
 const OUT = "public/catalog.json";
@@ -53,7 +53,7 @@ const heroKeysOf = (item) => (item.used_by_heroes && typeof item.used_by_heroes 
 
 // INDEX_FILE: a local index.json, to try the site with a full catalog before an export
 const [index, itemsGame, english] = await Promise.all([
-  process.env.INDEX_FILE ? JSON.parse(fs.readFileSync(process.env.INDEX_FILE, "utf8")) : getJson(`${MODELS_BASE}index.json`),
+  process.env.INDEX_FILE ? JSON.parse(fs.readFileSync(process.env.INDEX_FILE, "utf8")) : getJson(`${DOTADEX_BASE}index.json`),
   // ITEMS_GAME_FILE: a local items_game.json (one written by the file tracker's parser, before it is published)
   (process.env.ITEMS_GAME_FILE ? Promise.resolve(JSON.parse(fs.readFileSync(process.env.ITEMS_GAME_FILE, "utf8"))) : getJson(`${DATA_BASE}scripts/items/items_game.txt.json`)).then((data) => data.items_game),
   getJson(`${DATA_BASE}resource/localization/items_english.txt.json`, { lang: { Tokens: {} } }).then((data) => data.lang.Tokens),
@@ -391,7 +391,7 @@ for (const item of items) {
 }
 
 // Shop items and treasure chests from the dataset's game data, when it is there
-const gameData = async (file) => getJson(`${MODELS_BASE}data/${file}`, null);
+const gameData = async (file) => getJson(`${DOTADEX_BASE}data/${file}`, null);
 const [shopData, treasureData, englishTexts, library, heroData] = await Promise.all([
   gameData("items.json"),
   gameData("treasures.json"),

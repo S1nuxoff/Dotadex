@@ -1,7 +1,8 @@
-// Game data from the dataset's data/ folder: heroes, abilities, shop items, treasures,
+// Game data from dota2-data's dotadex/data/ folder: heroes, abilities, shop items, treasures,
 // and the texts in the chosen language (English fills what a language lacks).
 import { useEffect, useState } from "react";
 import { fetchData } from "./fetchData.js";
+import { DOTADEX_BASE } from "./datasets.js";
 
 export const LANGUAGES = [
   ["english", "English"],
@@ -37,7 +38,7 @@ export const LANGUAGES = [
 const cache = new Map();
 
 function load(base, file) {
-  const url = `${base}data/${file}`;
+  const url = `${DOTADEX_BASE}data/${file}`;
   if (!cache.has(url)) {
     const promise = fetchData(url).then((res) => {
       if (!res.ok) {

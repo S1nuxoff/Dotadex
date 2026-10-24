@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { fetchData } from "../fetchData.js";
 import { playSound } from "./Voice.jsx";
-import { SOUNDS_BASE } from "../datasets.js";
+import { DOTADEX_BASE, SOUNDS_BASE } from "../datasets.js";
 
 // The Armory's Chat Wheel (ChatWheelEntry, collection_shared's 160 x 174 tiles): the chat wheel's
 // lines by their categories (data/chat-wheel.json), each with its play button when it has a sound,
@@ -13,7 +13,7 @@ function useChatWheel(modelsBase) {
   const [data, setData] = useState(null);
   useEffect(() => {
     let cancelled = false;
-    loading ??= fetchData(`${modelsBase}data/chat-wheel.json`)
+    loading ??= fetchData(`${DOTADEX_BASE}data/chat-wheel.json`)
       .then((res) => (res.ok ? res.json() : { categories: [], messages: {} }))
       .catch(() => ({ categories: [], messages: {} }));
     loading.then((value) => !cancelled && setData(value));

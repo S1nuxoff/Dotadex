@@ -1,6 +1,6 @@
 import { fetchData } from "./fetchData.js";
 import { ARMORY_CATEGORIES } from "./armory.js";
-import { IMAGE_TRACKER_BASE, PRICES_URL, SCENES_BASE, STEAM_REACT_BASE } from "./datasets.js";
+import { DOTADEX_BASE, IMAGE_TRACKER_BASE, PRICES_URL, SCENES_BASE, STEAM_REACT_BASE } from "./datasets.js";
 // Rarity colors as the game shows them, in the game's order
 // value: the rarity's "value" in items_game (rarities), the order the game sorts by
 export const RARITIES = {
@@ -440,11 +440,11 @@ export async function loadPrices() {
 // Paths of the models exported so far, read live from the dataset
 export async function loadExported(modelsBase) {
   // exported.json is just the list; older datasets only have the whole index
-  const small = await fetchData(`${modelsBase}exported.json?t=${Date.now()}`, { cache: "no-store" }).catch(() => null);
+  const small = await fetchData(`${DOTADEX_BASE}exported.json?t=${Date.now()}`, { cache: "no-store" }).catch(() => null);
   if (small?.ok) {
     return new Set(await small.json());
   }
-  const res = await fetchData(`${modelsBase}index.json?t=${Date.now()}`, { cache: "no-store" });
+  const res = await fetchData(`${DOTADEX_BASE}index.json?t=${Date.now()}`, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`The list of exported models did not load (HTTP ${res.status}).`);
   }

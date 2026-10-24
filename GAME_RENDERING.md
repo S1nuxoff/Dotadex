@@ -10,8 +10,8 @@ site to the game by its code and values. Each line says where it comes from. Unk
 - Describe one: `Source2Viewer-CLI.exe -i <file>.vcs -b DATA > data.txt` (KV3: static and dynamic
   combos, variables, `m_staticComboData`, `m_byteCodeData`).
 - Programs are zstd frames compressed with a dictionary kept inside `Source2Viewer-CLI.exe`
-  (bytes 13614052..+65536, saved as `dota2-model-tracker/temp/v14sh/vcs.dict`).
-- One static combo's programs: `dota2-model-tracker/temp/v14gl/tools/combo.js <vcs> <data.txt>
+  (bytes 13614052..+65536, saved as `dota2-game-tracker/temp/re/v14sh/vcs.dict`).
+- One static combo's programs: `dota2-game-tracker/temp/re/v14gl/tools/combo.js <vcs> <data.txt>
   <dict> <staticId> <out>`; the static id is the sum of `value × m_nComboIndexValue` over the
   `S_*` combos. `m_byteCodeData[i].m_nOffs` counts from the first program frame (not from the
   frame of the DATA block at the start of the file).

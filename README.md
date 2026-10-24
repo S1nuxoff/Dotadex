@@ -79,7 +79,7 @@ trackers that follow every Dota 2 update.
 
 ```mermaid
 flowchart LR
-    G[("Dota 2<br/>game files")] --> T["dota2-model-tracker<br/><sub>one export after every update</sub>"]
+    G[("Dota 2<br/>game files")] --> T["dota2-game-tracker<br/><sub>one export after every update</sub>"]
     T --> DA[("dota2-data<br/><sub>scripts, texts, files made for the site</sub>")]
     T --> IM[("dota2-images<br/>dota2-videos")]
     T --> MO[("dota2-models<br/><sub>models, materials, particles</sub>")]
@@ -92,7 +92,7 @@ flowchart LR
     SO --> S
 ```
 
-- **[dota2-model-tracker](https://github.com/S1nuxoff/dota2-model-tracker)** exports the game to Hugging Face
+- **[dota2-game-tracker](https://github.com/S1nuxoff/dota2-game-tracker)** exports the game to Hugging Face
   datasets after every update: [dota2-data](https://huggingface.co/datasets/Sqls1/dota2-data) (every script
   and localization as JSON, and under `dotadex/` the files made for this site),
   [dota2-images](https://huggingface.co/datasets/Sqls1/dota2-images) and

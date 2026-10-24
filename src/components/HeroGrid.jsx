@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { imageUrl, useGameData } from "../gamedata.js";
+import { STEAM_REACT_BASE } from "../datasets.js";
 import { useDismiss, useUiScale, VALVE_NOTICE } from "./ui.jsx";
 
 // The game's hero grid as the dashboard has it now: four columns of tall portraits by primary
@@ -13,7 +14,7 @@ const GROUPS = [
   ["DOTA_ATTRIBUTE_ALL", "All", "hero_universal", "universal"],
 ];
 const GROUP_NAMES = { Strength: "Strength", Agility: "Agility", Intelligence: "Intelligence", All: "Universal" };
-export const ATTRIBUTE_ICON = (icon) => `https://cdn.steamstatic.com/apps/dota2/images/dota_react/icons/${icon}.png`;
+export const ATTRIBUTE_ICON = (icon) => `${STEAM_REACT_BASE}icons/${icon}.png`;
 
 export function attributeIcon(primary) {
   return ATTRIBUTE_ICON((GROUPS.find(([key]) => key === primary) ?? GROUPS[3])[2]);

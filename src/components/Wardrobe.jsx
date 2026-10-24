@@ -14,6 +14,7 @@ import {
   sortItems,
 } from "../catalog.js";
 import { ItemCard, Select } from "./ui.jsx";
+import { STEAM_REACT_BASE } from "../datasets.js";
 
 function SlotRow({ slot, item, isDefault, onOpen }) {
   const icon = item && itemIcon(item);
@@ -217,7 +218,7 @@ function LoadoutSlot({ image, name, count, active, onSelect }) {
   );
 }
 
-const heroCrop = (hero) => `https://cdn.steamstatic.com/apps/dota2/images/dota_react/heroes/crops/${hero.id}.png`;
+const heroCrop = (hero) => `${STEAM_REACT_BASE}heroes/crops/${hero.id}.png`;
 
 // A tile of the loadout overview, as the game draws it: the slot's name above; the picture
 // filling a light steel tile with a white corner and a thin bar along the bottom

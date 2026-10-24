@@ -4,6 +4,7 @@ import { useUiScale } from "./ui.jsx";
 import { useMenuMusic } from "./Music.jsx";
 import Settings from "./Settings.jsx";
 import { getVolume, onVolume, setVolume } from "../volume.js";
+import { DATASETS, datasetPage } from "../datasets.js";
 
 // The sections across the top, as the game's dashboard has them, and the pages of each below
 export const SECTIONS = [
@@ -147,7 +148,6 @@ export default function TopNav({ catalog, tab, onTab, onSection, onHome, onBack,
   const width = document.documentElement.clientWidth / scale;
   const section = sectionOf(tab);
   const active = SECTIONS.findIndex((entry) => entry.id === section.id);
-  const dataset = catalog.modelsBase.split("/datasets/")[1]?.split("/resolve")[0];
 
   return (
     <header className="relative z-30 shrink-0 overflow-x-clip">
@@ -227,7 +227,7 @@ export default function TopNav({ catalog, tab, onTab, onSection, onHome, onBack,
           <RightButton label="Support Dotadex on Ko-fi" center={1920 - 1661 + RIGHT_PITCH} href="https://ko-fi.com/s1nuxoff">
             <KofiIcon className="size-[28px] text-[#8b95a3]" />
           </RightButton>
-          <RightButton label="The models on Hugging Face" center={1920 - 1661} href={`https://huggingface.co/datasets/${dataset}`}>
+          <RightButton label="The models on Hugging Face" center={1920 - 1661} href={datasetPage(DATASETS.models)}>
             <Database className="size-[26px] text-[#8b95a3]" strokeWidth={1.75} />
           </RightButton>
           <RightButton label="Source on GitHub" center={1920 - 1741} href="https://github.com/S1nuxoff/Dotadex">

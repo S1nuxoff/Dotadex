@@ -15,6 +15,7 @@ import {
 } from "../catalog.js";
 import { Select } from "./ui.jsx";
 import { LANGUAGES } from "../gamedata.js";
+import { DATASETS, datasetPage } from "../datasets.js";
 
 const ANY = "";
 
@@ -369,7 +370,7 @@ export default function Sidebar({ catalog, tab, onTab, route, onOpen, language, 
           options={LANGUAGES.map(([value, label]) => ({ value, label }))}
         />
         <a
-          href={`https://huggingface.co/datasets/${catalog.modelsBase.split("/datasets/")[1]?.split("/resolve")[0]}`}
+          href={datasetPage(DATASETS.models)}
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-1 hover:text-bone"

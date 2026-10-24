@@ -18,7 +18,8 @@ import {
 import { Stage, T_POSE } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, modelLabels, modelsOneAtATime, rarity, slotName, wornOnHero } from "../catalog.js";
 import { GAME_BUTTON, GamePills, IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
-import { playSound, prepareSound, soundsBase } from "./Voice.jsx";
+import { playSound, prepareSound } from "./Voice.jsx";
+import { SOUNDS_BASE } from "../datasets.js";
 import { loadSpeech } from "../viewer/face.js";
 import { ATTRIBUTES, abilityIcon, useGameData } from "../gamedata.js";
 import { unlockSound } from "../viewer/soundPlayer.js";
@@ -42,7 +43,7 @@ function loadSoundData(modelsBase) {
         };
       }
     }
-    return { base: soundsBase(modelsBase), byModel, events, attack };
+    return { base: SOUNDS_BASE, byModel, events, attack };
   });
   return soundData;
 }
@@ -517,7 +518,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
       unlockSound();
       stageRef.current.castAbility(ability, index, sounds);
       if (lines?.length && Math.random() < 0.6) {
-        playSound(soundsBase(catalog.modelsBase) + lines[Math.floor(Math.random() * lines.length)], null, { speech: true });
+        playSound(SOUNDS_BASE + lines[Math.floor(Math.random() * lines.length)], null, { speech: true });
       }
     };
     const onEmote = (event) => {
@@ -528,7 +529,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
         stageRef.current.playOnce(name);
       }
       if (files?.length) {
-        playSound(soundsBase(catalog.modelsBase) + files[Math.floor(Math.random() * files.length)], null, { speech: true });
+        playSound(SOUNDS_BASE + files[Math.floor(Math.random() * files.length)], null, { speech: true });
       }
     };
     // The hero's face says the lines it speaks
@@ -553,7 +554,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
     // A line picked and loaded before it is said (its sound and its phonemes)
     const prepare = (files) => {
       if (!files?.length) return null;
-      const url = soundsBase(catalog.modelsBase) + files[Math.floor(Math.random() * files.length)];
+      const url = SOUNDS_BASE + files[Math.floor(Math.random() * files.length)];
       loadSpeech(url).catch(() => {});
       return { url, audio: prepareSound(url) };
     };

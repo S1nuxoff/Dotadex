@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { createAudio, soundsBase } from "./Voice.jsx";
+import { createAudio } from "./Voice.jsx";
+import { SOUNDS_BASE } from "../datasets.js";
 import { musicVolume, onVolume } from "../volume.js";
 import { eventVolume, loadUiSounds, pickFile } from "../uiSounds.js";
 import { mixLevel } from "../viewer/soundPlayer.js";
@@ -69,7 +70,7 @@ export function useMenuMusic(modelsBase) {
         if (!file) {
           return;
         }
-        const element = createAudio(soundsBase(modelsBase) + file);
+        const element = createAudio(SOUNDS_BASE + file);
         element.eventVolume = eventVolume(event) * mixLevel(file);
         // ui_main after the startup track, then ui_main again; a track that will not load is
         // passed over the same way

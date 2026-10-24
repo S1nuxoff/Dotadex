@@ -122,7 +122,7 @@ Order: cosmetics first (every particle and effect as in the game), abilities as 
   - The viewer's collection: what dropped kept in the browser; a dropped item opens in 3D, on its hero.
   - No money: free, no purchases, trading or cash-out; a simulator only.3, tooltips (the hints are the browser's titles). Read as plain CSS, not checked against a game shot: DropDown's `background-position: right 38px 35%`, the border brushes (taken as gradients of the border colour's alpha).
 
-## Data: the whole game in datasets (plan, not started)
+## Data: the whole game in datasets (plan, in progress)
 
 Agreed 2026-10-23: every game file the site can use lives on Hugging Face, one dataset per kind, exported whole (not only what the site needs today), by one tracker that checks Steam once per game update. GitHub keeps code and the prices only; the site repo keeps no game files.
 
@@ -146,7 +146,7 @@ Target datasets (names to confirm):
 
 Steps, in this order:
 
-- [ ] **D-01 One list of data sources on the site.** `src/datasets.js` names every dataset and the price file once; nothing finds a dataset by replacing a name in a URL (Voice.jsx, App.jsx, catalog.js `scenesBase`). No data moves; every later step changes one line there.
+- [x] **D-01 One list of data sources on the site.** `src/datasets.js` names every dataset and the price file once; nothing finds a dataset by replacing a name in a URL (Voice.jsx, App.jsx, catalog.js `scenesBase`). No data moves; every later step changes one line there. Done 2026-10-24: the site and the build scripts (build-catalog, dataset.mjs, particle-coverage) read every source from it, Steam CDN and the trackers included; `HF_DATASET` still overrides the models dataset for builds.
 - [ ] **D-02 DATA.md: the map of the data.** In the tracker repo: which dataset holds what, which script writes it, which part of the site reads it, what each large JSON is. Kept current with every step below.
 - [ ] **D-03 dota2-data.** Export every script and localization file as JSON, items_game and the 30 languages included; move the site-made files (index.json, exported.json, data/*.json) under `dotadex/`. build-catalog reads items_game from it; then dota2-file-tracker is archived.
 - [ ] **D-04 dota2-images.** Every panorama picture (47k textures; check how many are distinct pictures and folders over 10k entries), the format the site uses today (PNG; WebP where already). The site's `itemIcon`, hero portraits (instead of Steam's CDN), the pictures in `public/ui` from it; `IMAGE_FOLDERS` removed; then dota2-image-tracker is archived.

@@ -3,9 +3,10 @@
 // from the dataset's index.json in the browser, so new ones show up without a rebuild.
 import fs from "node:fs";
 import { MODELS_BASE } from "./dataset.mjs";
+import { FILE_TRACKER_BASE, SCENES_BASE } from "../src/datasets.js";
 import { WEATHER_SCENE, WEATHER_SYSTEMS, armoryCategory } from "../src/armory.js";
 
-const FILES = "https://raw.githubusercontent.com/S1nuxoff/dota2-file-tracker/main/static";
+const FILES = FILE_TRACKER_BASE.slice(0, -1);
 const OUT = "public/catalog.json";
 
 // Internal hero names that differ from the ones players know
@@ -448,7 +449,7 @@ const packName = (folder) =>
     .replace(/_/g, " ")
     .replace(/\w/g, (letter) => letter.toUpperCase()) || "Default";
 // Scenes and maps, from the scenes dataset
-const scenes = (await getJson(MODELS_BASE.replace("dota2-models", "dota2-scenes") + "scenes.json", [])).map((scene) => ({
+const scenes = (await getJson(`${SCENES_BASE}scenes.json`, [])).map((scene) => ({
   id: scene.id,
   name: scene.name,
   size: scene.size,

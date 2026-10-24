@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { fetchData } from "../fetchData.js";
-import { playSound, soundsBase } from "./Voice.jsx";
+import { playSound } from "./Voice.jsx";
+import { SOUNDS_BASE } from "../datasets.js";
 
 // The Armory's Chat Wheel (ChatWheelEntry, collection_shared's 160 x 174 tiles): the chat wheel's
 // lines by their categories (data/chat-wheel.json), each with its play button when it has a sound,
@@ -70,7 +71,7 @@ export default function ChatWheelLines({ modelsBase, query }) {
       return;
     }
     setPlaying(name);
-    audio.current = playSound(soundsBase(modelsBase) + line.files[0], () => setPlaying((value) => (value === name ? null : value)));
+    audio.current = playSound(SOUNDS_BASE + line.files[0], () => setPlaying((value) => (value === name ? null : value)));
   };
   const groups = data.categories
     .map((category) => [category, category.messages.filter((name) => !words || nameOf(name, data.messages[name]).toLowerCase().includes(words))])

@@ -1,5 +1,6 @@
 import { fetchData } from "./fetchData.js";
 import { ARMORY_CATEGORIES } from "./armory.js";
+import { IMAGE_TRACKER_BASE, PRICES_URL, SCENES_BASE, STEAM_REACT_BASE } from "./datasets.js";
 // Rarity colors as the game shows them, in the game's order
 // value: the rarity's "value" in items_game (rarities), the order the game sorts by
 export const RARITIES = {
@@ -97,12 +98,12 @@ function slotRank(slot) {
 // The image tracker keeps the game's file names, which are lowercase
 export function itemIcon(item) {
   return item.icon
-    ? `https://raw.githubusercontent.com/S1nuxoff/dota2-image-tracker/main/static/panorama/images/${item.icon.toLowerCase()}_png.png`
+    ? `${IMAGE_TRACKER_BASE}panorama/images/${item.icon.toLowerCase()}_png.png`
     : null;
 }
 
 export function heroPortrait(hero) {
-  return `https://cdn.steamstatic.com/apps/dota2/images/dota_react/heroes/${hero.id}.png`;
+  return `${STEAM_REACT_BASE}heroes/${hero.id}.png`;
 }
 
 export function formatPrice(price) {
@@ -423,7 +424,6 @@ export async function loadCatalog() {
 
 // Approximate market prices: the lowest offer on the trading platforms (DMarket, Skinport) by
 // the item's market name, read live from the price tracker, which updates them every 20 minutes
-const PRICES_URL = "https://raw.githubusercontent.com/S1nuxoff/dota2-price-tacker/main/static/prices/latest.json";
 
 export async function loadPrices() {
   const res = await fetch(`${PRICES_URL}?t=${Date.now()}`, { cache: "no-store" });
@@ -506,7 +506,7 @@ export function withExported(catalog, exported, prices = {}) {
     audioById: Object.fromEntries((catalog.audio ?? []).map((pack) => [pack.id, pack])),
     scenes: catalog.scenes ?? [],
     scenesById: Object.fromEntries((catalog.scenes ?? []).map((scene) => [scene.id, scene])),
-    scenesBase: catalog.modelsBase.replace("dota2-models", "dota2-scenes"),
+    scenesBase: SCENES_BASE,
     total: catalog.heroes.length + catalog.items.length,
   };
 }

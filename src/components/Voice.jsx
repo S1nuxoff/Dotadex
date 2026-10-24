@@ -2,11 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, Search } from "lucide-react";
 import { effectsVolume } from "../volume.js";
 import { likelyUrl, noteWav } from "../viewer/soundPlayer.js";
-
-// Where the sounds are: the sounds dataset next to the models one
-export function soundsBase(modelsBase) {
-  return modelsBase.replace("dota2-models", "dota2-sounds");
-}
+import { SOUNDS_BASE } from "../datasets.js";
 
 // Some of the game's sounds are WAV rather than MP3: when the .mp3 is missing, try .wav
 export function createAudio(url) {
@@ -123,7 +119,7 @@ export default function Voice({ modelsBase, heroKey }) {
   const [lines, setLines] = useState(null);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState("");
-  const base = soundsBase(modelsBase);
+  const base = SOUNDS_BASE;
 
   useEffect(() => {
     let cancelled = false;

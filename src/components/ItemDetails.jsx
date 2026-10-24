@@ -5,7 +5,8 @@ import { fetchData } from "../fetchData.js";
 import { loadUiSounds } from "../uiSounds.js";
 import { getViewSettings, onViewSettings, setViewSettings } from "../viewSettings.js";
 import { GAME_BUTTON } from "./ui.jsx";
-import { SoundList, soundsBase } from "./Voice.jsx";
+import { SoundList } from "./Voice.jsx";
+import { SOUNDS_BASE } from "../datasets.js";
 import { menuMusicPack } from "./Music.jsx";
 import { Emoticon, emoticonRange, useEmoticons } from "./Emoticons.jsx";
 
@@ -316,7 +317,7 @@ export default function ItemDetails({ catalog, item, onClose, onOpen }) {
               {files === null ? (
                 <p className="text-[16px] text-[#8b989e]">Loading the sounds</p>
               ) : files.length ? (
-                <SoundList base={soundsBase(catalog.modelsBase)} files={files} />
+                <SoundList base={SOUNDS_BASE} files={files} />
               ) : (
                 <p className="text-[16px] text-[#8b989e]">No sounds of this pack in the dataset</p>
               )}

@@ -11,9 +11,10 @@
 //   npm run particles:coverage [-- --top 40] [-- --json out.json] [-- --schema schema.json]
 import fs from "fs";
 import path from "path";
+import { DATASETS, datasetBase, datasetId } from "../src/datasets.js";
 
-const DATASET = "Sqls1/dota2-models";
-const BASE = `https://huggingface.co/datasets/${DATASET}/resolve/main/`;
+const DATASET = datasetId(DATASETS.models);
+const BASE = datasetBase(DATASETS.models);
 const CACHE = path.resolve("node_modules/.cache/particle-bundles");
 const SOURCE = path.resolve("src/viewer/particles");
 const arg = (name, fallback) => {

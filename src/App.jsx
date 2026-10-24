@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { prefetchModels } from "./viewer/stage.js";
 import { installUiSounds } from "./uiSounds.js";
+import { SOUNDS_BASE } from "./datasets.js";
 import { fetchData } from "./fetchData.js";
 import TopNav, { SECTIONS, sectionOf } from "./components/TopNav.jsx";
 import HeroGrid from "./components/HeroGrid.jsx";
@@ -404,7 +405,7 @@ export default function App() {
   // The game's interface sounds for the whole page
   useEffect(() => {
     if (catalog) {
-      installUiSounds(catalog.modelsBase.replace("dota2-models", "dota2-sounds"), catalog.modelsBase);
+      installUiSounds(SOUNDS_BASE, catalog.modelsBase);
     }
   }, [catalog]);
 

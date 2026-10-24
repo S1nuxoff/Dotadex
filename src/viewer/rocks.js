@@ -1,13 +1,28 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { stageTint } from "./effects.js";
+import { MODELS_BASE } from "../datasets.js";
 
 // Stony ground the model stands on, from the game's own rock props: Dota's river rocks and
 // ground stones around it, on a ground of their stone texture that fades into the dark.
 // A light from above casts the model's and the rocks' shadows, and a light in the model's
 // color lights the stones around it.
 
-const ROCKS = `${import.meta.env.BASE_URL}stage/`;
+// The props, from the models dataset at their game paths
+const PROPS = {
+  riveredge_rock001a: "models/props_rock/riveredge_rock001a",
+  riveredge_rock003a: "models/props_rock/riveredge_rock003a",
+  riveredge_rock005a: "models/props_rock/riveredge_rock005a",
+  riveredge_rock007a: "models/props_rock/riveredge_rock007a",
+  riveredge_rock009a: "models/props_rock/riveredge_rock009a",
+  riveredge_rock010a: "models/props_rock/riveredge_rock010a",
+  riveredge_rocks_small001: "models/props_rock/riveredge_rocks_small001",
+  riveredge_rocks_small002: "models/props_rock/riveredge_rocks_small002",
+  rock_ground001: "models/props_nature/rock_ground001",
+  cf_palace_brazier: "models/events/crownfall/survivors/architecture/palace/cf_palace_brazier",
+  lantern002: "models/props_debris/lantern002",
+  candles001: "models/props_debris/candles001",
+};
 
 // Where the rocks lie, in units of the model's footprint radius: [file, angle°, distance, size, turn°]
 const LAYOUT = [
@@ -73,7 +88,7 @@ const loader = new GLTFLoader();
 const models = new Map();
 function loadRock(name) {
   if (!models.has(name)) {
-    models.set(name, loader.loadAsync(`${ROCKS}${name}.glb`).catch(() => null));
+    models.set(name, loader.loadAsync(`${MODELS_BASE}${PROPS[name]}.glb`).catch(() => null));
   }
   return models.get(name);
 }

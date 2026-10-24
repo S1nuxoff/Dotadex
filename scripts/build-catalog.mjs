@@ -3,10 +3,9 @@
 // from the dataset's index.json in the browser, so new ones show up without a rebuild.
 import fs from "node:fs";
 import { MODELS_BASE } from "./dataset.mjs";
-import { FILE_TRACKER_BASE, SCENES_BASE } from "../src/datasets.js";
+import { DATA_BASE, SCENES_BASE } from "../src/datasets.js";
 import { WEATHER_SCENE, WEATHER_SYSTEMS, armoryCategory } from "../src/armory.js";
 
-const FILES = FILE_TRACKER_BASE.slice(0, -1);
 const OUT = "public/catalog.json";
 
 // Internal hero names that differ from the ones players know
@@ -56,8 +55,8 @@ const heroKeysOf = (item) => (item.used_by_heroes && typeof item.used_by_heroes 
 const [index, itemsGame, english] = await Promise.all([
   process.env.INDEX_FILE ? JSON.parse(fs.readFileSync(process.env.INDEX_FILE, "utf8")) : getJson(`${MODELS_BASE}index.json`),
   // ITEMS_GAME_FILE: a local items_game.json (one written by the file tracker's parser, before it is published)
-  (process.env.ITEMS_GAME_FILE ? Promise.resolve(JSON.parse(fs.readFileSync(process.env.ITEMS_GAME_FILE, "utf8"))) : getJson(`${FILES}/items_game.json`)).then((data) => data.items_game),
-  getJson(`${FILES}/items_english.json`, { lang: { Tokens: {} } }).then((data) => data.lang.Tokens),
+  (process.env.ITEMS_GAME_FILE ? Promise.resolve(JSON.parse(fs.readFileSync(process.env.ITEMS_GAME_FILE, "utf8"))) : getJson(`${DATA_BASE}scripts/items/items_game.txt.json`)).then((data) => data.items_game),
+  getJson(`${DATA_BASE}resource/localization/items_english.txt.json`, { lang: { Tokens: {} } }).then((data) => data.lang.Tokens),
 ]);
 const gameItems = itemsGame.items;
 const localize = (token) => (token?.startsWith("#") ? english[token.slice(1)] : null);

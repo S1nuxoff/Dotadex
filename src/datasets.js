@@ -6,6 +6,7 @@ const GITHUB_OWNER = "S1nuxoff";
 
 // The Hugging Face datasets the tracker exports the game to
 export const DATASETS = {
+  data: "dota2-data",
   models: "dota2-models",
   sounds: "dota2-sounds",
   scenes: "dota2-scenes",
@@ -16,14 +17,13 @@ export const datasetId = (name) => `${HF_OWNER}/${name}`;
 export const datasetPage = (name) => `https://huggingface.co/datasets/${datasetId(name)}`;
 export const datasetBase = (name) => `${datasetPage(name)}/resolve/main/`;
 
+// The game's scripts and texts at their game paths, as JSON (items_game, localizations, npc_*)
+export const DATA_BASE = datasetBase(DATASETS.data);
 export const MODELS_BASE = datasetBase(DATASETS.models);
 export const SOUNDS_BASE = datasetBase(DATASETS.sounds);
 export const SCENES_BASE = datasetBase(DATASETS.scenes);
 
 const githubRaw = (repo) => `https://raw.githubusercontent.com/${GITHUB_OWNER}/${repo}/main/static/`;
-
-// The game's item data (items_game), read at build; to move to a dataset (D-03)
-export const FILE_TRACKER_BASE = githubRaw("dota2-file-tracker");
 
 // Cosmetic item icons; to move to a dataset (D-04)
 export const IMAGE_TRACKER_BASE = githubRaw("dota2-image-tracker");

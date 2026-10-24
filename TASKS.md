@@ -158,6 +158,16 @@ Steps, in this order:
 - [ ] **D-10 Storage.** Measure each dataset after D-03..D-08; write the dataset cards; if the total is far above today's 65 GB, decide with the user (PRO account, or leave out what nobody will use, e.g. map textures).
 - [ ] **D-11 Clean up.** Remove from dota2-models what moved; the site repo's `public/` keeps only Dotadex's own files (fonts, logo).
 
+## Later: a download site for the whole game (idea, 2026-10-24)
+
+A second site where anyone can browse, search and download any file of the game the datasets hold: pictures, videos, sounds, models (glb with textures and animations), scripts and texts. It links straight to the datasets; no storage of its own.
+
+- [x] **F-01 A list of every file per dataset.** Tracker `files-list.js`: `files.json` (+ `.gz`) at each dataset's root, `[[path, size], ...]`, made again when the dataset changes (workflow step).
+- [ ] **F-02 Names people know.** Map game paths to names from the localizations in dota2-data (heroes, items, abilities, cosmetics), made by the tracker.
+- [ ] **F-03 Model previews.** Small pictures of each model for the catalog, rendered by the tracker.
+- [ ] **F-04 The site.** Browse by dataset and folder, search by name and path, preview, download. Non-commercial, crediting Valve.
+- Note: Hugging Face is storage, not a CDN; if downloads grow large, put a cache (Cloudflare) in front.
+
 ## Later: abilities as in a match
 
 - [ ] **A-01 (#39) Data sources for abilities.** Which effects an ability makes, with which CPs and when, is mostly in the game's code. From data: animation events in models (`AE_CL_CREATE_PARTICLE_EFFECT`, `AE_CL_PLAYSOUND`), preview configurations in `.vpcf`, abilities' precache lists, `asset_modifier` swaps, cast animations and timings (`AbilityCastPoint`). Decide whether a small hand-written table for well-known abilities is acceptable (against the everything-from-the-dataset rule).

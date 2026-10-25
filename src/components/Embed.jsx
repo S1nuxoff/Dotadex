@@ -1,25 +1,41 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { ExternalLink, Play } from "lucide-react";
 import { listOf, pageMeta, routePath } from "../catalog.js";
 
 // A hero or an item shown on another site, in an iframe (/Dotadex/embed/hero/pudge): the scene
 // alone, as the page shows it. It waits behind its picture until clicked, so a page with several
 // does not load them all at once (?autoplay=1 starts it at once); a link opens the full page
-// (?link=0 leaves it out)
+// (?link=0 leaves it out). ?bg=0: no background of its own (no stage color, no hero backdrop), the
+// model standing on the other site's page
+
 export default function Embed({ catalog, route, viewer, backdrop }) {
   const settings = new URLSearchParams(window.location.search);
   const [started, setStarted] = useState(() => settings.get("autoplay") === "1");
   const withLink = settings.get("link") !== "0";
+  const clear = settings.get("bg") === "0";
+  // The page under the scene let through: the frame's document clear, in the dark scheme (a frame
+  // whose scheme differs from its page's gets an opaque canvas from the browser)
+  useLayoutEffect(() => {
+    if (!clear) {
+      return;
+    }
+    for (const el of [document.documentElement, document.body, document.getElementById("root")]) {
+      if (el) {
+        el.style.background = "transparent";
+      }
+    }
+    document.documentElement.style.colorScheme = "dark";
+  }, [clear]);
   const entry = listOf(catalog, route.type)?.[route.id];
   const meta = entry ? pageMeta(route.type, entry, catalog) : null;
   const name = entry?.name?.trim() ?? "";
   const full = `${window.location.origin}${routePath(route)}`;
 
   return (
-    <main className="relative h-full overflow-hidden bg-stage">
+    <main className={`relative h-full overflow-hidden ${clear ? "" : "bg-stage"}`}>
       {started ? (
         <>
-          {backdrop}
+          {!clear && backdrop}
           {viewer}
         </>
       ) : (

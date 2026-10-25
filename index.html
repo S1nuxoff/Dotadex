@@ -28,6 +28,8 @@
         transition: opacity .9s ease, visibility .9s;
       }
       #dx-loader.is-done { opacity: 0; visibility: hidden; }
+      /* An embed with ?bg=0: clear from the first paint, before the app (no stage dark while it loads) */
+      html.dx-clear, html.dx-clear body, html.dx-clear #root { background: transparent !important; color-scheme: dark; }
       #dx-loader::after { /* vignette */
         content: ""; position: absolute; inset: 0; pointer-events: none;
         background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.8) 100%);
@@ -200,6 +202,7 @@
         // A frame on another site (/embed/...) goes without the splash: the stage's dark until its
         // scene comes, each time it is opened
         if (/\/embed\//.test(location.pathname)) {
+          if (new URLSearchParams(location.search).get("bg") === "0") document.documentElement.classList.add("dx-clear");
           document.getElementById("dx-loader").remove();
           window.DotadexLoader = { hide() {} };
           return;

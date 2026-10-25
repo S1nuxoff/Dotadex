@@ -472,7 +472,7 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
         return {
           key: set.id,
           name: set.name,
-          files: set.items[0] ? `${FILES_SITE}item/${set.items[0]}/` : null,
+          files: `${FILES_SITE}set/${encodeURIComponent(set.id)}/`,
           image: set.icon ? portrait(set.icon, style) : null,
           look: { ...look, id },
           styles: setStyles(catalog, set),

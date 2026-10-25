@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Download } from "lucide-react";
 import { formatPrice, heroSlots, itemIcon, personaOf, rarity, slotName, sortItems } from "../catalog.js";
 import { ARMORY_CATEGORIES, ARMORY_GROUPS, SCENE_CATEGORIES, categoryIcon } from "../armory.js";
 import { useDismiss, useUiLayout } from "./ui.jsx";
 import ItemDetails from "./ItemDetails.jsx";
 import { EmoticonsContent } from "./Emoticons.jsx";
 import ChatWheelLines from "./ChatWheelLines.jsx";
-import { panoramaImage } from "../datasets.js";
+import { FILES_SITE, panoramaImage } from "../datasets.js";
 
 // The game's Armory (dashboard_page_collection, dashboard_tabs_collection, collection_shared,
 // ui_econ_item_animated): the tabs under the top bar; a 300 wide column of heroes or categories on
@@ -163,10 +163,23 @@ function Labeled({ label, children }) {
 // width high over a grey ground, the name (BodySmall) and slot (LabelSmall at 50%) under it, a 3
 // high strip of the rarity's color; hovered the picture grows and brightens and a 4px white edge
 // shows, previewed a 1px one. A set (.Animated) is its picture whole, the name over its bottom.
-function Tile({ size, image, name, detail, look, active, tall, onClick }) {
+// files: the item on the download site (a small button under the pointer, top right)
+function Tile({ size, image, name, detail, look, active, tall, onClick, files }) {
   const [width, height] = size;
   return (
-    <li className="m-[6px]" style={{ width, height }}>
+    <li className="group/tile relative m-[6px]" style={{ width, height }}>
+      {files && (
+        <a
+          href={files}
+          target="_blank"
+          rel="noreferrer"
+          title="Download its files: model, textures, icon"
+          aria-label={`Download the files of ${name}`}
+          className="absolute top-[8px] right-[8px] z-10 flex size-[28px] items-center justify-center rounded-[3px] border border-white/10 bg-[#0d0f12]/85 text-[#b0bcc2] opacity-0 shadow-[0_2px_6px_rgb(0_0_0/0.6)] transition-opacity duration-150 group-hover/tile:opacity-100 hover:text-white"
+        >
+          <Download className="size-[15px]" />
+        </a>
+      )}
       <button
         onClick={onClick}
         // DOTAEconItemAnimated:selected
@@ -264,6 +277,7 @@ function itemTile(item, onOpen, active, size) {
       look={rarity(item)}
       active={active}
       onClick={() => onOpen(item)}
+      files={`${FILES_SITE}item/${item.id}/`}
     />
   );
 }

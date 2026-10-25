@@ -4,7 +4,8 @@ import { fetchData } from "../fetchData.js";
 import { useGameData } from "../gamedata.js";
 import { useUiLayout } from "./ui.jsx";
 import { startCardEdges } from "../viewer/cardEdges.js";
-import { DOTADEX_BASE, panoramaFile, panoramaImage } from "../datasets.js";
+import { DOTADEX_BASE, FILES_SITE, panoramaFile, panoramaImage } from "../datasets.js";
+import { Download } from "lucide-react";
 
 // CUSTOMIZE on a hero's page as the game draws it: #HeroCustomize with its DOTACosmeticPicker
 // (ui_cosmetic_picker, hero_slot_item_picker_loadout, ui_econ_item_animated, collection_shared)
@@ -160,14 +161,15 @@ function SlotRow({ icons, name, image, tall, isDefault, active, onSelect }) {
 // (.Animated) or an item's icon over its grey (.Static); its name, then what it does: equipped, or
 // the way to get it. Worn and owned (the hero's own) it is Equipped, in a thick light frame with
 // the corner badge; worn but not owned it is being previewed, in a thin frame
-function EconCard({ base, kind, image, background, name, look, styles, style, onStyle, market, treasure, owned, worn, onPick }) {
+// files: the item on the download site, where all its files are (a small button under the pointer)
+function EconCard({ base, kind, image, background, name, look, styles, style, onStyle, market, treasure, owned, worn, onPick, files }) {
   const set = kind === "set";
   const [width, height] = set ? SET_TILE : ITEM_TILE;
   const top = look && ["arcana", "immortal"].includes(look.id);
   const equipped = worn && owned;
   const previewing = worn && !owned;
   return (
-    <li className="relative shrink-0 pb-[2px]" style={{ width, height }}>
+    <li className="group/card relative shrink-0 pb-[2px]" style={{ width, height }}>
       <button
         onClick={worn ? undefined : onPick}
         // .Container:hover #ActionButton:active plays ui_loadout_equipped; the card it makes the
@@ -301,6 +303,20 @@ function EconCard({ base, kind, image, background, name, look, styles, style, on
         }`}
         style={{ borderImage: equipped ? "linear-gradient(#c2ced4, #727d81) 1" : previewing ? "linear-gradient(#fff, #fff) 1" : undefined }}
       />
+      {/* Its files on the download site: an item's at the foot of its picture, a set's top left */}
+      {files && (
+        <a
+          href={files}
+          target="_blank"
+          rel="noreferrer"
+          title="Download its files: model, textures, icon"
+          aria-label={`Download the files of ${name}`}
+          className="absolute z-10 flex size-[30px] items-center justify-center rounded-[3px] border border-white/10 bg-[#0d0f12]/85 text-[#b0bcc2] opacity-0 shadow-[0_2px_6px_rgb(0_0_0/0.6)] transition-opacity duration-150 group-hover/card:opacity-100 hover:text-white"
+          style={set ? { top: 14, left: 14 } : { top: 6 + ((width - 12) * 2) / 3 - 36, right: 14 }}
+        >
+          <Download className="size-[16px]" />
+        </a>
+      )}
     </li>
   );
 }
@@ -456,6 +472,7 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
         return {
           key: set.id,
           name: set.name,
+          files: set.items[0] ? `${FILES_SITE}item/${set.items[0]}/` : null,
           image: set.icon ? portrait(set.icon, style) : null,
           look: { ...look, id },
           styles: setStyles(catalog, set),
@@ -481,6 +498,7 @@ export function OutfitPicker({ catalog, outfit, start = "sets", onEquip, onEquip
       ...(slot ? sortItems(itemsForSlot(catalog, hero.id, selected), "newest") : []).map((item) => ({
         key: item.id,
         name: item.name,
+        files: `${FILES_SITE}item/${item.id}/`,
         image: itemIcon(item),
         look: { ...rarity(item), id: item.rarity },
         market: item.price ? `$${item.price < 10 ? item.price.toFixed(2) : Math.round(item.price)}` : null,

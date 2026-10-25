@@ -13,6 +13,7 @@ import { List, X } from "lucide-react";
 import Sidebar from "./components/Sidebar.jsx";
 import Scenes from "./components/Scenes.jsx";
 import Viewer from "./components/Viewer.jsx";
+import Embed from "./components/Embed.jsx";
 import Wardrobe, { EquippedSummary } from "./components/Wardrobe.jsx";
 import { OutfitPicker } from "./components/CosmeticPicker.jsx";
 import HeroInfo from "./components/HeroInfo.jsx";
@@ -34,6 +35,7 @@ import {
   homePath,
   pageMeta,
   parseRoute,
+  isEmbed,
   personaOf,
   routePath,
   withExported,
@@ -177,6 +179,8 @@ function Sheet({ open, onClose, label, side, children }) {
 }
 
 export default function App() {
+  // Shown in another site's iframe (/Dotadex/embed/...): the scene alone, the address left as it is
+  const [embed] = useState(() => isEmbed(window.location));
   const [base, setBase] = useState(null);
   const [exported, setExported] = useState(null);
   const [prices, setPrices] = useState({});
@@ -326,7 +330,7 @@ export default function App() {
   const address = pageKey && (pageKey === "grid" ? homePath() : routePath(route));
   const addressed = useRef(false);
   useEffect(() => {
-    if (!address) {
+    if (!address || embed) {
       return;
     }
     const here = window.location.pathname + window.location.search;
@@ -481,7 +485,7 @@ export default function App() {
       // .CollectionTab_Terrain #CollectionSceneBody is 100% wide: not through the hero's mask
       loadout={(route.type === "hero" && section.id === "heroes") || (armory && !outfit?.scene)}
       armory={armory}
-      frameShift={armory ? (-600 * uiScale) / document.documentElement.clientWidth : 0}
+      frameShift={armory && !embed ? (-600 * uiScale) / document.documentElement.clientWidth : 0}
       portrait={portraits[portraitKey] ?? null}
       // The game's hero page opens on this camera (its panel starts on the set preview slot)
       portraitShot={armory ? "default" : "econ_set_preview"}
@@ -497,8 +501,13 @@ export default function App() {
       onPersona={choosePersona}
       onWardrobe={wide ? null : () => setWardrobe(true)}
       onShown={setShownHero}
+      embed={embed}
+      startAnimation={embed ? new URLSearchParams(window.location.search).get("anim") : null}
     />
   );
+  if (embed) {
+    return <Embed catalog={catalog} route={route} viewer={viewer} backdrop={outfit?.hero ? <Backdrop base={catalog.modelsBase} heroId={outfit.hero} /> : null} />;
+  }
   // The heroes in the game's order of names, for the arrows to the previous and next one
   const heroOrder = catalog.heroes.filter((entry) => entry.id !== "target_dummy").sort((a, b) => a.name.localeCompare(b.name));
   const heroIndex = route.type === "hero" ? heroOrder.findIndex((entry) => entry.id === route.id) : -1;

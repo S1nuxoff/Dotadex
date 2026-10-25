@@ -319,7 +319,9 @@ function portraitLine(rules, voices, speech, heroId) {
   return files.length ? files[Math.floor(Math.random() * files.length)] : null;
 }
 
-export default function Viewer({ catalog, language, hideTitle = false, controlsRight = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], activities = [], unitModels = {}, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona, onShown }) {
+// embed: shown in another site's iframe, the scene alone (no title, no row of controls);
+// startAnimation: the animation it starts on when the models have come, if they have it
+export default function Viewer({ catalog, language, hideTitle = false, controlsRight = false, frameShift = 0, loadout = false, armory = false, portrait = null, portraitShot = "default", particles = [], activities = [], unitModels = {}, outfit, urls, onStyle, onAlone, onVariant, onWardrobe, onBare, onPersona, onShown, embed = false, startAnimation = null }) {
   const canvasRef = useRef(null);
   const stageRef = useRef(null);
   const reduce = useReducedMotion();
@@ -406,6 +408,9 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
           return;
         }
         setAnimations(names);
+        if (startAnimation && names.includes(startAnimation)) {
+          stageRef.current.play(startAnimation);
+        }
         setCurrent(stageRef.current.currentName ?? null);
         setProgress(null);
       })
@@ -640,7 +645,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
         ref={canvasRef}
         className="absolute inset-0 size-full touch-none"
         aria-label={`3D model of ${title}`}
-        style={loadout ? mask : undefined}
+        style={loadout && !embed ? mask : undefined}
       />
 
       {progress !== null && (
@@ -688,7 +693,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
       {/* Playback, outfit and view controls in one row at the bottom */}
       {/* On a hero's page they sit under the model, between the page's two columns */}
       <div
-        hidden={loadout && !armory}
+        hidden={(loadout && !armory) || embed}
         className={`viewer-controls pointer-events-auto absolute flex flex-wrap items-center gap-2 ${
           loadout
             ? `bottom-6 ${frameShift > 0 ? "left-[24%]" : "left-1/2"} max-w-[40%] -translate-x-1/2 justify-center`
@@ -824,7 +829,7 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
         </div>
       )}
 
-      <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-stage via-stage/70 to-transparent px-5 pt-24 pb-20 sm:px-8 sm:pb-20 ${hideTitle ? "hidden" : ""}`}>
+      <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-stage via-stage/70 to-transparent px-5 pt-24 pb-20 sm:px-8 sm:pb-20 ${hideTitle || embed ? "hidden" : ""}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={item ? `item/${item.id}` : `hero/${hero?.id}`}

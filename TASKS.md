@@ -183,6 +183,15 @@ A second site where anyone can browse, search and download any file of the game 
 - [~] **F-04 The site.** Browse by dataset and folder, search by name and path, preview, download. Non-commercial, crediting Valve. Started 2026-10-25: local repo `dota2-files` (React, Vite, Tailwind, lucide), not on GitHub yet. Heroes first (user: folders alone are awful): a hero's page gathers every model, persona, item, sound, effect, picture, texture and script of it; items with their files, sets, game names; kinds of items without a hero; folders and search of every dataset; preview (pictures, video, sound, glb with animations, text); download a file, a ZIP of anything (streamed to disk in Chromium), or into a folder. Catalog from the tracker's `exporters/catalog.js` (dota2-data `catalog/catalog.json`, last step of the export). Next: upload the catalog, GitHub repo and Pages, sounds' names, announcer and music packs' sounds (their .vsndevts events).
 - Note: Hugging Face is storage, not a CDN; if downloads grow large, put a cache (Cloudflare) in front.
 
+## Dotadex on other sites (2026-10-25)
+
+Any hero or item of Dotadex shown in another site's iframe, with the site's shader, lights, particles and animations.
+
+- [x] **E-01 Embed pages.** `/Dotadex/embed/hero/<hero>?persona=<n>&<slot>=<item>` and `/Dotadex/embed/item/<id>`: the scene alone (`src/components/Embed.jsx`; `Viewer` with `embed`: no title, no controls, no game mask, no Armory camera shift), a "Dotadex" link to the full page. It waits behind its picture until clicked (`?autoplay=1` starts at once), `?anim=<name>` starts on an animation. Served by 404.html on GitHub Pages (noindex). Checked with three frames on one page.
+- [x] **E-02 Code to paste.** The download site (dota2-files) has an Embed button on heroes and items: the iframe code in three sizes, start at once or on a click, Copy, Preview.
+- [ ] **E-03 Embed button in Dotadex itself**, on the hero page and the item details.
+- [ ] **E-04 Transparent background** (`?bg=none`) for frames laid over a site's own colours; a Twitter/X player card.
+
 ## Later: a public Dota 2 API (idea, 2026-10-24)
 
 Like ByMykel's CSGO-API (static JSON files of every skin, sticker and case in every language, made again after each update, free for anyone's bots and sites), for Dota 2, and more: every entry can point to its 3D model, sounds and videos besides its pictures, and to market prices.

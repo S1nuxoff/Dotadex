@@ -520,18 +520,24 @@ export const HOME_TITLE = "Dotadex: the complete Dota 2 encyclopedia in 3D";
 // developing, never read as a look
 const DEV_SWITCHES = ["preview", "key", "amb", "nospec", "noenv", "norim", "shadowview", "shadow9", "sunposition", "showtranslucent", "opaque", "nobloom", "flatparticles", "pfilter", "noshadow", "herolight", "specshadow", "keyflip", "fillall", "probe", "rawalpha"];
 
+// The same pages for other sites to show in an iframe: /Dotadex/embed/hero/pudge, with these
+// settings of the frame itself (never read as a look): the animation to start on, starting at
+// once rather than on a click
+export const EMBED_SETTINGS = ["anim", "autoplay"];
+export const isEmbed = ({ pathname }) => pathname.slice(BASE.length).startsWith("embed/");
+
 // /Dotadex/hero/pudge?head=4007.1&weapon=7247  (slot=item.style)
 // /Dotadex/item/4517?style=2&alone=1&variant=1
 // /Dotadex/scene/backgrounds/hero_showcase_antimage_persona?camera=herocamera
 // Older links had the same after a hash (/Dotadex/#/hero/pudge), which is still read
 export function parseRoute({ pathname, search, hash }) {
   const path = hash?.startsWith("#/") ? hash.slice(1) : `/${pathname.slice(BASE.length)}${search}`;
-  const [, type, id, query] = path.match(/^\/(hero|item|shop|treasure|audio|scene)\/([^?]+?)\/?(?:\?(.*))?$/) ?? [];
+  const [, type, id, query] = path.match(/^\/(?:embed\/)?(hero|item|shop|treasure|audio|scene)\/([^?]+?)\/?(?:\?(.*))?$/) ?? [];
   if (!type) {
     return null;
   }
   const params = new URLSearchParams(query ?? "");
-  for (const name of DEV_SWITCHES) {
+  for (const name of [...DEV_SWITCHES, ...EMBED_SETTINGS]) {
     params.delete(name);
   }
   if (type === "scene") {

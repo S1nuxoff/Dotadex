@@ -522,8 +522,8 @@ const DEV_SWITCHES = ["preview", "key", "amb", "nospec", "noenv", "norim", "shad
 
 // The same pages for other sites to show in an iframe: /Dotadex/embed/hero/pudge, with these
 // settings of the frame itself (never read as a look): the animation to start on, starting at
-// once rather than on a click
-export const EMBED_SETTINGS = ["anim", "autoplay"];
+// once rather than on a click, link=0 without the link to the full page (a site that has its own)
+export const EMBED_SETTINGS = ["anim", "autoplay", "link"];
 export const isEmbed = ({ pathname }) => pathname.slice(BASE.length).startsWith("embed/");
 
 // /Dotadex/hero/pudge?head=4007.1&weapon=7247  (slot=item.style)

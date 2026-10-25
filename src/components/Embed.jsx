@@ -5,8 +5,11 @@ import { listOf, pageMeta, routePath } from "../catalog.js";
 // A hero or an item shown on another site, in an iframe (/Dotadex/embed/hero/pudge): the scene
 // alone, as the page shows it. It waits behind its picture until clicked, so a page with several
 // does not load them all at once (?autoplay=1 starts it at once); a link opens the full page
+// (?link=0 leaves it out)
 export default function Embed({ catalog, route, viewer, backdrop }) {
-  const [started, setStarted] = useState(() => new URLSearchParams(window.location.search).get("autoplay") === "1");
+  const settings = new URLSearchParams(window.location.search);
+  const [started, setStarted] = useState(() => settings.get("autoplay") === "1");
+  const withLink = settings.get("link") !== "0";
   const entry = listOf(catalog, route.type)?.[route.id];
   const meta = entry ? pageMeta(route.type, entry, catalog) : null;
   const name = entry?.name?.trim() ?? "";
@@ -28,6 +31,7 @@ export default function Embed({ catalog, route, viewer, backdrop }) {
           </span>
         </button>
       )}
+      {withLink && (
       <a
         href={full}
         target="_blank"
@@ -37,6 +41,7 @@ export default function Embed({ catalog, route, viewer, backdrop }) {
       >
         Dotadex <ExternalLink className="size-3" />
       </a>
+      )}
     </main>
   );
 }

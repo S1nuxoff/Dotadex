@@ -197,6 +197,13 @@
     </div>
     <script>
       (() => {
+        // A frame on another site (/embed/...) goes without the splash: the stage's dark until its
+        // scene comes, each time it is opened
+        if (/\/embed\//.test(location.pathname)) {
+          document.getElementById("dx-loader").remove();
+          window.DotadexLoader = { hide() {} };
+          return;
+        }
         // The sequence, in ms from the start: DEX ignites once the logo has come up
         // the camera's push-in (.dx-cam): from this scale down to 1
         const PUSH = { dur: 2800, from: 1.16 };

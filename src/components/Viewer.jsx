@@ -5,6 +5,7 @@ import {
   Check,
   ChevronUp,
   Download,
+  FolderDown,
   Focus,
   Link2,
   Pause,
@@ -19,7 +20,7 @@ import { Stage, T_POSE } from "../viewer/stage.js";
 import { HERO_COLOR, formatPrice, heroPortrait, itemModels, modelLabels, modelsOneAtATime, rarity, slotName, wornOnHero } from "../catalog.js";
 import { GAME_BUTTON, GamePills, IconButton, Popover, Select, Toggle, useDismiss } from "./ui.jsx";
 import { playSound, prepareSound } from "./Voice.jsx";
-import { DOTADEX_BASE, SOUNDS_BASE, panoramaImage } from "../datasets.js";
+import { DOTADEX_BASE, FILES_SITE, SOUNDS_BASE, panoramaImage } from "../datasets.js";
 import { loadSpeech } from "../viewer/face.js";
 import { ATTRIBUTES, abilityIcon, useGameData } from "../gamedata.js";
 import { unlockSound } from "../viewer/soundPlayer.js";
@@ -350,6 +351,8 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
   const scene = outfit.scene ? catalog.scenesById[outfit.scene] : null;
   const hero = outfit.hero ? catalog.heroesById[outfit.hero] : null;
   const color = item ? rarity(item).color : HERO_COLOR;
+  // The same hero or item on the download site, with all its files
+  const filesLink = item ? `${FILES_SITE}item/${item.id}/` : hero ? `${FILES_SITE}hero/${hero.id}/` : null;
   const urlsKey = urls.join("|");
 
   // A taunt picked plays once the hero stands idle (after its spawn), as the loadout previews it
@@ -681,6 +684,12 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
                 {downloads.length > 1 ? model.split("/").pop() : "GLB"}
               </a>
             ))}
+            {filesLink && (
+              <a href={filesLink} target="_blank" rel="noreferrer" title="All its files to download: models, textures, icons, sounds, effects" className={ROUND_BUTTON}>
+                <FolderDown className="mr-[8px] size-[20px]" />
+                Files
+              </a>
+            )}
             {freeCamera && (
               <button onClick={() => stageRef.current.frameModel()} aria-label="Fit to view" title="Fit to view" className={ROUND_BUTTON}>
                 <Focus className="mx-[4px] size-[20px]" />
@@ -786,6 +795,18 @@ export default function Viewer({ catalog, language, hideTitle = false, controlsR
               {downloads.length > 1 ? model.split("/").pop() : "Download GLB"}
             </a>
           ))}
+          {filesLink && (
+            <a
+              href={filesLink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-panel/80 px-3 text-sm text-ash hover:text-bone"
+              title="All its files to download: models, textures, icons, sounds, effects"
+            >
+              <FolderDown className="size-4" />
+              All files
+            </a>
+          )}
         </div>
             <div className="ml-auto flex items-center gap-2">
         {/* The hero page goes without the sound and link buttons, as the game's has none */}

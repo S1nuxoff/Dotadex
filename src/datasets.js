@@ -24,6 +24,9 @@ export const datasetBase = (name) => `${datasetPage(name)}/resolve/main/`;
 export const DATA_BASE = datasetBase(DATASETS.data);
 // The files the tracker makes for Dotadex out of them: index.json, exported.json, data/...
 export const DOTADEX_BASE = `${DATA_BASE}dotadex/`;
+// The download site: every file of a hero or an item (its models, textures, icons, sounds,
+// effects) at /hero/<hero>/ and /item/<id>/
+export const FILES_SITE = "https://s1nuxoff.github.io/dota2-files/";
 // Every picture and video of the game's interface, as the game keeps it, at its game path
 export const IMAGES_BASE = datasetBase(DATASETS.images);
 export const VIDEOS_BASE = datasetBase(DATASETS.videos);

@@ -31,8 +31,36 @@ const HERO_NAMES = {
   zuus: "Zeus",
 };
 
+// Hugging Face drops a connection now and then (read ECONNRESET, 2026-11-23) or answers 5xx/429
+// for a moment, so a request is tried again after 2, 4, 8, 16 s; a 404 is an answer, not retried
+const ATTEMPTS = 5;
+async function fetchWithRetries(url) {
+  for (let attempt = 1; ; attempt++) {
+    let res;
+    let error;
+    try {
+      res = await fetch(url);
+      if (res.ok || (res.status < 500 && res.status !== 429)) {
+        return res;
+      }
+    } catch (caught) {
+      error = caught;
+    }
+    if (attempt >= ATTEMPTS) {
+      if (error) {
+        throw error;
+      }
+      return res;
+    }
+    const wait = 2 ** attempt;
+    const why = error ? (error.cause?.code ?? error.message) : `HTTP ${res.status}`;
+    console.warn(`${url}: ${why}, retry ${attempt}/${ATTEMPTS - 1} in ${wait} s`);
+    await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+  }
+}
+
 async function getJson(url, fallback) {
-  const res = await fetch(url);
+  const res = await fetchWithRetries(url);
   if (!res.ok) {
     if (fallback !== undefined) {
       console.warn(`${url}: HTTP ${res.status}, going on without it`);
